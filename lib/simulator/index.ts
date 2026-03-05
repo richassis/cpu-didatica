@@ -6,11 +6,44 @@
  */
 export { Register } from "./Register";
 export { Gpr } from "./Gpr";
-export { Ula, type UlaOperation } from "./Ula";
+export { Ula } from "./Ula";
+export { Adder } from "./Adder";
+export { Mux } from "./Mux";
+export { Memory } from "./Memory";
 export { Clock } from "./Clock";
 export {
-  type ClockStep,
   type Clockable,
-  CLOCK_STEP_ORDER,
   isClockable,
 } from "./Clockable";
+export {
+  Opcode,
+  INSTRUCTION_SET,
+  ISA_WORD_SIZE,
+  ISA_WORD_MAX,
+  type InstructionFormat,
+  type InstructionDescriptor,
+  type StandardDescriptor,
+  type ULADescriptor,
+  type DecodedInstruction,
+  type DecodedStandardInstruction,
+  type DecodedULAInstruction,
+  opcodeToMnemonic,
+  getDescriptor,
+  UlaOperation,
+  OPCODE_TO_ULA_OP,
+} from "./ISA";
+export { Encoder } from "./Encoder";
+export { Decoder } from "./Decoder";
+export { CPU, CpuState, OPCODE_SEQUENCES, CONTROL_SIGNAL_DEFS, type ControlSignalDef } from "./Cpu";
+
+// ── Reactive signal bus ────────────────────────────────────────
+export {
+  InputPort,
+  OutputPort,
+  assertPortsCompatible,
+  type Connectable,
+  type PortMap,
+  type PortDataType,
+} from "./Port";
+export { Wire, type WireDescriptor } from "./Wire";
+export { Bus } from "./Bus";

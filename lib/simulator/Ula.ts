@@ -1,10 +1,12 @@
-import type { ClockStep, Clockable } from "./Clockable";
+import type { Clockable } from "./Clockable";
+import { type Connectable, type PortMap, InputPort, OutputPort } from "./Port";
+import { UlaOperation } from "./ISA";
+
 
 /**
  * Supported ALU operations.
  * Extend this union as new operations are added.
  */
-export type UlaOperation = "ADD" | "SUB" | "AND" | "OR" | "XOR" | "NOT" | "SHL" | "SHR" | "NOP";
 
 /**
  * Data model for the Arithmetic Logic Unit (ULA / ALU).
@@ -12,9 +14,7 @@ export type UlaOperation = "ADD" | "SUB" | "AND" | "OR" | "XOR" | "NOT" | "SHL" 
  * Holds two operand inputs, an operation selector, and produces a result
  * plus status flags.  The UI UlaComponent reads from this object.
  */
-export class Ula implements Clockable {
-  // ── Clockable ────────────────────────────────────────────────
-  readonly clockSteps: ClockStep[] = ["EXECUTE"];
+export class Ula implements Clockable, Connectable {
   /** Unique ID matching the ComponentInstance id on the canvas */
   readonly id: string;
   /** Human-readable name, e.g. "ULA1" */
@@ -22,72 +22,122 @@ export class Ula implements Clockable {
   /** Bit width for operands / result (default 16) */
   readonly bitWidth: number;
 
-  /** Current operation */
-  private _operation: UlaOperation;
-  /** Operand A */
-  private _a: number;
-  /** Operand B */
-  private _b: number;
-  /** Cached result (re-computed on execute) */
-  private _result: number;
+  // ── Ports ────────────────────────────────────────────────────
 
-  // ── Status flags ─────────────────────────────────────────────
-  /** Result is zero */
-  zero: boolean;
-  /** Result overflowed */
-  carry: boolean;
-  /** Result is negative (MSB set) */
-  negative: boolean;
+  /** Input: operand A */
+  readonly in_a: InputPort<number>;
+  /** Input: operand B */
+  readonly in_b: InputPort<number>;
+  /** Input: operation selector (UlaOperation enum value) */
+  readonly in_operation: InputPort<number>;
+
+  /** Output: computation result */
+  readonly out_result: OutputPort<number>;
+  /** Output: zero flag */
+  readonly out_zero: OutputPort<number>;
+  /** Output: carry flag */
+  readonly out_carry: OutputPort<number>;
+  /** Output: negative flag */
+  readonly out_negative: OutputPort<number>;
 
   constructor(id: string, name: string, bitWidth = 16) {
     this.id = id;
     this.name = name;
     this.bitWidth = bitWidth;
 
-    this._operation = "NOP";
-    this._a = 0;
-    this._b = 0;
-    this._result = 0;
+    // Create input ports
+    this.in_a = new InputPort<number>(
+      "operand_a", "number", bitWidth, 0,
+      "Operand A"
+    );
+    this.in_b = new InputPort<number>(
+      "operand_b", "number", bitWidth, 0,
+      "Operand B"
+    );
+    this.in_operation = new InputPort<number>(
+      "operation", "number", 3, UlaOperation.ADD,
+      "Operation selector (UlaOperation enum)"
+    );
 
-    this.zero = true;
-    this.carry = false;
-    this.negative = false;
+    // Create output ports
+    this.out_result = new OutputPort<number>(
+      "result", "number", bitWidth, 0,
+      "Computation result"
+    );
+    this.out_zero = new OutputPort<number>(
+      "zero", "boolean", 1, 1,
+      "Zero flag (result == 0)"
+    );
+    this.out_carry = new OutputPort<number>(
+      "carry", "boolean", 1, 0,
+      "Carry/overflow flag"
+    );
+    this.out_negative = new OutputPort<number>(
+      "negative", "boolean", 1, 0,
+      "Negative flag (MSB set)"
+    );
   }
 
-  // ── Accessors ────────────────────────────────────────────────
+  // ── Connectable interface ────────────────────────────────────
+
+  getPorts(): PortMap {
+    return {
+      a: this.in_a,
+      b: this.in_b,
+      operation: this.in_operation,
+      result: this.out_result,
+      zero: this.out_zero,
+      carry: this.out_carry,
+      negative: this.out_negative,
+    };
+  }
+
+  // ── Convenience accessors (read/write via ports) ─────────────
 
   get operation(): UlaOperation {
-    return this._operation;
+    return this.in_operation.value as UlaOperation;
   }
 
   set operation(op: UlaOperation) {
-    this._operation = op;
+    this.in_operation.set(op);
   }
 
   get a(): number {
-    return this._a;
+    return this.in_a.value;
   }
 
   set a(v: number) {
-    this._a = this.clamp(v);
+    this.in_a.set(this.clamp(v));
   }
 
   get b(): number {
-    return this._b;
+    return this.in_b.value;
   }
 
   set b(v: number) {
-    this._b = this.clamp(v);
+    this.in_b.set(this.clamp(v));
   }
 
   get result(): number {
-    return this._result;
+    return this.out_result.value;
+  }
+
+  get zero(): boolean {
+    return this.out_zero.value !== 0;
+  }
+
+  get carry(): boolean {
+    return this.out_carry.value !== 0;
+  }
+
+  get negative(): boolean {
+    return this.out_negative.value !== 0;
   }
 
   /** Return the result as a zero-padded hex string. */
   resultHex(): string {
     const digits = Math.ceil(this.bitWidth / 4);
-    return this._result.toString(16).padStart(digits, "0").toUpperCase();
+    return this.out_result.value.toString(16).padStart(digits, "0").toUpperCase();
   }
 
   // ── Core ─────────────────────────────────────────────────────
@@ -97,81 +147,75 @@ export class Ula implements Clockable {
    * and updating status flags. Returns the numeric result.
    */
   execute(): number {
+    const a = this.in_a.value;
+    const b = this.in_b.value;
+    const op = this.in_operation.value as UlaOperation;
     let raw: number;
 
-    switch (this._operation) {
-      case "ADD":
-        raw = this._a + this._b;
+    switch (op) {
+      case UlaOperation.ADD:
+        raw = a + b;
         break;
-      case "SUB":
-        raw = this._a - this._b;
+      case UlaOperation.SUB:
+        raw = a - b;
         break;
-      case "AND":
-        raw = this._a & this._b;
+      case UlaOperation.AND:
+        raw = a & b;
         break;
-      case "OR":
-        raw = this._a | this._b;
+      case UlaOperation.OR:
+        raw = a | b;
         break;
-      case "XOR":
-        raw = this._a ^ this._b;
+      case UlaOperation.NOT:
+        raw = ~a;
         break;
-      case "NOT":
-        raw = ~this._a;
-        break;
-      case "SHL":
-        raw = this._a << (this._b & 0xf);
-        break;
-      case "SHR":
-        raw = this._a >>> (this._b & 0xf);
-        break;
-      case "NOP":
       default:
         raw = 0;
         break;
     }
 
     // Mask to bitWidth and update flags
-    this._result = this.clamp(raw & this.max); //NAO ENTENDI
-    this.carry = raw > this.max || raw < 0;
-    this.zero = this._result === 0;
-    this.negative = (this._result & (1 << (this.bitWidth - 1))) !== 0;
+    const result = this.clamp(raw & this.max);
+    const carry = raw > this.max || raw < 0 ? 1 : 0;
+    const zero = result === 0 ? 1 : 0;
+    const negative = (result & (1 << (this.bitWidth - 1))) !== 0 ? 1 : 0;
 
-    return this._result;
+    // Update output ports (propagates to connected inputs immediately)
+    this.out_result.set(result);
+    this.out_carry.set(carry);
+    this.out_zero.set(zero);
+    this.out_negative.set(negative);
+
+    return result;
   }
 
   /** Convenience: set operands + operation, execute, return result. */
   compute(op: UlaOperation, a: number, b: number = 0): number {
-    this._operation = op;
-    this._a = this.clamp(a);
-    this._b = this.clamp(b);
+    this.a = a;
+    this.b = b;
+    this.operation = op;
     return this.execute();
   }
 
   /** Reset to default state. */
   reset(): void {
-    this._operation = "NOP";
-    this._a = 0;
-    this._b = 0;
-    this._result = 0;
-    this.zero = true;
-    this.carry = false;
-    this.negative = false;
+    this.a = 0;
+    this.b = 0;
+    this.operation = UlaOperation.ADD;
+    this.out_result.set(0);
+    this.out_zero.set(1);
+    this.out_carry.set(0);
+    this.out_negative.set(0);
   }
 
   // ── Clockable callback ───────────────────────────────────────
 
   /**
-   * Called by the global clock on each subscribed step.
-   * On EXECUTE: runs the current operation.
+   * Called by the global clock on each tick.
+   * Executes the ULA operation with current inputs.
    */
-  onClockStep(step: ClockStep): void {
-    switch (step) {
-      case "EXECUTE":
-        this.execute();
-        break;
-      default:
-        break;
-    }
+  onTick(): void {
+    // Execute is typically triggered by the CPU, but we can auto-execute here
+    // if desired. For now, keep it as a stub.
   }
 
   // ── Helpers ──────────────────────────────────────────────────

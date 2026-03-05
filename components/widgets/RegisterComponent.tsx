@@ -5,19 +5,20 @@ import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { Props } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
+import { useDisplayStore, formatNum } from "@/lib/displayStore";
 import React from "react";
 import ConfigModal from "@/components/ConfigModal";
 
 export default function RegisterComponent({ component, zoom }: Props) {
   const { id, x, y, w, h, label } = component;
-  const [hovered, setHovered] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
 
   // Read value from the data layer
   const revision = useSimulatorStore((s) => s.revision);
   const reg = useSimulatorStore((s) => s.getRegister(id));
   void revision; // subscribe so we re-render on touch()
-  const displayValue = reg ? reg.toHex() : "0000";
+  const base = useDisplayStore((s) => s.numericBase);
+  const displayValue = reg ? formatNum(reg.value, base, reg.bitWidth) : "0x0000";
 
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({ id });
@@ -50,12 +51,8 @@ export default function RegisterComponent({ component, zoom }: Props) {
           bg-gray-800 transition-colors
           ${isDragging
             ? "border-cyan-400 shadow-2xl opacity-90"
-            : hovered
-              ? "border-cyan-500 shadow-lg"
-              : "border-cyan-700 shadow-md"}
+            : "border-cyan-700 shadow-md"}
         `}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
         onDoubleClick={(e) => { e.stopPropagation(); setConfigOpen(true); }}
       >
         {/* Register pill */}
@@ -64,13 +61,7 @@ export default function RegisterComponent({ component, zoom }: Props) {
             {label}
           </span>
           {/* Value shown on hover */}
-          <span
-            className={`
-              text-sm font-mono text-cyan-100 bg-cyan-900/60 rounded px-1.5 py-0.5
-              transition-opacity duration-150
-              ${hovered && !isDragging ? "opacity-100" : "opacity-0"}
-            `}
-          >
+          <span className="text-sm font-mono text-cyan-100 bg-cyan-900/60 rounded px-1.5 py-0.5">
             {displayValue}
           </span>
         </div>

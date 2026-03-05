@@ -59,6 +59,10 @@ export default function DraggableWidget({
           e.stopPropagation();
           setConfigOpen(true);
         }}
+        onContextMenu={(e) => {
+          // Let contextmenu bubble to PortTooltipWrapper; dnd-kit doesn't handle it
+          e.stopPropagation();
+        }}
       >
         <div className="flex-1 overflow-hidden">
           {children}

@@ -1,14 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useLayoutStore } from "@/lib/store";
 import { WIDGET_DEFINITIONS, WidgetDefinition, generateDefaultLabel } from "@/lib/widgetDefinitions";
 import { ConfigPanelForType, ComponentConfig } from "@/components/widgets/ConfigPanel";
 
 type Step = "pick" | "configure";
 
-export default function AddComponentModal() {
-  const [isOpen, setIsOpen] = useState(false);
+interface Props {
+  open: boolean;
+  onClose: () => void;
+}
+
+export default function AddComponentModal({ open: isOpen, onClose: close }: Props) {
   const [step, setStep] = useState<Step>("pick");
   const [selected, setSelected] = useState<WidgetDefinition | null>(null);
   const [config, setConfig] = useState<ComponentConfig>({ label: "" });
@@ -16,39 +21,40 @@ export default function AddComponentModal() {
   const addComponent = useLayoutStore((s) => s.addComponent);
   const components = useLayoutStore((s) => s.components);
 
-  const open = () => {
-    setStep("pick");
-    setSelected(null);
-    setConfig({ label: "" });
-    setIsOpen(true);
-  };
-
-  const close = () => setIsOpen(false);
+  // Reset state whenever modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setStep("pick");
+      setSelected(null);
+      setConfig({ label: "" });
+    }
+  }, [isOpen]);
 
   const handlePick = (def: WidgetDefinition) => {
     setSelected(def);
-    setConfig({ label: generateDefaultLabel(def, components) });
+    setConfig({
+      label:     generateDefaultLabel(def, components),
+      bitWidth:  def.type === "Register" || def.type === "MuxComponent" || def.type === "MemoryComponent" ? 16 : undefined,
+      numInputs: def.type === "MuxComponent" ? 2 : undefined,
+      wordCount: def.type === "MemoryComponent" ? 256 : undefined,
+    });
     setStep("configure");
   };
 
   const handleAdd = () => {
     if (!selected) return;
     const finalLabel = config.label.trim() || selected.label;
-    addComponent(selected.type, finalLabel, selected.defaultWidth, selected.defaultHeight);
+    const meta: Record<string, unknown> = {};
+    if (config.bitWidth  !== undefined) meta.bitWidth  = config.bitWidth;
+    if (config.numInputs !== undefined) meta.numInputs = config.numInputs;
+    if (config.wordCount !== undefined) meta.wordCount = config.wordCount;
+    addComponent(selected.type, finalLabel, selected.defaultWidth, selected.defaultHeight,
+      Object.keys(meta).length > 0 ? meta : undefined);
     close();
   };
 
-  return (
+  return createPortal(
     <>
-      {/* FAB */}
-      <button
-        onClick={open}
-        className="fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white text-3xl shadow-xl flex items-center justify-center transition-colors"
-        aria-label="Add component"
-      >
-        ＋
-      </button>
-
       {/* Modal */}
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -129,6 +135,7 @@ export default function AddComponentModal() {
           </div>
         </div>
       )}
-    </>
+    </>,
+    document.body
   );
 }

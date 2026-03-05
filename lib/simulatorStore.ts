@@ -2,7 +2,7 @@
  * simulatorStore.ts
  *
  * Non-persisted Zustand store that manages the *data layer* instances
- * (Register, Gpr, Ula) backing each UI widget on the canvas.
+ * (Register, Gpr, Ula, CPU, Decoder) backing each UI widget on the canvas.
  *
  * When a component is added/removed on the layout store, the corresponding
  * data object must be created/removed here as well.
@@ -12,15 +12,33 @@
  */
 
 import { create } from "zustand";
-import { Register, Gpr, Ula, Clock, isClockable } from "@/lib/simulator";
-import type { ClockStep } from "@/lib/simulator";
+import { Register, Gpr, Ula, Adder, Mux, Memory, Clock, CPU, Decoder, Bus, isClockable } from "@/lib/simulator";
+import type { Connectable, WireDescriptor } from "@/lib/simulator";
+import type { ComponentState } from "@/lib/store";
+// Lazy import via getter to avoid circular initialisation (store.ts imports simulatorStore).
+const getLayoutStore = () =>
+  (require("@/lib/store") as typeof import("@/lib/store")).useLayoutStore;
 
 /** Union of every data-layer object type */
-export type SimulatorObject = Register | Gpr | Ula;
+export type SimulatorObject = Register | Gpr | Ula | Adder | Mux | Memory | CPU | Decoder;
+
+/** Type guard to check if an object is Connectable */
+function isConnectable(obj: unknown): obj is Connectable {
+  return (
+    typeof obj === "object" &&
+    obj !== null &&
+    "id" in obj &&
+    "getPorts" in obj &&
+    typeof (obj as Connectable).getPorts === "function"
+  );
+}
 
 interface SimulatorState {
   /** Map from ComponentInstance.id → data-layer object */
   objects: Map<string, SimulatorObject>;
+
+  /** The signal bus for component interconnection */
+  bus: Bus;
 
   /**
    * Create the data-layer object that matches a widget type.
@@ -30,7 +48,7 @@ interface SimulatorState {
    * @param type  The widget type string, e.g. "Register", "GprComponent", "UlaComponent"
    * @param label The human-readable label
    */
-  createObject: (id: string, type: string, label: string) => void;
+  createObject: (id: string, type: string, label: string, meta?: Record<string, unknown>) => void;
 
   /**
    * Remove the data-layer object for a given component id.
@@ -48,6 +66,14 @@ interface SimulatorState {
   getRegister: (id: string) => Register | undefined;
   getGpr: (id: string) => Gpr | undefined;
   getUla: (id: string) => Ula | undefined;
+  getAdder: (id: string) => Adder | undefined;
+  getMux: (id: string) => Mux | undefined;
+  getMemory: (id: string) => Memory | undefined;
+  getCpu: (id: string) => CPU | undefined;
+  getDecoder: (id: string) => Decoder | undefined;
+
+  /** Toggle or set the paused state of a CPU instance. */
+  pauseCpu: (id: string, paused: boolean) => void;
 
   /**
    * Trigger a re-render for subscribers watching a specific id.
@@ -64,60 +90,148 @@ interface SimulatorState {
   /** The global clock instance. */
   clock: Clock;
 
-  /** The step that was most recently executed (null before the first tick). */
-  lastExecutedStep: ClockStep | null;
-
   /**
-   * Advance the clock by one step, execute all Clockable objects
-   * registered for that step, and bump the revision.
+   * Advance the clock by one tick, execute all Clockable objects,
+   * and bump the revision.
    */
   tickClock: () => void;
 
   /**
-   * Run all remaining steps to complete the current cycle.
-   */
-  completeCycle: () => void;
-
-  /**
-   * Reset the clock to the beginning and reset all data objects.
+   * Reset the clock and all data objects.
    */
   resetClock: () => void;
+
+  // ── Wire Management ────────────────────────────────────────────
+
+  /**
+   * Create a wire connection between two component ports.
+   * Returns the wire ID if successful, null if failed.
+   */
+  createWire: (
+    sourceId: string,
+    sourcePort: string,
+    targetId: string,
+    targetPort: string
+  ) => string | null;
+
+  /**
+   * Remove a wire by its ID.
+   */
+  removeWire: (wireId: string) => void;
+
+  /**
+   * Get all wire descriptors (for persistence/UI).
+   */
+  getWires: () => WireDescriptor[];
+
+  /**
+   * Restore wires from descriptors (e.g., after loading a saved state).
+   */
+  restoreWires: (descriptors: WireDescriptor[]) => void;
+
+  /**
+   * Serialise runtime values of all data-layer objects into plain-JSON ComponentState records.
+   * Returns a Map from component id → ComponentState.
+   */
+  serializeObjects: () => Map<string, ComponentState>;
+
+  /**
+   * Apply a previously-serialised state map back to live data-layer objects.
+   * Used on page reload and when loading a project file.
+   */
+  applyObjectStates: (stateMap: Map<string, ComponentState>) => void;
+
+  /**
+   * Directly write a word into a Memory cell, bypassing tick logic.
+   * Immediately persists updated state.
+   */
+  pokeMemory: (id: string, addr: number, value: number) => void;
+
+  /**
+   * Directly write a value into a GPR register, bypassing tick logic.
+   * Immediately persists updated state.
+   */
+  pokeGprRegister: (id: string, index: number, value: number) => void;
 }
 
 export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
   objects: new Map<string, SimulatorObject>(),
+  bus: new Bus(),
   revision: 0,
 
-  createObject: (id, type, label) => {
-    const map = new Map(get().objects);
+  createObject: (id, type, label, meta) => {
+    const { objects, bus } = get();
+    const map = new Map(objects);
+    let newObj: SimulatorObject | null = null;
 
     switch (type) {
-      case "Register":
-        map.set(id, new Register(id, label));
+      case "Register": {
+        const bitWidth = typeof meta?.bitWidth === "number" ? meta.bitWidth : 16;
+        newObj = new Register(id, label, bitWidth);
         break;
+      }
       case "GprComponent":
-        map.set(id, new Gpr(id, label));
+        newObj = new Gpr(id, label);
         break;
       case "UlaComponent":
-        map.set(id, new Ula(id, label));
+        newObj = new Ula(id, label);
         break;
-      // Types without a data-layer (LabelWidget, ValueDisplayWidget, MemoryComponent)
-      // are silently ignored — they have no backing domain object (yet).
+      case "AdderComponent":
+        newObj = new Adder(id, label);
+        break;
+      case "MuxComponent": {
+        const bitWidth  = typeof meta?.bitWidth  === "number" ? meta.bitWidth  : 16;
+        const numInputs = (meta?.numInputs === 3 ? 3 : 2) as 2 | 3;
+        newObj = new Mux(id, label, bitWidth, numInputs);
+        break;
+      }
+      case "CpuComponent":
+        newObj = new CPU(id, label);
+        break;
+      case "DecoderComponent":
+        newObj = new Decoder(id, label);
+        break;
+      case "MemoryComponent": {
+        const wordCount = typeof meta?.wordCount === "number" ? meta.wordCount : 256;
+        const bitWidth  = typeof meta?.bitWidth  === "number" ? meta.bitWidth  : 16;
+        newObj = new Memory(id, label, wordCount, bitWidth);
+        break;
+      }
+      // Types without a data-layer (LabelWidget, ValueDisplayWidget)
+      // are silently ignored — they have no backing domain object.
       default:
         break;
+    }
+
+    if (newObj) {
+      map.set(id, newObj);
+      // Register with the bus if it's Connectable
+      if (isConnectable(newObj)) {
+        bus.registerComponent(newObj);
+      }
     }
 
     set({ objects: map });
   },
 
   removeObject: (id) => {
-    const map = new Map(get().objects);
+    const { objects, bus } = get();
+    const map = new Map(objects);
+    
+    // Unregister from bus before removing
+    bus.unregisterComponent(id);
     map.delete(id);
+    
     set({ objects: map });
   },
 
   clearObjects: () => {
-    set({ objects: new Map() });
+    const { bus } = get();
+    // Clear all wires and components from bus
+    for (const wireId of bus.getWireIds()) {
+      bus.removeWire(wireId);
+    }
+    set({ objects: new Map(), bus: new Bus() });
   },
 
   getRegister: (id) => {
@@ -135,6 +249,39 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
     return obj instanceof Ula ? obj : undefined;
   },
 
+  getAdder: (id) => {
+    const obj = get().objects.get(id);
+    return obj instanceof Adder ? obj : undefined;
+  },
+
+  getMux: (id) => {
+    const obj = get().objects.get(id);
+    return obj instanceof Mux ? obj : undefined;
+  },
+
+  getMemory: (id) => {
+    const obj = get().objects.get(id);
+    return obj instanceof Memory ? obj : undefined;
+  },
+
+  getCpu: (id) => {
+    const obj = get().objects.get(id);
+    return obj instanceof CPU ? obj : undefined;
+  },
+
+  getDecoder: (id) => {
+    const obj = get().objects.get(id);
+    return obj instanceof Decoder ? obj : undefined;
+  },
+
+  pauseCpu: (id, paused) => {
+    const obj = get().objects.get(id);
+    if (obj instanceof CPU) {
+      obj.setPaused(paused);
+      set((s) => ({ revision: s.revision + 1 }));
+    }
+  },
+
   touch: () => {
     set((s) => ({ revision: s.revision + 1 }));
   },
@@ -142,42 +289,22 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
   // ── Clock ──────────────────────────────────────────────────────
 
   clock: new Clock(),
-  lastExecutedStep: null,
 
   tickClock: () => {
     const { clock, objects } = get();
-    const step = clock.tick();
+    clock.tick();
 
-    // Execute all Clockable objects that subscribe to this step
+    // Execute all Clockable objects
     for (const obj of objects.values()) {
-      if (isClockable(obj) && obj.clockSteps.includes(step)) {
-        obj.onClockStep(step);
+      if (isClockable(obj)) {
+        obj.onTick();
       }
     }
 
-    // Bump revision so UI re-renders, and record the step
-    set((s) => ({
-      revision: s.revision + 1,
-      lastExecutedStep: step,
-    }));
-  },
-
-  completeCycle: () => {
-    const { clock, objects } = get();
-    const steps = clock.completeCycle();
-
-    for (const step of steps) {
-      for (const obj of objects.values()) {
-        if (isClockable(obj) && obj.clockSteps.includes(step)) {
-          obj.onClockStep(step);
-        }
-      }
-    }
-
-    set((s) => ({
-      revision: s.revision + 1,
-      lastExecutedStep: steps[steps.length - 1] ?? null,
-    }));
+    // Bump revision so UI re-renders
+    set((s) => ({ revision: s.revision + 1 }));
+    // Persist updated port/register/memory values
+    getLayoutStore().getState().saveState();
   },
 
   resetClock: () => {
@@ -187,13 +314,127 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
     // Reset every data object
     for (const obj of objects.values()) {
       if ("reset" in obj && typeof obj.reset === "function") {
-        obj.reset();
+        (obj as { reset: () => void }).reset();
       }
     }
 
-    set((s) => ({
-      revision: s.revision + 1,
-      lastExecutedStep: null,
-    }));
+    set((s) => ({ revision: s.revision + 1 }));
+    // Persist cleared values
+    getLayoutStore().getState().saveState();
+  },
+
+  // ── Wire Management ────────────────────────────────────────────
+
+  createWire: (sourceId, sourcePort, targetId, targetPort) => {
+    const { bus } = get();
+    const wire = bus.createWire(sourceId, sourcePort, targetId, targetPort);
+    if (wire) {
+      set((s) => ({ revision: s.revision + 1 }));
+      // Persist wire list alongside components in the layout store.
+      getLayoutStore().getState().saveWires();
+      getLayoutStore().getState().saveState();
+      return wire.id;
+    }
+    return null;
+  },
+
+  removeWire: (wireId) => {
+    const { bus } = get();
+    bus.removeWire(wireId);
+    set((s) => ({ revision: s.revision + 1 }));
+    // Keep persisted snapshot in sync.
+    getLayoutStore().getState().saveWires();
+    getLayoutStore().getState().saveState();
+  },
+
+  getWires: () => {
+    const { bus } = get();
+    return bus.serialize();
+  },
+
+  restoreWires: (descriptors) => {
+    const { bus, objects } = get();
+    
+    // Ensure all components are registered first
+    for (const obj of objects.values()) {
+      if (isConnectable(obj) && !bus.getComponent(obj.id)) {
+        bus.registerComponent(obj);
+      }
+    }
+    
+    // Restore wires — skip invalid descriptors so a single bad entry
+    // doesn't abort restoring all the remaining valid wires.
+    bus.deserialize(descriptors, /* skipInvalid */ true);
+    set((s) => ({ revision: s.revision + 1 }));
+  },
+
+  serializeObjects: () => {
+    const { objects } = get();
+    const result = new Map<string, ComponentState>();
+    for (const [id, obj] of objects) {
+      const ports: Record<string, number> = {};
+      // Capture all port values by their map key
+      if (isConnectable(obj)) {
+        for (const [key, port] of Object.entries(obj.getPorts())) {
+          ports[key] = port.value as number;
+        }
+      }
+      const entry: ComponentState = { ports };
+      // GPR: also save the register bank
+      if (obj instanceof Gpr) {
+        entry.registers = obj.snapshot().map((r) => r.value);
+      }
+      // Memory: also save the cells array
+      if (obj instanceof Memory) {
+        entry.cells = obj.dump();
+      }
+      result.set(id, entry);
+    }
+    return result;
+  },
+
+  applyObjectStates: (stateMap) => {
+    const { objects } = get();
+    for (const [id, state] of stateMap) {
+      const obj = objects.get(id);
+      if (!obj) continue;
+      // Restore bulk data first (so port reads reflect restored values)
+      if (obj instanceof Gpr && state.registers) {
+        state.registers.forEach((v, i) => obj.write(i, v));
+      }
+      if (obj instanceof Memory && state.cells) {
+        obj.load(state.cells);
+      }
+      // Restore port values (output ports only — inputs are driven by wires)
+      if (isConnectable(obj)) {
+        const portMap = obj.getPorts();
+        for (const [key, value] of Object.entries(state.ports)) {
+          const port = portMap[key];
+          // Only set output ports directly; input ports get their value from wires
+          if (port && port.direction === "output" && typeof value === "number") {
+            (port as { set?: (v: number) => void }).set?.(value);
+          }
+        }
+      }
+    }
+    set((s) => ({ revision: s.revision + 1 }));
+  },
+
+  pokeMemory: (id, addr, value) => {
+    const obj = get().objects.get(id);
+    if (obj instanceof Memory) {
+      obj.poke(addr, value);
+      set((s) => ({ revision: s.revision + 1 }));
+      getLayoutStore().getState().saveState();
+    }
+  },
+
+  pokeGprRegister: (id, index, value) => {
+    const obj = get().objects.get(id);
+    if (obj instanceof Gpr) {
+      obj.write(index, value);
+      set((s) => ({ revision: s.revision + 1 }));
+      getLayoutStore().getState().saveState();
+    }
   },
 }));
