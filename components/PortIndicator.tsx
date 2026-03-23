@@ -7,7 +7,12 @@ interface Props {
   portName: string;
   direction: "input" | "output";
   componentId: string;
-  onPortClick?: (componentId: string, portName: string, direction: "input" | "output") => void;
+  onPortPointerDown?: (
+    componentId: string,
+    portName: string,
+    direction: "input" | "output",
+    event: React.PointerEvent,
+  ) => void;
   position: "left" | "right" | "top" | "bottom";
   offset?: number;
 }
@@ -16,7 +21,7 @@ export default function PortIndicator({
   portName, 
   direction, 
   componentId, 
-  onPortClick,
+  onPortPointerDown,
   position,
   offset = 50,
 }: Props) {
@@ -43,9 +48,9 @@ export default function PortIndicator({
     }
   }, [componentId, portName, objects, revision]);
 
-  const handleClick = (e: React.MouseEvent) => {
+  const handlePointerDown = (e: React.PointerEvent) => {
     e.stopPropagation();
-    onPortClick?.(componentId, portName, direction);
+    onPortPointerDown?.(componentId, portName, direction, e);
   };
 
   // Position the port based on side
@@ -67,7 +72,10 @@ export default function PortIndicator({
       style={positionStyles}
       className="pointer-events-auto z-20"
       data-port-indicator
-      onClick={handleClick}
+      data-port-component-id={componentId}
+      data-port-name={portName}
+      data-port-direction={direction}
+      onPointerDown={handlePointerDown}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >

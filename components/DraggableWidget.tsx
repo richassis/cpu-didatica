@@ -8,6 +8,7 @@ import ConfigModal from "@/components/ConfigModal";
 import PortIndicator from "@/components/PortIndicator";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useWireCreationStore } from "@/lib/wireCreationStore";
+import { findPortPosition } from "@/lib/portPositioning";
 
 interface PortPosition {
   name: string;
@@ -37,12 +38,9 @@ export default function DraggableWidget({
   const removeComponent = useLayoutStore((s) => s.removeComponent);
   const [configOpen, setConfigOpen] = useState(false);
   const objects = useSimulatorStore((s) => s.objects);
-  const createWire = useSimulatorStore((s) => s.createWire);
   const revision = useSimulatorStore((s) => s.revision);
   const startWireCreation = useWireCreationStore((s) => s.startWireCreation);
-  const completeWireCreation = useWireCreationStore((s) => s.completeWireCreation);
   const isCreating = useWireCreationStore((s) => s.isCreating);
-  const sourceComponentId = useWireCreationStore((s) => s.sourceComponentId);
   
   const [ports, setPorts] = useState<Array<{ name: string; direction: "input" | "output" }>>([]);
 
@@ -78,28 +76,15 @@ export default function DraggableWidget({
     touchAction: "none",
   };
 
-  const handlePortClick = (compId: string, portName: string, direction: "input" | "output") => {
-    if (!isCreating) {
-      // Start wire creation
-      if (direction === "output") {
-        startWireCreation(compId, portName, direction);
-      }
-    } else {
-      // Complete wire creation
-      if (direction === "input" && sourceComponentId !== compId) {
-        const success = completeWireCreation(compId, portName, direction);
-        if (success && sourceComponentId) {
-          const sourcePort = useWireCreationStore.getState().sourcePortName;
-          if (sourcePort) {
-            try {
-              createWire(sourceComponentId, sourcePort, compId, portName);
-            } catch (e) {
-              console.error("Failed to create wire:", e);
-            }
-          }
-        }
-      }
-    }
+  const handlePortPointerDown = (
+    compId: string,
+    portName: string,
+    direction: "input" | "output",
+    event: React.PointerEvent,
+  ) => {
+    if (event.button !== 0 || isCreating) return;
+    const startPosition = findPortPosition(component, portName, direction, ports);
+    startWireCreation(compId, portName, direction, startPosition);
   };
 
   // Auto-generate port positions if not provided
@@ -148,7 +133,7 @@ export default function DraggableWidget({
             componentId={id}
             position={portPos.position}
             offset={portPos.offset}
-            onPortClick={handlePortClick}
+            onPortPointerDown={handlePortPointerDown}
           />
         ))}
       </div>

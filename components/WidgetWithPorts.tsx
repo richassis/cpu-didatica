@@ -4,6 +4,7 @@ import { ComponentInstance } from "@/lib/store";
 import { useEffect, useState } from "react";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useWireCreationStore } from "@/lib/wireCreationStore";
+import { findPortPosition } from "@/lib/portPositioning";
 import PortIndicator from "./PortIndicator";
 
 interface Props {
@@ -19,13 +20,9 @@ interface PortInfo {
 export default function WidgetWithPorts({ component, children }: Props) {
   const { id } = component;
   const objects = useSimulatorStore((s) => s.objects);
-  const createWire = useSimulatorStore((s) => s.createWire);
   const revision = useSimulatorStore((s) => s.revision);
   const startWireCreation = useWireCreationStore((s) => s.startWireCreation);
-  const completeWireCreation = useWireCreationStore((s) => s.completeWireCreation);
   const isCreating = useWireCreationStore((s) => s.isCreating);
-  const sourceComponentId = useWireCreationStore((s) => s.sourceComponentId);
-  const sourcePortName = useWireCreationStore((s) => s.sourcePortName);
   
   const [ports, setPorts] = useState<PortInfo[]>([]);
 
@@ -43,25 +40,15 @@ export default function WidgetWithPorts({ component, children }: Props) {
     }
   }, [id, objects, revision]);
 
-  const handlePortClick = (compId: string, portName: string, direction: "input" | "output") => {
-    if (!isCreating) {
-      // Start wire creation
-      if (direction === "output") {
-        startWireCreation(compId, portName, direction);
-      }
-    } else {
-      // Complete wire creation
-      if (direction === "input" && sourceComponentId !== compId) {
-        const success = completeWireCreation(compId, portName, direction);
-        if (success && sourceComponentId && sourcePortName) {
-          try {
-            createWire(sourceComponentId, sourcePortName, compId, portName);
-          } catch (e) {
-            console.error("Failed to create wire:", e);
-          }
-        }
-      }
-    }
+  const handlePortPointerDown = (
+    compId: string,
+    portName: string,
+    direction: "input" | "output",
+    event: React.PointerEvent,
+  ) => {
+    if (event.button !== 0 || isCreating) return;
+    const startPosition = findPortPosition(component, portName, direction, ports);
+    startWireCreation(compId, portName, direction, startPosition);
   };
 
   // Calculate port positions
@@ -86,7 +73,7 @@ export default function WidgetWithPorts({ component, children }: Props) {
           componentId={id}
           position="left"
           offset={getPortOffset(idx, inputPorts.length)}
-          onPortClick={handlePortClick}
+          onPortPointerDown={handlePortPointerDown}
         />
       ))}
       
@@ -99,7 +86,7 @@ export default function WidgetWithPorts({ component, children }: Props) {
           componentId={id}
           position="right"
           offset={getPortOffset(idx, outputPorts.length)}
-          onPortClick={handlePortClick}
+          onPortPointerDown={handlePortPointerDown}
         />
       ))}
     </div>

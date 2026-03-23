@@ -297,7 +297,10 @@ export class Bus {
         );
       } catch (e) {
         if (!skipInvalid) throw e;
-        console.warn(`[Bus] Skipping invalid wire: ${(e as Error).message}`);
+        // Only log in development mode
+        if (process.env.NODE_ENV === "development") {
+          console.warn(`[Bus] Skipping invalid wire: ${(e as Error).message}`);
+        }
       }
     }
   }

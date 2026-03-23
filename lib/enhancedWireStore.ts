@@ -1,5 +1,8 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { snapToGrid } from "@/lib/wireRouting";
+
+const GRID_SIZE = 16;
 
 /**
  * A waypoint/node in a wire path that can be dragged to reshape the wire.
@@ -10,21 +13,25 @@ export interface WireNode {
   y: number;
 }
 
+export type WireDirection = "input" | "output";
+
+export interface WireEndpoint {
+  componentId: string;
+  portName: string;
+  direction: WireDirection;
+}
+
 /**
  * Enhanced wire descriptor that supports multiple segments and bifurcation.
  */
 export interface EnhancedWire {
   id: string;
-  /** Source component and port */
-  source: {
-    componentId: string;
-    portName: string;
-  };
-  /** Multiple targets for bifurcation */
-  targets: Array<{
-    componentId: string;
-    portName: string;
-  }>;
+  /** Wire start endpoint (can be input or output while drawing). */
+  start: WireEndpoint;
+  /** Wire end endpoint (null when dangling/unattached). */
+  end: WireEndpoint | null;
+  /** Free endpoint when not attached to a second port. */
+  floatingEnd: { x: number; y: number } | null;
   /** Intermediate waypoints that define the wire path */
   nodes: WireNode[];
   /** Visual style */
@@ -35,12 +42,17 @@ interface EnhancedWireState {
   wires: EnhancedWire[];
   selectedWireId: string | null;
   selectedNodeId: string | null;
-  
-  addWire: (sourceCompId: string, sourcePort: string, targetCompId: string, targetPort: string) => string;
+
+  createWire: (params: {
+    start: WireEndpoint;
+    nodes?: Array<{ x: number; y: number }>;
+    floatingEnd?: { x: number; y: number } | null;
+    end?: WireEndpoint | null;
+  }) => string;
+  attachWireEnd: (wireId: string, end: WireEndpoint) => void;
+  setFloatingEnd: (wireId: string, x: number, y: number) => void;
+  setWireNodes: (wireId: string, nodes: Array<{ x: number; y: number }>) => void;
   removeWire: (wireId: string) => void;
-  addWireTarget: (wireId: string, targetCompId: string, targetPort: string) => void;
-  addWireTargetFromNode: (wireId: string, nodeId: string, targetCompId: string, targetPort: string) => string;
-  removeWireTarget: (wireId: string, targetCompId: string, targetPort: string) => void;
   addWireNode: (wireId: string, x: number, y: number, insertIndex?: number) => string;
   updateWireNode: (wireId: string, nodeId: string, x: number, y: number) => void;
   removeWireNode: (wireId: string, nodeId: string) => void;
@@ -58,28 +70,73 @@ export const useEnhancedWireStore = create<EnhancedWireState>()(
       selectedWireId: null,
       selectedNodeId: null,
 
-      addWire: (sourceCompId, sourcePort, targetCompId, targetPort) => {
+      createWire: ({ start, nodes = [], floatingEnd = null, end = null }) => {
         const wireId = `wire-${Date.now()}-${Math.random()}`;
         const wire: EnhancedWire = {
           id: wireId,
-          source: {
-            componentId: sourceCompId,
-            portName: sourcePort,
-          },
-          targets: [
-            {
-              componentId: targetCompId,
-              portName: targetPort,
-            },
-          ],
-          nodes: [], // Empty initially - will be auto-routed
+          start,
+          end,
+          floatingEnd,
+          nodes: nodes.map((node) => ({
+            id: `node-${Date.now()}-${Math.random()}`,
+            x: snapToGrid(node.x, GRID_SIZE),
+            y: snapToGrid(node.y, GRID_SIZE),
+          })),
         };
-        
+
         set((state) => ({
           wires: [...state.wires, wire],
         }));
-        
+
         return wireId;
+      },
+
+      attachWireEnd: (wireId, end) => {
+        set((state) => ({
+          wires: state.wires.map((wire) =>
+            wire.id === wireId
+              ? {
+                  ...wire,
+                  end,
+                  floatingEnd: null,
+                }
+              : wire
+          ),
+        }));
+      },
+
+      setFloatingEnd: (wireId, x, y) => {
+        set((state) => ({
+          wires: state.wires.map((wire) =>
+            wire.id === wireId
+              ? {
+                  ...wire,
+                  end: null,
+                  floatingEnd: {
+                    x: snapToGrid(x, GRID_SIZE),
+                    y: snapToGrid(y, GRID_SIZE),
+                  },
+                }
+              : wire
+          ),
+        }));
+      },
+
+      setWireNodes: (wireId, nodes) => {
+        set((state) => ({
+          wires: state.wires.map((wire) =>
+            wire.id === wireId
+              ? {
+                  ...wire,
+                  nodes: nodes.map((node) => ({
+                    id: `node-${Date.now()}-${Math.random()}`,
+                    x: snapToGrid(node.x, GRID_SIZE),
+                    y: snapToGrid(node.y, GRID_SIZE),
+                  })),
+                }
+              : wire
+          ),
+        }));
       },
 
       removeWire: (wireId) => {
@@ -89,73 +146,13 @@ export const useEnhancedWireStore = create<EnhancedWireState>()(
         }));
       },
 
-      addWireTarget: (wireId, targetCompId, targetPort) => {
-        set((state) => ({
-          wires: state.wires.map((w) =>
-            w.id === wireId
-              ? {
-                  ...w,
-                  targets: [
-                    ...w.targets,
-                    { componentId: targetCompId, portName: targetPort },
-                  ],
-                }
-              : w
-          ),
-        }));
-      },
-
-      addWireTargetFromNode: (wireId, nodeId, targetCompId, targetPort) => {
-        // Create a new wire that branches from the specified node
-        const newWireId = `wire-${Date.now()}-${Math.random()}`;
-        const sourceWire = get().wires.find(w => w.id === wireId);
-        
-        if (!sourceWire) return newWireId;
-        
-        const nodeIndex = sourceWire.nodes.findIndex(n => n.id === nodeId);
-        if (nodeIndex === -1) return newWireId;
-        
-        const node = sourceWire.nodes[nodeIndex];
-        
-        // Create new wire starting from this node
-        const newWire: EnhancedWire = {
-          id: newWireId,
-          source: sourceWire.source, // Same source as parent wire
-          targets: [
-            {
-              componentId: targetCompId,
-              portName: targetPort,
-            },
-          ],
-          // Copy nodes up to and including the bifurcation point
-          nodes: sourceWire.nodes.slice(0, nodeIndex + 1),
-        };
-        
-        set((state) => ({
-          wires: [...state.wires, newWire],
-        }));
-        
-        return newWireId;
-      },
-
-      removeWireTarget: (wireId, targetCompId, targetPort) => {
-        set((state) => ({
-          wires: state.wires.map((w) =>
-            w.id === wireId
-              ? {
-                  ...w,
-                  targets: w.targets.filter(
-                    (t) => !(t.componentId === targetCompId && t.portName === targetPort)
-                  ),
-                }
-              : w
-          ),
-        }));
-      },
-
       addWireNode: (wireId, x, y, insertIndex) => {
         const nodeId = `node-${Date.now()}-${Math.random()}`;
-        const node: WireNode = { id: nodeId, x, y };
+        const node: WireNode = {
+          id: nodeId,
+          x: snapToGrid(x, GRID_SIZE),
+          y: snapToGrid(y, GRID_SIZE),
+        };
         
         set((state) => ({
           wires: state.wires.map((w) => {
@@ -182,7 +179,13 @@ export const useEnhancedWireStore = create<EnhancedWireState>()(
               ? {
                   ...w,
                   nodes: w.nodes.map((n) =>
-                    n.id === nodeId ? { ...n, x, y } : n
+                    n.id === nodeId
+                      ? {
+                          ...n,
+                          x: snapToGrid(x, GRID_SIZE),
+                          y: snapToGrid(y, GRID_SIZE),
+                        }
+                      : n
                   ),
                 }
               : w
@@ -219,6 +222,88 @@ export const useEnhancedWireStore = create<EnhancedWireState>()(
     }),
     {
       name: "enhanced-wire-storage",
+      version: 2,
+      migrate: (persistedState: unknown) => {
+        const state = persistedState as { wires?: Array<Record<string, unknown>> } | undefined;
+        const wires = state?.wires ?? [];
+
+        const migratedWires: EnhancedWire[] = [];
+
+        for (const maybeWire of wires) {
+          if (maybeWire && "start" in maybeWire) {
+            migratedWires.push(maybeWire as EnhancedWire);
+            continue;
+          }
+
+          const oldWire = maybeWire as {
+            id?: string;
+            source?: { componentId?: string; portName?: string };
+            targets?: Array<{ componentId?: string; portName?: string }>;
+            nodes?: Array<{ id?: string; x?: number; y?: number }>;
+            color?: string;
+          };
+
+          if (!oldWire.source?.componentId || !oldWire.source.portName) {
+            continue;
+          }
+
+          const sharedNodes = (oldWire.nodes ?? [])
+            .filter((node) => typeof node.x === "number" && typeof node.y === "number")
+            .map((node) => ({
+              id: node.id ?? `node-${Date.now()}-${Math.random()}`,
+              x: snapToGrid(node.x as number, GRID_SIZE),
+              y: snapToGrid(node.y as number, GRID_SIZE),
+            }));
+
+          const targets = oldWire.targets ?? [];
+
+          if (targets.length === 0) {
+            migratedWires.push({
+              id: oldWire.id ?? `wire-${Date.now()}-${Math.random()}`,
+              start: {
+                componentId: oldWire.source.componentId,
+                portName: oldWire.source.portName,
+                direction: "output",
+              },
+              end: null,
+              floatingEnd: null,
+              nodes: sharedNodes,
+              color: oldWire.color,
+            });
+            continue;
+          }
+
+          targets.forEach((target, index) => {
+            if (!target.componentId || !target.portName) return;
+
+            migratedWires.push({
+              id:
+                index === 0
+                  ? oldWire.id ?? `wire-${Date.now()}-${Math.random()}`
+                  : `wire-${Date.now()}-${Math.random()}`,
+              start: {
+                componentId: oldWire.source!.componentId!,
+                portName: oldWire.source!.portName!,
+                direction: "output",
+              },
+              end: {
+                componentId: target.componentId,
+                portName: target.portName,
+                direction: "input",
+              },
+              floatingEnd: null,
+              nodes: sharedNodes,
+              color: oldWire.color,
+            });
+          });
+        }
+
+        return {
+          wires: migratedWires,
+          selectedWireId: null,
+          selectedNodeId: null,
+        };
+      },
       partialize: (state) => ({
         wires: state.wires,
       }),

@@ -67,6 +67,8 @@ export default function UlaComponent({ component, zoom }: Props) {
               : "invert(39%) sepia(69%) saturate(600%) hue-rotate(210deg) brightness(95%) contrast(95%)",
             transition: "filter 0.15s ease",
             display: "block",
+            width: "100%",
+            height: "auto",
           }}
         />
 

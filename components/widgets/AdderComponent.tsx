@@ -66,6 +66,8 @@ export default function AdderComponent({ component, zoom }: Props) {
               : "invert(55%) sepia(80%) saturate(700%) hue-rotate(350deg) brightness(100%) contrast(95%)",
             transition: "filter 0.15s ease",
             display: "block",
+            width: "100%",
+            height: "auto",
           }}
         />
 

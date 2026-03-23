@@ -26,6 +26,8 @@ export interface WidgetDefinition {
  * Each widget also exports its own `definition` for co-location,
  * but THIS array is the single source for the Add Component modal.
  * Add a new entry here when creating a new widget type.
+ * 
+ * Note: All dimensions are aligned to GRID_SIZE (16px) for proper grid snapping.
  */
 
 export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
@@ -34,8 +36,8 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     label: "Label",
     namePrefix: "LBL",
     icon: "\u{1F3F7}",
-    defaultWidth: 160,
-    defaultHeight: 60,
+    defaultWidth: 160,  // 10 grid cells
+    defaultHeight: 64,  // 4 grid cells
     description: "A static text label",
   },
   {
@@ -43,8 +45,8 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     label: "Value Display",
     namePrefix: "VAL",
     icon: "\u{1F4CA}",
-    defaultWidth: 200,
-    defaultHeight: 120,
+    defaultWidth: 192,  // 12 grid cells
+    defaultHeight: 128, // 8 grid cells
     description: "Displays a numeric or text value with a title",
   },
   {
@@ -52,8 +54,8 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     label: "GPR Bank",
     namePrefix: "GPR",
     icon: "\u{1F5C2}",
-    defaultWidth: 160,
-    defaultHeight: 260,
+    defaultWidth: 160,  // 10 grid cells
+    defaultHeight: 256, // 16 grid cells
     description: "General Purpose Registers bank",
   },
   {
@@ -61,8 +63,8 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     label: "Memory",
     namePrefix: "MEM",
     icon: "\u{1F9E0}",
-    defaultWidth: 160,
-    defaultHeight: 200,
+    defaultWidth: 160,  // 10 grid cells
+    defaultHeight: 192, // 12 grid cells
     description: "Unified memory — addr/data/rdMem/wrMem ports, 256×16b default",
   },
   {
@@ -70,8 +72,8 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     label: "ULA / ALU",
     namePrefix: "ULA",
     icon: "\u2699\uFE0F",
-    defaultWidth: 130,
-    defaultHeight: 180,
+    defaultWidth: 128,  // 8 grid cells
+    defaultHeight: 176, // 11 grid cells
     description: "Arithmetic Logic Unit",
   },
   {
@@ -79,8 +81,8 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     label: "Adder",
     namePrefix: "ADD",
     icon: "\u2795",
-    defaultWidth: 130,
-    defaultHeight: 180,
+    defaultWidth: 128,  // 8 grid cells
+    defaultHeight: 176, // 11 grid cells
     description: "Dedicated adder \u2014 always performs A + B",
   },
   {
@@ -88,8 +90,8 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     label: "Multiplexer",
     namePrefix: "MUX",
     icon: "\u2195",
-    defaultWidth: 70,
-    defaultHeight: 100,
+    defaultWidth: 64,   // 4 grid cells
+    defaultHeight: 96,  // 6 grid cells
     description: "Selects one of 2\u20133 inputs based on a select signal",
   },
   {
@@ -97,8 +99,8 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     label: "Register",
     namePrefix: "REG",
     icon: "\u{1F4C1}",
-    defaultWidth: 140,
-    defaultHeight: 48,
+    defaultWidth: 144,  // 9 grid cells
+    defaultHeight: 48,  // 3 grid cells
     description: "A single register showing its label and value on hover",
   },
   {
@@ -106,8 +108,8 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     label: "Decoder",
     namePrefix: "DEC",
     icon: "\u{1F4DC}",
-    defaultWidth: 150,
-    defaultHeight: 200,
+    defaultWidth: 144,  // 9 grid cells
+    defaultHeight: 192, // 12 grid cells
     description: "Instruction decoder — shows opcode, fields, and format",
   },
   {
@@ -115,8 +117,8 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     label: "CPU Unit",
     namePrefix: "CPU",
     icon: "\u{1F9EE}",
-    defaultWidth: 170,
-    defaultHeight: 300,
+    defaultWidth: 176,  // 11 grid cells
+    defaultHeight: 304, // 19 grid cells
     description: "CPU control unit — FSM state and control signals",
   },
 ];

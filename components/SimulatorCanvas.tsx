@@ -12,6 +12,7 @@ import { useLayoutStore, ZOOM_STEP, ZOOM_MIN, ZOOM_MAX, CANVAS_WIDTH, CANVAS_HEI
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayStore } from "@/lib/displayStore";
 import { useWireCreationStore } from "@/lib/wireCreationStore";
+import { useEnhancedWireStore } from "@/lib/enhancedWireStore";
 import { snapToGrid } from "@/lib/wireRouting";
 import WidgetRenderer from "./WidgetRenderer";
 import AddComponentModal from "./AddComponentModal";
@@ -46,6 +47,7 @@ export default function SimulatorCanvas() {
   const clock = useSimulatorStore((s) => s.clock);
   const tickClock = useSimulatorStore((s) => s.tickClock);
   const resetClock = useSimulatorStore((s) => s.resetClock);
+  const createSimulatorWire = useSimulatorStore((s) => s.createWire);
   const revision = useSimulatorStore((s) => s.revision);
   void revision;
 
@@ -55,8 +57,15 @@ export default function SimulatorCanvas() {
 
   // Wire creation state
   const isCreatingWire = useWireCreationStore((s) => s.isCreating);
+  const sourceComponentId = useWireCreationStore((s) => s.sourceComponentId);
+  const sourcePortName = useWireCreationStore((s) => s.sourcePortName);
+  const sourceDirection = useWireCreationStore((s) => s.sourceDirection);
+  const pathPoints = useWireCreationStore((s) => s.pathPoints);
   const updateMousePosition = useWireCreationStore((s) => s.updateMousePosition);
+  const finishWireCreation = useWireCreationStore((s) => s.finishWireCreation);
   const cancelWireCreation = useWireCreationStore((s) => s.cancelWireCreation);
+
+  const createEnhancedWire = useEnhancedWireStore((s) => s.createWire);
 
   // Sync viewport state into the store whenever scroll or size changes
   const syncViewport = useCallback(() => {
@@ -191,24 +200,86 @@ export default function SimulatorCanvas() {
       }
     };
 
-    const handleClick = (e: MouseEvent) => {
-      // Cancel if clicking on canvas background
-      const target = e.target as HTMLElement;
-      if (target.closest('svg') && !target.closest('[data-draggable]')) {
-        cancelWireCreation();
+    const handleMouseUp = (e: MouseEvent) => {
+      if (!sourceComponentId || !sourcePortName || !sourceDirection || pathPoints.length < 2) {
+        finishWireCreation();
+        return;
       }
+
+      const targetElement = (e.target as HTMLElement).closest("[data-port-indicator]") as HTMLElement | null;
+
+      let endEndpoint: { componentId: string; portName: string; direction: "input" | "output" } | null = null;
+      if (targetElement) {
+        const targetComponentId = targetElement.dataset.portComponentId;
+        const targetPortName = targetElement.dataset.portName;
+        const targetDirection = targetElement.dataset.portDirection as "input" | "output" | undefined;
+
+        if (
+          targetComponentId &&
+          targetPortName &&
+          targetDirection &&
+          targetDirection !== sourceDirection &&
+          !(targetComponentId === sourceComponentId && targetPortName === sourcePortName)
+        ) {
+          endEndpoint = {
+            componentId: targetComponentId,
+            portName: targetPortName,
+            direction: targetDirection,
+          };
+        }
+      }
+
+      const nodes = pathPoints.slice(1, -1);
+      const floatingEnd = pathPoints[pathPoints.length - 1];
+
+      createEnhancedWire({
+        start: {
+          componentId: sourceComponentId,
+          portName: sourcePortName,
+          direction: sourceDirection,
+        },
+        end: endEndpoint,
+        floatingEnd: endEndpoint ? null : floatingEnd,
+        nodes,
+      });
+
+      if (endEndpoint) {
+        try {
+          if (sourceDirection === "output" && endEndpoint.direction === "input") {
+            createSimulatorWire(sourceComponentId, sourcePortName, endEndpoint.componentId, endEndpoint.portName);
+          } else if (sourceDirection === "input" && endEndpoint.direction === "output") {
+            createSimulatorWire(endEndpoint.componentId, endEndpoint.portName, sourceComponentId, sourcePortName);
+          }
+        } catch (error) {
+          console.error("Failed to connect simulator wire:", error);
+        }
+      }
+
+      finishWireCreation();
     };
 
     window.addEventListener("mousemove", handleMouseMove);
     window.addEventListener("keydown", handleEscape);
-    window.addEventListener("click", handleClick);
+    window.addEventListener("mouseup", handleMouseUp);
 
     return () => {
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("keydown", handleEscape);
-      window.removeEventListener("click", handleClick);
+      window.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [isCreatingWire, zoom, updateMousePosition, cancelWireCreation]);
+  }, [
+    isCreatingWire,
+    zoom,
+    sourceComponentId,
+    sourcePortName,
+    sourceDirection,
+    pathPoints,
+    updateMousePosition,
+    finishWireCreation,
+    cancelWireCreation,
+    createEnhancedWire,
+    createSimulatorWire,
+  ]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),

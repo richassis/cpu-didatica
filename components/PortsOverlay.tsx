@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useLayoutStore } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useWireCreationStore } from "@/lib/wireCreationStore";
-import { useEnhancedWireStore } from "@/lib/enhancedWireStore";
+import { findPortPosition } from "@/lib/portPositioning";
 import PortIndicator from "./PortIndicator";
 
 interface PortInfo {
@@ -21,22 +22,11 @@ interface Props {
  */
 export default function PortsOverlay({ componentId }: Props) {
   const objects = useSimulatorStore((s) => s.objects);
-  const createWire = useSimulatorStore((s) => s.createWire);
   const revision = useSimulatorStore((s) => s.revision);
+  const components = useLayoutStore((s) => s.components);
   const startWireCreation = useWireCreationStore((s) => s.startWireCreation);
-  const completeWireCreation = useWireCreationStore((s) => s.completeWireCreation);
   const isCreating = useWireCreationStore((s) => s.isCreating);
-  const sourceComponentId = useWireCreationStore((s) => s.sourceComponentId);
-  const sourcePortName = useWireCreationStore((s) => s.sourcePortName);
-  const sourceWireId = useWireCreationStore((s) => s.sourceWireId);
-  const sourceNodeId = useWireCreationStore((s) => s.sourceNodeId);
-  
-  // Enhanced wire store
-  const addWire = useEnhancedWireStore((s) => s.addWire);
-  const addWireTarget = useEnhancedWireStore((s) => s.addWireTarget);
-  const addWireTargetFromNode = useEnhancedWireStore((s) => s.addWireTargetFromNode);
-  const wires = useEnhancedWireStore((s) => s.wires);
-  
+
   const [ports, setPorts] = useState<PortInfo[]>([]);
 
   // Get ports from simulator object
@@ -53,50 +43,28 @@ export default function PortsOverlay({ componentId }: Props) {
     }
   }, [componentId, objects, revision]);
 
-  const handlePortClick = (compId: string, portName: string, direction: "input" | "output") => {
-    if (!isCreating) {
-      // Start wire creation
-      if (direction === "output") {
-        startWireCreation(compId, portName, direction);
-      }
-    } else {
-      // Complete wire creation
-      if (direction === "input" && (sourceComponentId !== compId || sourceWireId)) {
-        const success = completeWireCreation(compId, portName, direction);
-        if (success) {
-          try {
-            if (sourceWireId && sourceNodeId) {
-              // Creating bifurcation from a node
-              addWireTargetFromNode(sourceWireId, sourceNodeId, compId, portName);
-              // Also create in simulator store
-              const wire = wires.find(w => w.id === sourceWireId);
-              if (wire) {
-                createWire(wire.source.componentId, wire.source.portName, compId, portName);
-              }
-            } else if (sourceComponentId && sourcePortName) {
-              // Creating from a port
-              // Check if there's already a wire from this source
-              const existingWire = wires.find(
-                (w) => w.source.componentId === sourceComponentId && w.source.portName === sourcePortName
-              );
-              
-              if (existingWire) {
-                // Add as another target to existing wire (bifurcation)
-                addWireTarget(existingWire.id, compId, portName);
-              } else {
-                // Create new wire
-                const wireId = addWire(sourceComponentId, sourcePortName, compId, portName);
-                
-                // Also create in simulator store for backwards compatibility
-                createWire(sourceComponentId, sourcePortName, compId, portName);
-              }
-            }
-          } catch (e) {
-            console.error("Failed to create wire:", e);
-          }
-        }
-      }
-    }
+  const handlePortPointerDown = (
+    compId: string,
+    portName: string,
+    direction: "input" | "output",
+    event: React.PointerEvent,
+  ) => {
+    if (event.button !== 0) return;
+    if (isCreating) return;
+
+    const sourceComp = components.find((component) => component.id === compId);
+    const sourceObj = objects.get(compId);
+    if (!sourceComp || !sourceObj || !("getPorts" in sourceObj)) return;
+
+    const sourcePortMap = (sourceObj as { getPorts: () => Record<string, { direction: string }> }).getPorts();
+    const sourcePorts = Object.entries(sourcePortMap).map(([name, port]) => ({
+      name,
+      direction: port.direction as "input" | "output",
+    }));
+
+    const startPosition = findPortPosition(sourceComp, portName, direction, sourcePorts);
+
+    startWireCreation(compId, portName, direction, startPosition);
   };
 
   // Calculate port positions
@@ -119,7 +87,7 @@ export default function PortsOverlay({ componentId }: Props) {
           componentId={componentId}
           position="left"
           offset={getPortOffset(idx, inputPorts.length)}
-          onPortClick={handlePortClick}
+          onPortPointerDown={handlePortPointerDown}
         />
       ))}
       
@@ -132,7 +100,7 @@ export default function PortsOverlay({ componentId }: Props) {
           componentId={componentId}
           position="right"
           offset={getPortOffset(idx, outputPorts.length)}
-          onPortClick={handlePortClick}
+          onPortPointerDown={handlePortPointerDown}
         />
       ))}
     </>

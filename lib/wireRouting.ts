@@ -1,6 +1,9 @@
 /**
  * Calculates orthogonal (Manhattan) routing path between two points.
  * Returns an array of points forming 90-degree angles.
+ * 
+ * Includes snapping support: if one dimension is much smaller than the other,
+ * it snaps to zero to make straight lines easier to draw.
  */
 export function calculateOrthogonalPath(
   start: { x: number; y: number },
@@ -8,8 +11,19 @@ export function calculateOrthogonalPath(
 ): { x: number; y: number }[] {
   const points: { x: number; y: number }[] = [start];
 
-  const dx = end.x - start.x;
-  const dy = end.y - start.y;
+  let dx = end.x - start.x;
+  let dy = end.y - start.y;
+
+  // Snapping threshold: if one dimension is much smaller than the other, snap it to zero
+  // This makes it easier to draw pure horizontal/vertical lines
+  const maxDimension = Math.max(Math.abs(dx), Math.abs(dy));
+  const snapThreshold = Math.max(40, maxDimension * 0.15); // 15% or 40px, whichever is larger
+
+  if (Math.abs(dx) < snapThreshold && Math.abs(dx) < Math.abs(dy)) {
+    dx = 0; // Snap to pure vertical
+  } else if (Math.abs(dy) < snapThreshold && Math.abs(dy) < Math.abs(dx)) {
+    dy = 0; // Snap to pure horizontal
+  }
 
   // Simple 2-segment routing: horizontal then vertical, or vice versa
   // Choose based on which direction is longer
