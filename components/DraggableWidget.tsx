@@ -50,6 +50,7 @@ export default function DraggableWidget({
         style={style}
         {...listeners}
         {...attributes}
+        data-draggable
         className={`
           select-none rounded-xl border-2 flex flex-col overflow-hidden
           ${isDragging ? "border-indigo-400 shadow-2xl opacity-90" : "border-indigo-600 shadow-lg"}

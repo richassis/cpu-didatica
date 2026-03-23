@@ -35,6 +35,8 @@ export default function SimulatorCanvas() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [fabOpen, setFabOpen] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [isPanning, setIsPanning] = useState(false);
+  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
 
   // Clock state
   const clock = useSimulatorStore((s) => s.clock);
@@ -81,14 +83,33 @@ export default function SimulatorCanvas() {
     };
   }, [syncViewport]);
 
-  // Ctrl+Wheel to zoom
+  // Scroll wheel to zoom (Google Maps style)
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
-      if (!e.ctrlKey && !e.metaKey) return;
       e.preventDefault();
-      setZoom(zoom + (e.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP));
+      const delta = e.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP;
+      const newZoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoom + delta));
+      
+      // Zoom towards cursor position
+      const rect = el.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+      
+      // Calculate scroll position to keep zoom centered on cursor
+      const scrollX = (el.scrollLeft + mouseX) / zoom * newZoom - mouseX;
+      const scrollY = (el.scrollTop + mouseY) / zoom * newZoom - mouseY;
+      
+      setZoom(newZoom);
+      
+      // Apply new scroll position after zoom
+      requestAnimationFrame(() => {
+        if (scrollRef.current) {
+          scrollRef.current.scrollLeft = scrollX;
+          scrollRef.current.scrollTop = scrollY;
+        }
+      });
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
@@ -101,6 +122,44 @@ export default function SimulatorCanvas() {
     window.addEventListener("mousedown", handler);
     return () => window.removeEventListener("mousedown", handler);
   }, [fabOpen]);
+
+  // Click and drag to pan (Google Maps style)
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const onMouseDown = (e: MouseEvent) => {
+      // Only pan on primary button and not on interactive elements
+      if (e.button !== 0) return;
+      const target = e.target as HTMLElement;
+      // Don't pan if clicking on widgets or interactive elements
+      if (target.closest('[data-draggable], button, input, select, textarea')) return;
+      
+      setIsPanning(true);
+      setPanStart({ x: e.clientX + el.scrollLeft, y: e.clientY + el.scrollTop });
+      e.preventDefault();
+    };
+
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isPanning) return;
+      el.scrollLeft = panStart.x - e.clientX;
+      el.scrollTop = panStart.y - e.clientY;
+    };
+
+    const onMouseUp = () => {
+      setIsPanning(false);
+    };
+
+    el.addEventListener("mousedown", onMouseDown);
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+
+    return () => {
+      el.removeEventListener("mousedown", onMouseDown);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+  }, [isPanning, panStart]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -144,7 +203,11 @@ export default function SimulatorCanvas() {
   };
 
   return (
-    <div ref={scrollRef} className="flex-1 min-h-0 overflow-auto bg-gray-950 relative">
+    <div 
+      ref={scrollRef} 
+      className="flex-1 min-h-0 overflow-auto bg-gray-950 relative"
+      style={{ cursor: isPanning ? 'grabbing' : 'grab' }}
+    >
       <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
         <div style={{ width: CANVAS_WIDTH * zoom, height: CANVAS_HEIGHT * zoom }}>
           <div
