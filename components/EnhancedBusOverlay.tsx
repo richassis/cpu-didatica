@@ -5,6 +5,7 @@ import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayStore, formatNum } from "@/lib/displayStore";
 import { useWireCreationStore } from "@/lib/wireCreationStore";
 import { useEnhancedWireStore, type EnhancedWire, type WireNode } from "@/lib/enhancedWireStore";
+import { findPortPosition } from "@/lib/portPositioning";
 import { useState, useEffect, useMemo } from "react";
 import { calculateOrthogonalPath, pointsToSVGPath, getPointOnOrthogonalPath } from "@/lib/wireRouting";
 
@@ -47,30 +48,60 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
       const sourceComp = components.find((c) => c.id === wire.source.componentId);
       if (!sourceComp) continue;
 
-      // Get source position
-      const sourceX = sourceComp.x + sourceComp.w;
-      const sourceY = sourceComp.y + sourceComp.h / 2;
+      // Get all ports for the source component
+      const sourceObj = objects.get(wire.source.componentId);
+      if (!sourceObj || !("getPorts" in sourceObj)) continue;
+      
+      const sourcePortMap = (sourceObj as { getPorts: () => Record<string, { direction: string }> }).getPorts();
+      const sourcePorts = Object.entries(sourcePortMap).map(([name, p]) => ({
+        name,
+        direction: p.direction as "input" | "output",
+      }));
+
+      // Calculate exact source port position
+      const sourcePortPos = findPortPosition(
+        sourceComp,
+        wire.source.portName,
+        "output",
+        sourcePorts
+      );
 
       // Build path with nodes
-      const pathPoints = [{ x: sourceX, y: sourceY }];
+      const pathPoints = [sourcePortPos];
       wire.nodes.forEach((node) => pathPoints.push({ x: node.x, y: node.y }));
 
-      // Get target positions
+      // Get target positions with exact port locations
       const targetPositions = wire.targets
         .map((target) => {
           const targetComp = components.find((c) => c.id === target.componentId);
           if (!targetComp) return null;
           
+          const targetObj = objects.get(target.componentId);
+          if (!targetObj || !("getPorts" in targetObj)) return null;
+          
+          const targetPortMap = (targetObj as { getPorts: () => Record<string, { direction: string }> }).getPorts();
+          const targetPorts = Object.entries(targetPortMap).map(([name, p]) => ({
+            name,
+            direction: p.direction as "input" | "output",
+          }));
+          
+          // Calculate exact target port position
+          const targetPortPos = findPortPosition(
+            targetComp,
+            target.portName,
+            "input",
+            targetPorts
+          );
+          
           return {
-            x: targetComp.x,
-            y: targetComp.y + targetComp.h / 2,
+            x: targetPortPos.x,
+            y: targetPortPos.y,
             label: `${targetComp.label}.${target.portName}`,
           };
         })
         .filter((t): t is { x: number; y: number; label: string } => t !== null);
 
       // Get value from source port
-      const sourceObj = objects.get(wire.source.componentId);
       let value = "?";
       if (sourceObj && "getPorts" in sourceObj) {
         const ports = (sourceObj as { getPorts: () => Record<string, { value: unknown; bitWidth: number | null }> }).getPorts();
@@ -127,6 +158,33 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
     };
   }, [dragState, zoom, updateWireNode]);
 
+  // Handle wire/node deselection
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        selectWire(null);
+        selectNode(null);
+      }
+    };
+
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      // Deselect if clicking on canvas background or SVG background
+      if (target.tagName === "svg" || target.closest('[data-canvas]') === target) {
+        selectWire(null);
+        selectNode(null);
+      }
+    };
+
+    window.addEventListener("keydown", handleEscape);
+    window.addEventListener("click", handleClickOutside);
+
+    return () => {
+      window.removeEventListener("keydown", handleEscape);
+      window.removeEventListener("click", handleClickOutside);
+    };
+  }, [selectWire, selectNode]);
+
   if (!visible) return null;
 
   // Calculate temporary wire preview
@@ -134,12 +192,23 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
   if (isCreating && sourceComponentId && sourcePortName && mousePosition) {
     const sourceComp = components.find((c) => c.id === sourceComponentId);
     if (sourceComp) {
-      const sourceX = sourceComp.x + sourceComp.w;
-      const sourceY = sourceComp.y + sourceComp.h / 2;
-      tempWirePreview = calculateOrthogonalPath(
-        { x: sourceX, y: sourceY },
-        mousePosition
-      );
+      const sourceObj = objects.get(sourceComponentId);
+      if (sourceObj && "getPorts" in sourceObj) {
+        const sourcePortMap = (sourceObj as { getPorts: () => Record<string, { direction: string }> }).getPorts();
+        const sourcePorts = Object.entries(sourcePortMap).map(([name, p]) => ({
+          name,
+          direction: p.direction as "input" | "output",
+        }));
+        
+        const sourcePortPos = findPortPosition(
+          sourceComp,
+          sourcePortName,
+          "output",
+          sourcePorts
+        );
+        
+        tempWirePreview = calculateOrthogonalPath(sourcePortPos, mousePosition);
+      }
     }
   }
 
@@ -203,7 +272,7 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
                     d={path}
                     fill="none"
                     stroke={isSelected ? "#fbbf24" : "url(#wireGradient)"}
-                    strokeWidth={isSelected ? 3 : 2}
+                    strokeWidth={isSelected ? 4 : 3}
                     strokeLinecap="round"
                     markerEnd="url(#arrowhead)"
                     filter="url(#glow)"
@@ -297,7 +366,7 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
           d={pointsToSVGPath(tempWirePreview)}
           fill="none"
           stroke="#22d3ee"
-          strokeWidth="2"
+          strokeWidth="3"
           strokeLinecap="round"
           strokeDasharray="5,5"
           opacity="0.6"
