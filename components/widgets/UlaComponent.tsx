@@ -9,6 +9,7 @@ import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayStore, formatNum } from "@/lib/displayStore";
 import React from "react";
 import ConfigModal from "@/components/ConfigModal";
+import PortsOverlay from "@/components/PortsOverlay";
 
 export default function UlaComponent({ component, zoom }: Props) {
   const { id, x, y, w, h, label } = component;
@@ -101,6 +102,9 @@ export default function UlaComponent({ component, zoom }: Props) {
             = {resultHex}
           </span>
         </div>
+        
+        {/* Port indicators */}
+        <PortsOverlay componentId={id} />
       </div>
 
       {configOpen && (

@@ -55,13 +55,11 @@ export default function WidgetRenderer({ component, zoom }: Props) {
   const widget = renderWidget();
   if (!widget) return null;
 
-  // Wrap connectable components with ports and tooltip
+  // Wrap connectable components with tooltip only
   if (isConnectable) {
     return (
       <PortTooltipWrapper componentId={component.id} componentLabel={component.label}>
-        <WidgetWithPorts component={component}>
-          {widget}
-        </WidgetWithPorts>
+        {widget}
       </PortTooltipWrapper>
     );
   }

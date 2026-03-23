@@ -7,6 +7,7 @@ import { Props } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import React from "react";
 import ConfigModal from "@/components/ConfigModal";
+import PortsOverlay from "@/components/PortsOverlay";
 import { Opcode, INSTRUCTION_SET } from "@/lib/simulator/ISA";
 import type { Decoder } from "@/lib/simulator/Decoder";
 
@@ -186,6 +187,9 @@ export default function DecoderComponent({ component, zoom }: Props) {
             </span>
           </div>
         )}
+        
+        {/* Port indicators */}
+        <PortsOverlay componentId={id} />
       </div>
 
       {configOpen && (

@@ -8,6 +8,7 @@ import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayStore, formatNum } from "@/lib/displayStore";
 import React from "react";
 import ConfigModal from "@/components/ConfigModal";
+import PortsOverlay from "@/components/PortsOverlay";
 
 export default function GprComponent({ component, zoom }: Props) {
   const { id, x, y, w, h, label } = component;
@@ -103,6 +104,9 @@ export default function GprComponent({ component, zoom }: Props) {
             </div>
           )}
         </div>
+        
+        {/* Port indicators */}
+        <PortsOverlay componentId={id} />
       </div>
 
       {configOpen && (
@@ -161,6 +165,9 @@ function RegisterRow({ index, value, bitWidth, base, editMode, onPoke }: RowProp
             if (e.key === "Escape") { setDraft(null); inputRef.current?.blur(); }
           }}
         />
+        
+        {/* Port indicators */}
+        <PortsOverlay componentId={id} />
       </div>
     );
   }

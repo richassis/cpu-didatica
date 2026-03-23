@@ -15,7 +15,7 @@ import { useWireCreationStore } from "@/lib/wireCreationStore";
 import { snapToGrid } from "@/lib/wireRouting";
 import WidgetRenderer from "./WidgetRenderer";
 import AddComponentModal from "./AddComponentModal";
-import BusOverlay from "./BusOverlay";
+import EnhancedBusOverlay from "./EnhancedBusOverlay";
 import ConnectionModal from "./ConnectionModal";
 import { useEffect, useRef, useState, useCallback } from "react";
 
@@ -265,6 +265,7 @@ export default function SimulatorCanvas() {
       ref={scrollRef} 
       className="flex-1 min-h-0 overflow-auto bg-gray-950 relative scrollbar-hide"
       style={{ cursor: isPanning ? 'grabbing' : 'grab' }}
+      data-canvas
     >
       <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
         <div style={{ width: CANVAS_WIDTH * zoom, height: CANVAS_HEIGHT * zoom }}>
@@ -278,7 +279,7 @@ export default function SimulatorCanvas() {
               backgroundSize: `${GRID_SIZE}px ${GRID_SIZE}px`,
             }}
           >
-            <BusOverlay visible={showBusOverlay} />
+            <EnhancedBusOverlay visible={showBusOverlay} />
             {components.map((c) => (
               <WidgetRenderer key={c.id} component={c} zoom={zoom} />
             ))}

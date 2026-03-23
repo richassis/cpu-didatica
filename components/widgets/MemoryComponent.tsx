@@ -8,6 +8,7 @@ import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayStore, formatNum } from "@/lib/displayStore";
 import React from "react";
 import ConfigModal from "@/components/ConfigModal";
+import PortsOverlay from "@/components/PortsOverlay";
 
 function addrHex(addr: number, addrBits: number): string {
   const digits = Math.ceil(addrBits / 4);
@@ -206,6 +207,9 @@ export default function MemoryComponent({ component, zoom }: Props) {
           </div>
         </div>
         )}
+        
+        {/* Port indicators */}
+        <PortsOverlay componentId={id} />
       </div>
 
       {configOpen && (

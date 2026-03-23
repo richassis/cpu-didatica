@@ -8,6 +8,7 @@ import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayStore, formatNum } from "@/lib/displayStore";
 import React from "react";
 import ConfigModal from "@/components/ConfigModal";
+import PortsOverlay from "@/components/PortsOverlay";
 import { CpuState, CONTROL_SIGNAL_DEFS } from "@/lib/simulator/Cpu";
 import type { CPU } from "@/lib/simulator/Cpu";
 
@@ -94,6 +95,9 @@ function SignalRow({
         >
           {display}
         </span>
+        
+        {/* Port indicators */}
+        <PortsOverlay componentId={id} />
       </div>
     </div>
   );
@@ -270,6 +274,9 @@ export default function CpuComponent({ component, zoom }: Props) {
           <span className="text-[9px] text-gray-600 italic">dbl-click to configure</span>
           <span className="text-[9px] text-gray-600 font-mono">CPU</span>
         </div>
+        
+        {/* Port indicators */}
+        <PortsOverlay componentId={id} />
       </div>
 
       {configOpen && (
