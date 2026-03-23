@@ -57,6 +57,7 @@ export default function MuxComponent({ component, zoom }: Props) {
         style={style}
         {...listeners}
         {...attributes}
+        data-draggable
         className="select-none cursor-grab active:cursor-grabbing relative"
         onDoubleClick={(e) => { e.stopPropagation(); setConfigOpen(true); }}
       >

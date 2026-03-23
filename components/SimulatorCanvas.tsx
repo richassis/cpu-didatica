@@ -141,8 +141,8 @@ export default function SimulatorCanvas() {
       // Only pan on primary button and not on interactive elements
       if (e.button !== 0) return;
       const target = e.target as HTMLElement;
-      // Don't pan if clicking on widgets or interactive elements
-      if (target.closest('[data-draggable], button, input, select, textarea')) return;
+      // Don't pan if clicking on widgets, ports, or interactive elements
+      if (target.closest('[data-draggable], [data-port-indicator], button, input, select, textarea, svg')) return;
       
       setIsPanning(true);
       setPanStart({ x: e.clientX + el.scrollLeft, y: e.clientY + el.scrollTop });

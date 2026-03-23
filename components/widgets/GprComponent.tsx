@@ -49,6 +49,7 @@ export default function GprComponent({ component, zoom }: Props) {
         style={style}
         {...listeners}
         {...attributes}
+        data-draggable
         className={`select-none cursor-grab active:cursor-grabbing relative rounded-xl border-2 ${
           isDragging ? "border-teal-400" : "border-teal-700/60"
         } bg-gray-950/90 overflow-hidden`}

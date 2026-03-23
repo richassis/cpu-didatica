@@ -44,6 +44,7 @@ export default function PortIndicator({
     <div
       style={positionStyles}
       className="pointer-events-auto z-20"
+      data-port-indicator
       onClick={handleClick}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}

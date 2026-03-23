@@ -12,6 +12,7 @@ import RegisterComponent from "./widgets/RegisterComponent";
 import DecoderComponent from "./widgets/DecoderComponent";
 import CpuComponent from "./widgets/CpuComponent";
 import PortTooltipWrapper from "./PortTooltipWrapper";
+import WidgetWithPorts from "./WidgetWithPorts";
 
 interface Props {
   component: ComponentInstance;
@@ -54,11 +55,13 @@ export default function WidgetRenderer({ component, zoom }: Props) {
   const widget = renderWidget();
   if (!widget) return null;
 
-  // Wrap connectable components with port tooltip
+  // Wrap connectable components with ports and tooltip
   if (isConnectable) {
     return (
       <PortTooltipWrapper componentId={component.id} componentLabel={component.label}>
-        {widget}
+        <WidgetWithPorts component={component}>
+          {widget}
+        </WidgetWithPorts>
       </PortTooltipWrapper>
     );
   }

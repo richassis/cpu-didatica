@@ -87,6 +87,7 @@ export default function DecoderComponent({ component, zoom }: Props) {
         style={style}
         {...listeners}
         {...attributes}
+        data-draggable
         className={`
           select-none cursor-grab active:cursor-grabbing
           rounded-lg border-2 flex flex-col overflow-hidden
