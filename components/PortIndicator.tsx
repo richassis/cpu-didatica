@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSimulatorStore } from "@/lib/simulatorStore";
 
 interface Props {
   portName: string;
@@ -20,6 +21,27 @@ export default function PortIndicator({
   offset = 50,
 }: Props) {
   const [hover, setHover] = useState(false);
+  const [portValue, setPortValue] = useState<string>("");
+  const objects = useSimulatorStore((s) => s.objects);
+  const revision = useSimulatorStore((s) => s.revision);
+
+  useEffect(() => {
+    const obj = objects.get(componentId);
+    if (obj && "getPorts" in obj) {
+      const portMap = (obj as { getPorts: () => Record<string, { value: unknown }> }).getPorts();
+      const port = portMap[portName];
+      if (port) {
+        const val = port.value;
+        if (typeof val === "number") {
+          setPortValue(`0x${val.toString(16).toUpperCase().padStart(4, "0")}`);
+        } else if (typeof val === "boolean") {
+          setPortValue(val ? "1" : "0");
+        } else {
+          setPortValue(String(val));
+        }
+      }
+    }
+  }, [componentId, portName, objects, revision]);
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -56,11 +78,11 @@ export default function PortIndicator({
           ${borderColor}
           hover:shadow-lg
         `}
-        title={`${direction}: ${portName}`}
       >
         {hover && (
-          <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 px-2 py-0.5 bg-gray-900 border border-gray-700 rounded text-[9px] font-mono text-white whitespace-nowrap pointer-events-none">
-            {portName}
+          <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 px-2 py-1 bg-gray-900 border border-gray-700 rounded text-[9px] font-mono text-white whitespace-nowrap pointer-events-none z-50">
+            <div className="font-semibold text-gray-300">{portName}</div>
+            <div className={isInput ? "text-green-300" : "text-orange-300"}>{portValue}</div>
           </div>
         )}
       </div>

@@ -79,7 +79,7 @@ export default function MemoryComponent({ component, zoom }: Props) {
         data-draggable
         className={`select-none cursor-grab active:cursor-grabbing relative rounded-xl border-2 ${
           accessing ? "shadow-lg shadow-amber-900/40" : ""
-        } ${borderCls} bg-gray-950/90 overflow-hidden`}
+        } ${borderCls} bg-gray-950/90`}
         onDoubleClick={(e) => { e.stopPropagation(); setConfigOpen(true); }}
       >
         {/* ── Header ── */}

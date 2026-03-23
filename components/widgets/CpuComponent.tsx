@@ -95,9 +95,6 @@ function SignalRow({
         >
           {display}
         </span>
-        
-        {/* Port indicators */}
-        <PortsOverlay componentId={id} />
       </div>
     </div>
   );

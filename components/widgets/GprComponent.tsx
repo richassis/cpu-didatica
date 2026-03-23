@@ -53,7 +53,7 @@ export default function GprComponent({ component, zoom }: Props) {
         data-draggable
         className={`select-none cursor-grab active:cursor-grabbing relative rounded-xl border-2 ${
           isDragging ? "border-teal-400" : "border-teal-700/60"
-        } bg-gray-950/90 overflow-hidden`}
+        } bg-gray-950/90`}
         onDoubleClick={(e) => { e.stopPropagation(); setConfigOpen(true); }}
       >
         {/* ── Header ── */}
@@ -83,7 +83,7 @@ export default function GprComponent({ component, zoom }: Props) {
         </div>
 
         {/* ── Body ── */}
-        <div className="flex flex-col overflow-y-auto" style={{ height: h - 28 }}>
+        <div className="flex flex-col overflow-y-auto rounded-b-xl" style={{ height: h - 28 }}>
           {regs.length === 0 ? (
             <div className="flex items-center justify-center h-full text-[10px] text-gray-600">
               no GPR

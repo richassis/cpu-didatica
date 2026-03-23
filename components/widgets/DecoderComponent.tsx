@@ -91,7 +91,7 @@ export default function DecoderComponent({ component, zoom }: Props) {
         data-draggable
         className={`
           select-none cursor-grab active:cursor-grabbing
-          rounded-lg border-2 flex flex-col overflow-hidden
+          rounded-lg border-2 flex flex-col
           bg-gray-900 transition-colors
           ${isDragging
             ? "border-yellow-400 shadow-2xl opacity-90"
