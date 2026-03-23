@@ -6,8 +6,12 @@ interface WireCreationState {
   sourcePortName: string | null;
   sourceDirection: "input" | "output" | null;
   mousePosition: { x: number; y: number } | null;
+  // For bifurcation from existing wire nodes
+  sourceWireId: string | null;
+  sourceNodeId: string | null;
   
   startWireCreation: (componentId: string, portName: string, direction: "input" | "output") => void;
+  startWireCreationFromNode: (wireId: string, nodeId: string) => void;
   updateMousePosition: (x: number, y: number) => void;
   completeWireCreation: (targetComponentId: string, targetPortName: string, targetDirection: "input" | "output") => boolean;
   cancelWireCreation: () => void;
@@ -19,6 +23,8 @@ export const useWireCreationStore = create<WireCreationState>((set, get) => ({
   sourcePortName: null,
   sourceDirection: null,
   mousePosition: null,
+  sourceWireId: null,
+  sourceNodeId: null,
 
   startWireCreation: (componentId, portName, direction) => {
     set({
@@ -26,6 +32,19 @@ export const useWireCreationStore = create<WireCreationState>((set, get) => ({
       sourceComponentId: componentId,
       sourcePortName: portName,
       sourceDirection: direction,
+      sourceWireId: null,
+      sourceNodeId: null,
+    });
+  },
+
+  startWireCreationFromNode: (wireId, nodeId) => {
+    set({
+      isCreating: true,
+      sourceComponentId: null,
+      sourcePortName: null,
+      sourceDirection: "output", // Treat node as output
+      sourceWireId: wireId,
+      sourceNodeId: nodeId,
     });
   },
 
@@ -39,14 +58,16 @@ export const useWireCreationStore = create<WireCreationState>((set, get) => ({
   completeWireCreation: (targetComponentId, targetPortName, targetDirection) => {
     const state = get();
     
-    // Validate: source must be output, target must be input
-    if (state.sourceDirection === "output" && targetDirection === "input") {
+    // Validate: source must be output (or node), target must be input
+    if ((state.sourceDirection === "output" || state.sourceWireId) && targetDirection === "input") {
       set({
         isCreating: false,
         sourceComponentId: null,
         sourcePortName: null,
         sourceDirection: null,
         mousePosition: null,
+        sourceWireId: null,
+        sourceNodeId: null,
       });
       return true;
     }
@@ -58,6 +79,8 @@ export const useWireCreationStore = create<WireCreationState>((set, get) => ({
       sourcePortName: null,
       sourceDirection: null,
       mousePosition: null,
+      sourceWireId: null,
+      sourceNodeId: null,
     });
     return false;
   },
@@ -69,6 +92,8 @@ export const useWireCreationStore = create<WireCreationState>((set, get) => ({
       sourcePortName: null,
       sourceDirection: null,
       mousePosition: null,
+      sourceWireId: null,
+      sourceNodeId: null,
     });
   },
 }));

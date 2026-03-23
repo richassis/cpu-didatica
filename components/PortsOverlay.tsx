@@ -28,10 +28,13 @@ export default function PortsOverlay({ componentId }: Props) {
   const isCreating = useWireCreationStore((s) => s.isCreating);
   const sourceComponentId = useWireCreationStore((s) => s.sourceComponentId);
   const sourcePortName = useWireCreationStore((s) => s.sourcePortName);
+  const sourceWireId = useWireCreationStore((s) => s.sourceWireId);
+  const sourceNodeId = useWireCreationStore((s) => s.sourceNodeId);
   
   // Enhanced wire store
   const addWire = useEnhancedWireStore((s) => s.addWire);
   const addWireTarget = useEnhancedWireStore((s) => s.addWireTarget);
+  const addWireTargetFromNode = useEnhancedWireStore((s) => s.addWireTargetFromNode);
   const wires = useEnhancedWireStore((s) => s.wires);
   
   const [ports, setPorts] = useState<PortInfo[]>([]);
@@ -58,24 +61,35 @@ export default function PortsOverlay({ componentId }: Props) {
       }
     } else {
       // Complete wire creation
-      if (direction === "input" && sourceComponentId !== compId && sourcePortName) {
+      if (direction === "input" && (sourceComponentId !== compId || sourceWireId)) {
         const success = completeWireCreation(compId, portName, direction);
-        if (success && sourceComponentId) {
+        if (success) {
           try {
-            // Check if there's already a wire from this source
-            const existingWire = wires.find(
-              (w) => w.source.componentId === sourceComponentId && w.source.portName === sourcePortName
-            );
-            
-            if (existingWire) {
-              // Add as another target to existing wire (bifurcation)
-              addWireTarget(existingWire.id, compId, portName);
-            } else {
-              // Create new wire
-              const wireId = addWire(sourceComponentId, sourcePortName, compId, portName);
+            if (sourceWireId && sourceNodeId) {
+              // Creating bifurcation from a node
+              addWireTargetFromNode(sourceWireId, sourceNodeId, compId, portName);
+              // Also create in simulator store
+              const wire = wires.find(w => w.id === sourceWireId);
+              if (wire) {
+                createWire(wire.source.componentId, wire.source.portName, compId, portName);
+              }
+            } else if (sourceComponentId && sourcePortName) {
+              // Creating from a port
+              // Check if there's already a wire from this source
+              const existingWire = wires.find(
+                (w) => w.source.componentId === sourceComponentId && w.source.portName === sourcePortName
+              );
               
-              // Also create in simulator store for backwards compatibility
-              createWire(sourceComponentId, sourcePortName, compId, portName);
+              if (existingWire) {
+                // Add as another target to existing wire (bifurcation)
+                addWireTarget(existingWire.id, compId, portName);
+              } else {
+                // Create new wire
+                const wireId = addWire(sourceComponentId, sourcePortName, compId, portName);
+                
+                // Also create in simulator store for backwards compatibility
+                createWire(sourceComponentId, sourcePortName, compId, portName);
+              }
             }
           } catch (e) {
             console.error("Failed to create wire:", e);

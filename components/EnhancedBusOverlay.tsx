@@ -31,12 +31,17 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
   const selectNode = useEnhancedWireStore((s) => s.selectNode);
   const updateWireNode = useEnhancedWireStore((s) => s.updateWireNode);
   const addWireNode = useEnhancedWireStore((s) => s.addWireNode);
+  const addWireTargetFromNode = useEnhancedWireStore((s) => s.addWireTargetFromNode);
+  const getNodePosition = useEnhancedWireStore((s) => s.getNodePosition);
   
   // Wire creation state
   const isCreating = useWireCreationStore((s) => s.isCreating);
   const sourceComponentId = useWireCreationStore((s) => s.sourceComponentId);
   const sourcePortName = useWireCreationStore((s) => s.sourcePortName);
+  const sourceWireId = useWireCreationStore((s) => s.sourceWireId);
+  const sourceNodeId = useWireCreationStore((s) => s.sourceNodeId);
   const mousePosition = useWireCreationStore((s) => s.mousePosition);
+  const startWireCreationFromNode = useWireCreationStore((s) => s.startWireCreationFromNode);
   
   const [dragState, setDragState] = useState<{ wireId: string; nodeId: string } | null>(null);
 
@@ -189,26 +194,36 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
 
   // Calculate temporary wire preview
   let tempWirePreview: { x: number; y: number }[] | null = null;
-  if (isCreating && sourceComponentId && sourcePortName && mousePosition) {
-    const sourceComp = components.find((c) => c.id === sourceComponentId);
-    if (sourceComp) {
-      const sourceObj = objects.get(sourceComponentId);
-      if (sourceObj && "getPorts" in sourceObj) {
-        const sourcePortMap = (sourceObj as { getPorts: () => Record<string, { direction: string }> }).getPorts();
-        const sourcePorts = Object.entries(sourcePortMap).map(([name, p]) => ({
-          name,
-          direction: p.direction as "input" | "output",
-        }));
-        
-        const sourcePortPos = findPortPosition(
-          sourceComp,
-          sourcePortName,
-          "output",
-          sourcePorts
-        );
-        
-        tempWirePreview = calculateOrthogonalPath(sourcePortPos, mousePosition);
+  if (isCreating && mousePosition) {
+    let startPos: { x: number; y: number } | null = null;
+    
+    if (sourceComponentId && sourcePortName) {
+      // Starting from a port
+      const sourceComp = components.find((c) => c.id === sourceComponentId);
+      if (sourceComp) {
+        const sourceObj = objects.get(sourceComponentId);
+        if (sourceObj && "getPorts" in sourceObj) {
+          const sourcePortMap = (sourceObj as { getPorts: () => Record<string, { direction: string }> }).getPorts();
+          const sourcePorts = Object.entries(sourcePortMap).map(([name, p]) => ({
+            name,
+            direction: p.direction as "input" | "output",
+          }));
+          
+          startPos = findPortPosition(
+            sourceComp,
+            sourcePortName,
+            "output",
+            sourcePorts
+          );
+        }
       }
+    } else if (sourceWireId && sourceNodeId) {
+      // Starting from a node
+      startPos = getNodePosition(sourceWireId, sourceNodeId);
+    }
+    
+    if (startPos) {
+      tempWirePreview = calculateOrthogonalPath(startPos, mousePosition);
     }
   }
 
@@ -234,15 +249,16 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
           </feMerge>
         </filter>
 
+        {/* Arrow marker - smaller size matching port indicators */}
         <marker
           id="arrowhead"
-          markerWidth="10"
-          markerHeight="7"
-          refX="9"
-          refY="3.5"
+          markerWidth="6"
+          markerHeight="6"
+          refX="5"
+          refY="3"
           orient="auto"
         >
-          <polygon points="0 0, 10 3.5, 0 7" fill="#22d3ee" />
+          <polygon points="0 0, 6 3, 0 6" fill="#22d3ee" />
         </marker>
       </defs>
 
@@ -329,6 +345,11 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
                 onClick={(e) => {
                   e.stopPropagation();
                   selectNode(node.id);
+                }}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  // Start wire creation from this node for bifurcation
+                  startWireCreationFromNode(wire.id, node.id);
                 }}
               />
             ))}

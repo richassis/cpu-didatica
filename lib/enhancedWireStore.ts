@@ -39,6 +39,7 @@ interface EnhancedWireState {
   addWire: (sourceCompId: string, sourcePort: string, targetCompId: string, targetPort: string) => string;
   removeWire: (wireId: string) => void;
   addWireTarget: (wireId: string, targetCompId: string, targetPort: string) => void;
+  addWireTargetFromNode: (wireId: string, nodeId: string, targetCompId: string, targetPort: string) => string;
   removeWireTarget: (wireId: string, targetCompId: string, targetPort: string) => void;
   addWireNode: (wireId: string, x: number, y: number, insertIndex?: number) => string;
   updateWireNode: (wireId: string, nodeId: string, x: number, y: number) => void;
@@ -46,6 +47,7 @@ interface EnhancedWireState {
   selectWire: (wireId: string | null) => void;
   selectNode: (nodeId: string | null) => void;
   getWire: (wireId: string) => EnhancedWire | undefined;
+  getNodePosition: (wireId: string, nodeId: string) => { x: number; y: number } | null;
   clearAll: () => void;
 }
 
@@ -101,6 +103,39 @@ export const useEnhancedWireStore = create<EnhancedWireState>()(
               : w
           ),
         }));
+      },
+
+      addWireTargetFromNode: (wireId, nodeId, targetCompId, targetPort) => {
+        // Create a new wire that branches from the specified node
+        const newWireId = `wire-${Date.now()}-${Math.random()}`;
+        const sourceWire = get().wires.find(w => w.id === wireId);
+        
+        if (!sourceWire) return newWireId;
+        
+        const nodeIndex = sourceWire.nodes.findIndex(n => n.id === nodeId);
+        if (nodeIndex === -1) return newWireId;
+        
+        const node = sourceWire.nodes[nodeIndex];
+        
+        // Create new wire starting from this node
+        const newWire: EnhancedWire = {
+          id: newWireId,
+          source: sourceWire.source, // Same source as parent wire
+          targets: [
+            {
+              componentId: targetCompId,
+              portName: targetPort,
+            },
+          ],
+          // Copy nodes up to and including the bifurcation point
+          nodes: sourceWire.nodes.slice(0, nodeIndex + 1),
+        };
+        
+        set((state) => ({
+          wires: [...state.wires, newWire],
+        }));
+        
+        return newWireId;
       },
 
       removeWireTarget: (wireId, targetCompId, targetPort) => {
@@ -171,6 +206,14 @@ export const useEnhancedWireStore = create<EnhancedWireState>()(
       selectNode: (nodeId) => set({ selectedNodeId: nodeId }),
 
       getWire: (wireId) => get().wires.find((w) => w.id === wireId),
+
+      getNodePosition: (wireId, nodeId) => {
+        const wire = get().wires.find((w) => w.id === wireId);
+        if (!wire) return null;
+        
+        const node = wire.nodes.find((n) => n.id === nodeId);
+        return node ? { x: node.x, y: node.y } : null;
+      },
 
       clearAll: () => set({ wires: [], selectedWireId: null, selectedNodeId: null }),
     }),
