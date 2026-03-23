@@ -231,7 +231,7 @@ export const useEnhancedWireStore = create<EnhancedWireState>()(
 
         for (const maybeWire of wires) {
           if (maybeWire && "start" in maybeWire) {
-            migratedWires.push(maybeWire as EnhancedWire);
+            migratedWires.push(maybeWire as unknown as EnhancedWire);
             continue;
           }
 

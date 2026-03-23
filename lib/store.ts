@@ -141,8 +141,8 @@ export const useLayoutStore = create<LayoutState>()(
             c.id === id
               ? {
                   ...c,
-                  x: Math.max(0, Math.min(CANVAS_WIDTH  - c.w, c.x + dx)),
-                  y: Math.max(0, Math.min(CANVAS_HEIGHT - c.h, c.y + dy)),
+                  x: snapToGrid(Math.max(0, Math.min(CANVAS_WIDTH  - c.w, c.x + dx)), GRID_SIZE),
+                  y: snapToGrid(Math.max(0, Math.min(CANVAS_HEIGHT - c.h, c.y + dy)), GRID_SIZE),
                 }
               : c
           ),

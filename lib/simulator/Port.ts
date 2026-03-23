@@ -146,7 +146,7 @@ export class InputPort<T = number> extends Port<T> {
 
 /**
  * An OutputPort emits values to all connected InputPorts.
- * Writing to it immediately propagates to all listeners.
+ * Writing to it can propagate immediately or be deferred until explicit propagation.
  */
 export class OutputPort<T = number> extends Port<T> {
   /** All InputPorts currently connected to this output. */
@@ -179,6 +179,32 @@ export class OutputPort<T = number> extends Port<T> {
     // Immediate propagation to all targets
     for (const target of this._targets) {
       target._receive(value);
+    }
+  }
+
+  /**
+   * Set the output value WITHOUT propagating to connected inputs.
+   * Use this when you want to batch updates and propagate later via `propagate()`.
+   */
+  setWithoutPropagate(value: T): void {
+    // Clamp numeric values if bitWidth is defined
+    if (this.dataType === "number" || this.dataType === "opcode") {
+      if (this.bitWidth !== null && typeof value === "number") {
+        const max = (1 << this.bitWidth) - 1;
+        value = Math.max(0, Math.min(max, Math.floor(value))) as T;
+      }
+    }
+
+    this._value = value;
+  }
+
+  /**
+   * Explicitly propagate the current value to all connected inputs.
+   * Call this after using `setWithoutPropagate()` to push the value downstream.
+   */
+  propagate(): void {
+    for (const target of this._targets) {
+      target._receive(this._value);
     }
   }
 
