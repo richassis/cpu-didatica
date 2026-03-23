@@ -45,8 +45,8 @@ export interface Props {
 }
 
 /** Virtual canvas is effectively infinite — much larger than any screen. */
-export const CANVAS_WIDTH  = 10000;
-export const CANVAS_HEIGHT = 10000;
+export const CANVAS_WIDTH  = 20000;
+export const CANVAS_HEIGHT = 20000;
 
 interface LayoutState {
   zoom: number;
@@ -78,8 +78,8 @@ interface LayoutState {
   loadProject: (snapshot: ProjectSnapshot) => void;
 }
 
-const MIN_ZOOM = 0.1;
-const MAX_ZOOM = 4;
+const MIN_ZOOM = 0.2;
+const MAX_ZOOM = 2;
 
 export const useLayoutStore = create<LayoutState>()(
   persist(
@@ -250,6 +250,6 @@ export const useLayoutStore = create<LayoutState>()(
   )
 );
 
-export const ZOOM_STEP = 0.1;
+export const ZOOM_STEP = 0.05;
 export const ZOOM_MIN = MIN_ZOOM;
 export const ZOOM_MAX = MAX_ZOOM;

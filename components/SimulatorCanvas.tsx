@@ -205,7 +205,7 @@ export default function SimulatorCanvas() {
   return (
     <div 
       ref={scrollRef} 
-      className="flex-1 min-h-0 overflow-auto bg-gray-950 relative"
+      className="flex-1 min-h-0 overflow-auto bg-gray-950 relative scrollbar-hide"
       style={{ cursor: isPanning ? 'grabbing' : 'grab' }}
     >
       <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
