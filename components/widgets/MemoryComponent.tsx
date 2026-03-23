@@ -226,7 +226,7 @@ interface CellRowProps {
   value: number;
   bitWidth: number;
   addrBits: number;
-  base: number;
+  base: import("@/lib/displayStore").NumericBase;
   isActive: boolean;
   onPoke: (addr: number, value: number) => void;
 }

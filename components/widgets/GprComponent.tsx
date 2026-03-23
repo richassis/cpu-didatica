@@ -122,7 +122,7 @@ interface RowProps {
   index: number;
   value: number;
   bitWidth: number;
-  base: number;
+  base: import("@/lib/displayStore").NumericBase;
   editMode: boolean;
   onPoke: (index: number, value: number) => void;
 }
@@ -165,9 +165,6 @@ function RegisterRow({ index, value, bitWidth, base, editMode, onPoke }: RowProp
             if (e.key === "Escape") { setDraft(null); inputRef.current?.blur(); }
           }}
         />
-        
-        {/* Port indicators */}
-        <PortsOverlay componentId={id} />
       </div>
     );
   }
