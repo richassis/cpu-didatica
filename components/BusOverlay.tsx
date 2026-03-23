@@ -3,7 +3,9 @@
 import { useLayoutStore, CANVAS_WIDTH, CANVAS_HEIGHT } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayStore, formatNum } from "@/lib/displayStore";
+import { useWireCreationStore } from "@/lib/wireCreationStore";
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { calculateOrthogonalPath, pointsToSVGPath, getPointOnOrthogonalPath } from "@/lib/wireRouting";
 
 interface WireAnimation {
   wireId: string;
@@ -29,6 +31,13 @@ export default function BusOverlay({ visible }: { visible: boolean }) {
   const objects = useSimulatorStore((s) => s.objects);
   const revision = useSimulatorStore((s) => s.revision);
   const base = useDisplayStore((s) => s.numericBase);
+  
+  // Wire creation state
+  const isCreating = useWireCreationStore((s) => s.isCreating);
+  const sourceComponentId = useWireCreationStore((s) => s.sourceComponentId);
+  const sourcePortName = useWireCreationStore((s) => s.sourcePortName);
+  const mousePosition = useWireCreationStore((s) => s.mousePosition);
+  const cancelWireCreation = useWireCreationStore((s) => s.cancelWireCreation);
   
   // Get wires - re-runs when revision changes
   const wires = useMemo(() => getWires(), [getWires, revision]);
@@ -120,46 +129,19 @@ export default function BusOverlay({ visible }: { visible: boolean }) {
 
   if (!visible) return null;
 
-  // Calculate bezier curve path
-  const getPath = (source: { x: number; y: number }, target: { x: number; y: number }) => {
-    const midX = (source.x + target.x) / 2;
-    const dx = Math.abs(target.x - source.x);
-    const controlOffset = Math.min(dx * 0.5, 100);
-    
-    return `M ${source.x} ${source.y} 
-            C ${source.x + controlOffset} ${source.y}, 
-              ${target.x - controlOffset} ${target.y}, 
-              ${target.x} ${target.y}`;
-  };
-
-  // Get point along bezier curve at t (0-1)
-  const getPointOnCurve = (
-    source: { x: number; y: number },
-    target: { x: number; y: number },
-    t: number
-  ) => {
-    const dx = Math.abs(target.x - source.x);
-    const controlOffset = Math.min(dx * 0.5, 100);
-    
-    const p0 = source;
-    const p1 = { x: source.x + controlOffset, y: source.y };
-    const p2 = { x: target.x - controlOffset, y: target.y };
-    const p3 = target;
-
-    // Cubic bezier formula
-    const cx = 3 * (p1.x - p0.x);
-    const bx = 3 * (p2.x - p1.x) - cx;
-    const ax = p3.x - p0.x - cx - bx;
-    
-    const cy = 3 * (p1.y - p0.y);
-    const by = 3 * (p2.y - p1.y) - cy;
-    const ay = p3.y - p0.y - cy - by;
-
-    const x = ax * t * t * t + bx * t * t + cx * t + p0.x;
-    const y = ay * t * t * t + by * t * t + cy * t + p0.y;
-
-    return { x, y };
-  };
+  // Calculate temporary wire preview
+  let tempWirePreview: { x: number; y: number }[] | null = null;
+  if (isCreating && sourceComponentId && sourcePortName && mousePosition) {
+    const sourceComp = components.find((c) => c.id === sourceComponentId);
+    if (sourceComp) {
+      const sourceX = sourceComp.x + sourceComp.w;
+      const sourceY = sourceComp.y + sourceComp.h / 2;
+      tempWirePreview = calculateOrthogonalPath(
+        { x: sourceX, y: sourceY },
+        mousePosition
+      );
+    }
+  }
 
   return (
     <svg
@@ -201,10 +183,11 @@ export default function BusOverlay({ visible }: { visible: boolean }) {
       {/* Render wires */}
       {wirePositions.map((wp) => {
         const animation = animations.find((a) => a.wireId === wp.wireId);
-        const path = getPath(
+        const points = calculateOrthogonalPath(
           { x: wp.sourceX, y: wp.sourceY },
           { x: wp.targetX, y: wp.targetY }
         );
+        const path = pointsToSVGPath(points);
 
         return (
           <g key={wp.wireId}>
@@ -223,11 +206,7 @@ export default function BusOverlay({ visible }: { visible: boolean }) {
             {/* Animated data packet */}
             {animation && animation.progress < 1 && (
               (() => {
-                const point = getPointOnCurve(
-                  { x: wp.sourceX, y: wp.sourceY },
-                  { x: wp.targetX, y: wp.targetY },
-                  animation.progress
-                );
+                const point = getPointOnOrthogonalPath(points, animation.progress);
                 return (
                   <g transform={`translate(${point.x}, ${point.y})`}>
                     {/* Glowing circle */}
@@ -275,11 +254,7 @@ export default function BusOverlay({ visible }: { visible: boolean }) {
             {/* Value badge at midpoint */}
             {!animation && (
               (() => {
-                const midPoint = getPointOnCurve(
-                  { x: wp.sourceX, y: wp.sourceY },
-                  { x: wp.targetX, y: wp.targetY },
-                  0.5
-                );
+                const midPoint = getPointOnOrthogonalPath(points, 0.5);
                 return (
                   <g transform={`translate(${midPoint.x}, ${midPoint.y})`}>
                     <rect
@@ -307,6 +282,19 @@ export default function BusOverlay({ visible }: { visible: boolean }) {
           </g>
         );
       })}
+
+      {/* Temporary wire preview during creation */}
+      {tempWirePreview && (
+        <path
+          d={pointsToSVGPath(tempWirePreview)}
+          fill="none"
+          stroke="#22d3ee"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeDasharray="5,5"
+          opacity="0.6"
+        />
+      )}
 
       {/* Show "No connections" if empty */}
       {wirePositions.length === 0 && (

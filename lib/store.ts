@@ -2,7 +2,10 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { v4 as uuidv4 } from "uuid";
 import { useSimulatorStore } from "@/lib/simulatorStore";
+import { snapToGrid } from "@/lib/wireRouting";
 import type { WireDescriptor } from "@/lib/simulator";
+
+const GRID_SIZE = 16;
 
 /**
  * Plain-JSON snapshot of a single component's runtime state.
@@ -106,8 +109,12 @@ export const useLayoutStore = create<LayoutState>()(
           const visW = viewportSize.width  / zoom;
           const visH = viewportSize.height / zoom;
 
-          const x = Math.max(0, Math.min(CANVAS_WIDTH  - w, Math.round(canvasLeft + (visW - w) / 2)));
-          const y = Math.max(0, Math.min(CANVAS_HEIGHT - h, Math.round(canvasTop  + (visH - h) / 2)));
+          const rawX = Math.max(0, Math.min(CANVAS_WIDTH  - w, Math.round(canvasLeft + (visW - w) / 2)));
+          const rawY = Math.max(0, Math.min(CANVAS_HEIGHT - h, Math.round(canvasTop  + (visH - h) / 2)));
+          
+          // Snap to grid
+          const x = snapToGrid(rawX, GRID_SIZE);
+          const y = snapToGrid(rawY, GRID_SIZE);
 
           return {
             components: [...state.components, { id, type, label, w, h, x, y, ...(meta ? { meta } : {}) }],

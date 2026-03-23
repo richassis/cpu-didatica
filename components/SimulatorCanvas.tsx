@@ -11,11 +11,15 @@ import {
 import { useLayoutStore, ZOOM_STEP, ZOOM_MIN, ZOOM_MAX, CANVAS_WIDTH, CANVAS_HEIGHT, ProjectSnapshot } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayStore } from "@/lib/displayStore";
+import { useWireCreationStore } from "@/lib/wireCreationStore";
+import { snapToGrid } from "@/lib/wireRouting";
 import WidgetRenderer from "./WidgetRenderer";
 import AddComponentModal from "./AddComponentModal";
 import BusOverlay from "./BusOverlay";
 import ConnectionModal from "./ConnectionModal";
 import { useEffect, useRef, useState, useCallback } from "react";
+
+export const GRID_SIZE = 16;
 
 export default function SimulatorCanvas() {
   const components = useLayoutStore((s) => s.components);
@@ -48,6 +52,11 @@ export default function SimulatorCanvas() {
   // Numeric base setting
   const numericBase = useDisplayStore((s) => s.numericBase);
   const setNumericBase = useDisplayStore((s) => s.setNumericBase);
+
+  // Wire creation state
+  const isCreatingWire = useWireCreationStore((s) => s.isCreating);
+  const updateMousePosition = useWireCreationStore((s) => s.updateMousePosition);
+  const cancelWireCreation = useWireCreationStore((s) => s.cancelWireCreation);
 
   // Sync viewport state into the store whenever scroll or size changes
   const syncViewport = useCallback(() => {
@@ -161,6 +170,46 @@ export default function SimulatorCanvas() {
     };
   }, [isPanning, panStart]);
 
+  // Track mouse position for wire creation preview
+  useEffect(() => {
+    if (!isCreatingWire) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const el = scrollRef.current;
+      if (!el) return;
+      
+      const rect = el.getBoundingClientRect();
+      const canvasX = (e.clientX - rect.left + el.scrollLeft) / zoom;
+      const canvasY = (e.clientY - rect.top + el.scrollTop) / zoom;
+      
+      updateMousePosition(canvasX, canvasY);
+    };
+
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        cancelWireCreation();
+      }
+    };
+
+    const handleClick = (e: MouseEvent) => {
+      // Cancel if clicking on canvas background
+      const target = e.target as HTMLElement;
+      if (target.closest('svg') && !target.closest('[data-draggable]')) {
+        cancelWireCreation();
+      }
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("keydown", handleEscape);
+    window.addEventListener("click", handleClick);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("keydown", handleEscape);
+      window.removeEventListener("click", handleClick);
+    };
+  }, [isCreatingWire, zoom, updateMousePosition, cancelWireCreation]);
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } })
@@ -169,7 +218,16 @@ export default function SimulatorCanvas() {
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, delta } = event;
     if (delta.x !== 0 || delta.y !== 0) {
-      updatePosition(String(active.id), delta.x / zoom, delta.y / zoom);
+      const dx = delta.x / zoom;
+      const dy = delta.y / zoom;
+      
+      // Snap to grid
+      const component = components.find(c => c.id === String(active.id));
+      if (component) {
+        const newX = snapToGrid(component.x + dx, GRID_SIZE);
+        const newY = snapToGrid(component.y + dy, GRID_SIZE);
+        updatePosition(String(active.id), newX - component.x, newY - component.y);
+      }
     }
   };
 
@@ -217,7 +275,7 @@ export default function SimulatorCanvas() {
               height: CANVAS_HEIGHT,
               transform: `scale(${zoom})`,
               backgroundImage: "radial-gradient(circle, #374151 1px, transparent 1px)",
-              backgroundSize: "32px 32px",
+              backgroundSize: `${GRID_SIZE}px ${GRID_SIZE}px`,
             }}
           >
             <BusOverlay visible={showBusOverlay} />
