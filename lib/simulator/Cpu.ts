@@ -1,6 +1,11 @@
 import type { Clockable } from "./Clockable";
 import { Opcode, UlaOperation, OPCODE_TO_ULA_OP } from "./ISA";
 import { InputPort, OutputPort, type Connectable, type PortMap } from "./Port";
+import { CpuState, ALL_CPU_STATES } from "./CpuState";
+import { DEFAULT_TICK_STEPS } from "./CpuSteps";
+
+// Re-export CpuState for backwards compatibility
+export { CpuState } from "./CpuState";
 
 /**
  * Control signal definitions for the CPU.
@@ -26,24 +31,6 @@ export const CONTROL_SIGNAL_DEFS: ControlSignalDef[] = [
 ];
 
 /**
- * FSM states for instruction execution.
- */
-export enum CpuState {
-    FETCH = 0,
-    DECODE = 1,
-    EXECUTE = 2,
-    READMEM = 3,
-    WRITEMEM = 4,
-    READREG1 = 5,
-    READREG2 = 6,
-    WRITEREG1 = 7,
-    WRITEREG2 = 8,
-    WRITEREG3 = 9,
-    WRITEPC = 10,
-}
-
-
-/**
  * Maps each opcode to its ordered sequence of CpuState steps that execute
  * after FETCH+DECODE.
  *
@@ -67,6 +54,15 @@ export const OPCODE_SEQUENCES: Readonly<Partial<Record<Opcode, CpuState[]>>> = {
   // HLT and unknown opcodes handled specially in doDecode()
 };
 
+/**
+ * Component registry entry for step-based ticking.
+ */
+export interface RegisteredComponent {
+  id: string;
+  type: string;
+  component: Clockable;
+  tickSteps: CpuState[];
+}
 
 
 /**
@@ -74,6 +70,9 @@ export const OPCODE_SEQUENCES: Readonly<Partial<Record<Opcode, CpuState[]>>> = {
  *
  * Implements a finite state machine that sequences through instruction phases
  * and drives control signals to other components via output ports.
+ * 
+ * The CPU now owns the clock and controls when each registered component ticks
+ * based on the current execution state.
  *
  * Ports:
  * - in_opcode (5-bit): The decoded opcode from the Decoder
@@ -92,6 +91,15 @@ export class CPU implements Clockable, Connectable {
   private _FSMindex: number = 0;
   private _halted: boolean = false;
   private _paused: boolean = false;
+
+  // Clock tick counter (moved from Clock class)
+  private _totalTicks: number = 0;
+
+  // Registered components for step-based ticking
+  private _registeredComponents: Map<string, RegisteredComponent> = new Map();
+
+  // Previous signal values for change detection
+  private _prevSignals: Map<string, number | boolean> = new Map();
 
   // ── Input Ports ──────────────────────────────────────────────
   readonly in_opcode: InputPort<number>;
@@ -134,8 +142,66 @@ export class CPU implements Clockable, Connectable {
     this.out_muxAMem = new OutputPort<number>("out_muxAMem", "number", 1, 0);
     this.out_wrIR = new OutputPort<number>("out_wrIR", "number", 1, 0);
     this.out_opULA = new OutputPort<number>("out_opULA", "number", 3, UlaOperation.ADD);
-    this.out_state = new OutputPort<number>("out_state", "number", 3, CpuState.FETCH);
+    this.out_state = new OutputPort<number>("out_state", "number", 4, CpuState.FETCH);
     this.out_halted = new OutputPort<boolean>("out_halted", "boolean", 1, false);
+
+    // Initialize previous signal values
+    this.initPrevSignals();
+  }
+
+  // ── Component Registration ───────────────────────────────────
+
+  /**
+   * Register a component for step-based ticking.
+   * @param id Component ID
+   * @param type Component type string (e.g., "Register", "GprComponent")
+   * @param component The Clockable component instance
+   * @param customTickSteps Optional custom tick steps (uses defaults if not provided)
+   */
+  registerComponent(
+    id: string,
+    type: string,
+    component: Clockable,
+    customTickSteps?: CpuState[]
+  ): void {
+    const defaultSteps = DEFAULT_TICK_STEPS[type] ?? ALL_CPU_STATES;
+    this._registeredComponents.set(id, {
+      id,
+      type,
+      component,
+      tickSteps: customTickSteps ?? [...defaultSteps],
+    });
+  }
+
+  /**
+   * Unregister a component.
+   */
+  unregisterComponent(id: string): void {
+    this._registeredComponents.delete(id);
+  }
+
+  /**
+   * Get the tick steps for a registered component.
+   */
+  getComponentTickSteps(id: string): CpuState[] | undefined {
+    return this._registeredComponents.get(id)?.tickSteps;
+  }
+
+  /**
+   * Set the tick steps for a registered component.
+   */
+  setComponentTickSteps(id: string, steps: CpuState[]): void {
+    const entry = this._registeredComponents.get(id);
+    if (entry) {
+      entry.tickSteps = [...steps];
+    }
+  }
+
+  /**
+   * Get all registered components.
+   */
+  getRegisteredComponents(): RegisteredComponent[] {
+    return Array.from(this._registeredComponents.values());
   }
 
   // ── Connectable interface ────────────────────────────────────
@@ -175,6 +241,10 @@ export class CPU implements Clockable, Connectable {
     return this._paused;
   }
 
+  get totalTicks(): number {
+    return this._totalTicks;
+  }
+
   /** Pause or resume the CPU without affecting halted state. */
   setPaused(paused: boolean): void {
     this._paused = paused;
@@ -185,10 +255,27 @@ export class CPU implements Clockable, Connectable {
   /** Reset the CPU to initial state. */
   reset(): void {
     this._state = CpuState.FETCH;
+    this._FSMindex = 0;
     this._halted = false;
+    this._totalTicks = 0;
     this.clearAllSignals();
+    this.initPrevSignals();
     this.out_state.set(CpuState.FETCH);
     this.out_halted.set(false);
+  }
+
+  /** Initialize previous signal values for change detection. */
+  private initPrevSignals(): void {
+    this._prevSignals.set("wrReg", 0);
+    this._prevSignals.set("muxAReg", 1);
+    this._prevSignals.set("muxDReg", 2);
+    this._prevSignals.set("wrPC", 0);
+    this._prevSignals.set("muxPC", 1);
+    this._prevSignals.set("rdMem", 0);
+    this._prevSignals.set("wrMem", 0);
+    this._prevSignals.set("muxAMem", 1);
+    this._prevSignals.set("wrIR", 0);
+    this._prevSignals.set("opULA", UlaOperation.ADD);
   }
 
   /** Clear all control signals to 0. */
@@ -205,6 +292,62 @@ export class CPU implements Clockable, Connectable {
     this.out_opULA.set(UlaOperation.ADD);
   }
 
+  /**
+   * Set a signal only if it has changed from its previous value.
+   * This reduces unnecessary propagation.
+   */
+  private setSignalIfChanged<T extends number | boolean>(
+    port: OutputPort<T>,
+    signalName: string,
+    value: T
+  ): void {
+    const prevValue = this._prevSignals.get(signalName);
+    if (prevValue !== value) {
+      port.set(value);
+      this._prevSignals.set(signalName, value);
+    }
+  }
+
+  // ── Tick orchestration ───────────────────────────────────────
+
+  /**
+   * Main tick method that advances the CPU state and ticks appropriate components.
+   * This replaces the old global clock tick.
+   */
+  tick(): void {
+    if (this._halted || this._paused) return;
+
+    this._totalTicks++;
+
+    // First, execute the CPU's own state logic
+    this.onTick();
+
+    // Then, tick all registered components that should tick on this state
+    this.tickComponentsForState(this._state);
+  }
+
+  /**
+   * Tick all components registered for the given state.
+   */
+  private tickComponentsForState(state: CpuState): void {
+    for (const entry of this._registeredComponents.values()) {
+      if (entry.tickSteps.includes(state)) {
+        entry.component.onTick();
+      }
+    }
+  }
+
+  /**
+   * Tick a single component by ID, regardless of current state.
+   * Useful for manual testing from ConfigModal.
+   */
+  tickSingleComponent(id: string): void {
+    const entry = this._registeredComponents.get(id);
+    if (entry) {
+      entry.component.onTick();
+    }
+  }
+
   // ── Clockable callback ───────────────────────────────────────
 
   /**
@@ -219,8 +362,6 @@ export class CPU implements Clockable, Connectable {
    */
   onTick(): void {
     if (this._halted || this._paused) return;
-
-    // this.clearAllSignals();
 
     switch (this._state) {
       case CpuState.FETCH:
@@ -244,14 +385,9 @@ export class CPU implements Clockable, Connectable {
 
   /** Tick 1 – read instruction from memory[PC] into IR. */
   private doFetch(): void {
-    this.out_wrPC.set(1);
-    this.out_wrIR.set(1);
-    this.out_rdMem.set(1);
-    // this.out_wrMem.set(0);
-    // this.out_muxPC.set(1); 
-    // this.out_muxAMem.set(1);
-    // this.out_muxAReg.set(1);
-    // this.out_muxDReg.set(2); 
+    this.setSignalIfChanged(this.out_wrPC, "wrPC", 1);
+    this.setSignalIfChanged(this.out_wrIR, "wrIR", 1);
+    this.setSignalIfChanged(this.out_rdMem, "rdMem", 1);
     this._state = CpuState.DECODE;
   }
 
@@ -261,9 +397,9 @@ export class CPU implements Clockable, Connectable {
    * Then decide which first execution state to enter.
    */
   private doDecode(): void {
-    this.out_wrPC.set(0);
-    this.out_wrIR.set(0);
-    this.out_rdMem.set(0);
+    this.setSignalIfChanged(this.out_wrPC, "wrPC", 0);
+    this.setSignalIfChanged(this.out_wrIR, "wrIR", 0);
+    this.setSignalIfChanged(this.out_rdMem, "rdMem", 0);
 
     const opcode = this.in_opcode.get() as Opcode;
 
@@ -322,53 +458,51 @@ export class CPU implements Clockable, Connectable {
 
       // ── LDA: mem[operand] → GPR ─────────────────────────────
       case CpuState.READMEM:
-        this.out_rdMem.set(1);
-        this.out_muxAMem.set(0); // operand as memory address
-        this.out_muxAReg.set(0); // select GPR address for later write
-        this.out_muxDReg.set(1); // select memory data for later write
+        this.setSignalIfChanged(this.out_rdMem, "rdMem", 1);
+        this.setSignalIfChanged(this.out_muxAMem, "muxAMem", 0); // operand as memory address
+        this.setSignalIfChanged(this.out_muxAReg, "muxAReg", 0); // select GPR address for later write
+        this.setSignalIfChanged(this.out_muxDReg, "muxDReg", 1); // select memory data for later write
         break;
 
       case CpuState.WRITEREG1:
         // Used by LDA: write memory data into GPR
-        this.out_wrReg.set(1);
-        this.out_rdMem.set(0);
+        this.setSignalIfChanged(this.out_wrReg, "wrReg", 1);
+        this.setSignalIfChanged(this.out_rdMem, "rdMem", 0);
         break;
 
       // ── LDAI: immediate → GPR ───────────────────────────────
       case CpuState.WRITEREG2:
         // Used by LDAI: write immediate operand into GPR
-        this.out_wrReg.set(1);
-        this.out_muxAReg.set(0); // select GPR address for later write
-        this.out_muxDReg.set(0); // immediate operand
+        this.setSignalIfChanged(this.out_wrReg, "wrReg", 1);
+        this.setSignalIfChanged(this.out_muxAReg, "muxAReg", 0); // select GPR address for later write
+        this.setSignalIfChanged(this.out_muxDReg, "muxDReg", 0); // immediate operand
         break;
 
       // ── STA: GPR → mem[operand] ─────────────────────────────
       case CpuState.READREG1:
         // Used by STA: assert GPR value on bus (muxAReg selects GPR address)
-        this.out_muxAMem.set(0);
+        this.setSignalIfChanged(this.out_muxAMem, "muxAMem", 0);
         break;
 
       case CpuState.WRITEMEM:
         // Used by STA: write GPR data to memory[operand]
-        this.out_wrMem.set(1);
+        this.setSignalIfChanged(this.out_wrMem, "wrMem", 1);
         break;
 
       // ── ULA ops: read operands, execute, write result ────────
       case CpuState.READREG2:
         // Read second source operand into ULA input B
-        // this.out_muxAReg.set(1); // select srcB address
         break;
 
       case CpuState.EXECUTE:
         // Perform the ULA operation
-        this.out_opULA.set(this.opcodeToUlaOp(opcode));
+        this.setSignalIfChanged(this.out_opULA, "opULA", this.opcodeToUlaOp(opcode));
         break;
 
       case CpuState.WRITEREG3:
         // Write ULA result into destination register
-        this.out_wrReg.set(1);
-        this.out_opULA.set(UlaOperation.ADD); // default to ADD for non-ULA ops
-
+        this.setSignalIfChanged(this.out_wrReg, "wrReg", 1);
+        this.setSignalIfChanged(this.out_opULA, "opULA", UlaOperation.ADD); // default to ADD for non-ULA ops
         break;
 
       // ── Jumps ────────────────────────────────────────────────
@@ -380,8 +514,8 @@ export class CPU implements Clockable, Connectable {
           (opcode === Opcode.JN && this.in_flagNegative.get());
 
         if (taken) {
-          this.out_wrPC.set(1);
-          this.out_muxPC.set(1); // jump target from operand
+          this.setSignalIfChanged(this.out_wrPC, "wrPC", 1);
+          this.setSignalIfChanged(this.out_muxPC, "muxPC", 1); // jump target from operand
         }
         break;
       }

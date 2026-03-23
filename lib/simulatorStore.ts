@@ -12,7 +12,7 @@
  */
 
 import { create } from "zustand";
-import { Register, Gpr, Ula, Adder, Mux, Memory, Clock, CPU, Decoder, Bus, isClockable } from "@/lib/simulator";
+import { Register, Gpr, Ula, Adder, Mux, Memory, CPU, Decoder, Bus, isClockable, CpuState, ALL_CPU_STATES } from "@/lib/simulator";
 import type { Connectable, WireDescriptor } from "@/lib/simulator";
 import type { ComponentState } from "@/lib/store";
 // Lazy import via getter to avoid circular initialisation (store.ts imports simulatorStore).
@@ -85,21 +85,40 @@ interface SimulatorState {
   /** Monotonically increasing counter bumped by `touch` — forces selector updates. */
   revision: number;
 
-  // ── Clock ──────────────────────────────────────────────────────
-
-  /** The global clock instance. */
-  clock: Clock;
+  // ── Clock / CPU-based ticking ──────────────────────────────────
 
   /**
-   * Advance the clock by one tick, execute all Clockable objects,
-   * and bump the revision.
+   * Get the primary CPU instance (first CpuComponent found).
+   * Returns null if no CPU exists.
+   */
+  getPrimaryCpu: () => CPU | null;
+
+  /**
+   * Advance the simulation by one tick via the CPU.
+   * The CPU controls which components tick based on its current state.
    */
   tickClock: () => void;
 
   /**
-   * Reset the clock and all data objects.
+   * Reset the simulation (CPU and all data objects).
    */
   resetClock: () => void;
+
+  /**
+   * Tick a single component by ID, bypassing the CPU state system.
+   * Useful for manual testing.
+   */
+  tickSingleComponent: (id: string) => void;
+
+  /**
+   * Get the tick steps configured for a component.
+   */
+  getComponentTickSteps: (id: string) => CpuState[] | undefined;
+
+  /**
+   * Set the tick steps for a component.
+   */
+  setComponentTickSteps: (id: string, steps: CpuState[]) => void;
 
   // ── Wire Management ────────────────────────────────────────────
 
@@ -209,6 +228,17 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
       if (isConnectable(newObj)) {
         bus.registerComponent(newObj);
       }
+      
+      // Register with CPU for step-based ticking (if not the CPU itself)
+      if (isClockable(newObj) && type !== "CpuComponent") {
+        // Find the primary CPU and register this component
+        for (const obj of map.values()) {
+          if (obj instanceof CPU) {
+            obj.registerComponent(id, type, newObj);
+            break;
+          }
+        }
+      }
     }
 
     set({ objects: map });
@@ -217,6 +247,14 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
   removeObject: (id) => {
     const { objects, bus } = get();
     const map = new Map(objects);
+    
+    // Unregister from CPU
+    for (const obj of objects.values()) {
+      if (obj instanceof CPU) {
+        obj.unregisterComponent(id);
+        break;
+      }
+    }
     
     // Unregister from bus before removing
     bus.unregisterComponent(id);
@@ -286,18 +324,39 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
     set((s) => ({ revision: s.revision + 1 }));
   },
 
-  // ── Clock ──────────────────────────────────────────────────────
+  // ── Clock / CPU-based ticking ──────────────────────────────────
 
-  clock: new Clock(),
+  getPrimaryCpu: () => {
+    const { objects } = get();
+    for (const obj of objects.values()) {
+      if (obj instanceof CPU) {
+        return obj;
+      }
+    }
+    return null;
+  },
 
   tickClock: () => {
-    const { clock, objects } = get();
-    clock.tick();
-
-    // Execute all Clockable objects
+    const { objects } = get();
+    
+    // Find the primary CPU
+    let cpu: CPU | null = null;
     for (const obj of objects.values()) {
-      if (isClockable(obj)) {
-        obj.onTick();
+      if (obj instanceof CPU) {
+        cpu = obj;
+        break;
+      }
+    }
+
+    if (cpu) {
+      // CPU-controlled ticking: CPU decides which components tick
+      cpu.tick();
+    } else {
+      // Fallback: tick all Clockable objects if no CPU exists
+      for (const obj of objects.values()) {
+        if (isClockable(obj)) {
+          obj.onTick();
+        }
       }
     }
 
@@ -308,8 +367,7 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
   },
 
   resetClock: () => {
-    const { clock, objects } = get();
-    clock.reset();
+    const { objects } = get();
 
     // Reset every data object
     for (const obj of objects.values()) {
@@ -321,6 +379,37 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
     set((s) => ({ revision: s.revision + 1 }));
     // Persist cleared values
     getLayoutStore().getState().saveState();
+  },
+
+  tickSingleComponent: (id) => {
+    const { objects } = get();
+    const obj = objects.get(id);
+    if (obj && isClockable(obj)) {
+      obj.onTick();
+      set((s) => ({ revision: s.revision + 1 }));
+      getLayoutStore().getState().saveState();
+    }
+  },
+
+  getComponentTickSteps: (id) => {
+    const { objects } = get();
+    for (const obj of objects.values()) {
+      if (obj instanceof CPU) {
+        return obj.getComponentTickSteps(id);
+      }
+    }
+    return undefined;
+  },
+
+  setComponentTickSteps: (id, steps) => {
+    const { objects } = get();
+    for (const obj of objects.values()) {
+      if (obj instanceof CPU) {
+        obj.setComponentTickSteps(id, steps);
+        set((s) => ({ revision: s.revision + 1 }));
+        break;
+      }
+    }
   },
 
   // ── Wire Management ────────────────────────────────────────────

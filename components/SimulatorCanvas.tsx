@@ -44,12 +44,15 @@ export default function SimulatorCanvas() {
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
 
   // Clock state
-  const clock = useSimulatorStore((s) => s.clock);
   const tickClock = useSimulatorStore((s) => s.tickClock);
   const resetClock = useSimulatorStore((s) => s.resetClock);
+  const getPrimaryCpu = useSimulatorStore((s) => s.getPrimaryCpu);
   const createSimulatorWire = useSimulatorStore((s) => s.createWire);
   const revision = useSimulatorStore((s) => s.revision);
-  void revision;
+  
+  // Get total ticks from the primary CPU
+  const cpu = getPrimaryCpu();
+  const totalTicks = cpu?.totalTicks ?? 0;
 
   // Numeric base setting
   const numericBase = useDisplayStore((s) => s.numericBase);
@@ -497,7 +500,7 @@ export default function SimulatorCanvas() {
 
       {/* ── Clock toolbar (bottom-left) ───────────────────── */}
       <div className="fixed bottom-6 left-6 z-40 flex items-center gap-2 bg-gray-900/90 border border-gray-700 rounded-full px-3 py-1.5 shadow-xl backdrop-blur-sm">
-        <span className="text-xs font-mono text-gray-400 min-w-[4rem] text-center">T{clock.totalTicks}</span>
+        <span className="text-xs font-mono text-gray-400 min-w-[4rem] text-center">T{totalTicks}</span>
         <button
           onClick={tickClock}
           className="px-2.5 py-1 rounded-full text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition-colors"

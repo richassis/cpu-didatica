@@ -34,7 +34,14 @@ export {
 } from "./ISA";
 export { Encoder } from "./Encoder";
 export { Decoder } from "./Decoder";
-export { CPU, CpuState, OPCODE_SEQUENCES, CONTROL_SIGNAL_DEFS, type ControlSignalDef } from "./Cpu";
+export { CPU, OPCODE_SEQUENCES, CONTROL_SIGNAL_DEFS, type ControlSignalDef } from "./Cpu";
+// CpuState exported from its own module to avoid circular dependencies
+export { CpuState, CPU_STATE_LABELS, ALL_CPU_STATES } from "./CpuState";
+export {
+  DEFAULT_TICK_STEPS,
+  type StepTickable,
+  createStepTickableMixin,
+} from "./CpuSteps";
 
 // ── Reactive signal bus ────────────────────────────────────────
 export {

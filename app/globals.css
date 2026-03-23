@@ -30,3 +30,19 @@ body {
 .scrollbar-hide::-webkit-scrollbar {
   display: none;  /* Chrome, Safari and Opera */
 }
+
+/* Wire pulse animation for data passing */
+@keyframes wirePulse {
+  0% {
+    opacity: 0.9;
+    stroke-width: 6;
+  }
+  50% {
+    opacity: 0.7;
+    stroke-width: 8;
+  }
+  100% {
+    opacity: 0;
+    stroke-width: 4;
+  }
+}

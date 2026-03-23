@@ -6,6 +6,7 @@ import { useLayoutStore, ComponentInstance } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { getWidgetDefinition } from "@/lib/widgetDefinitions";
 import { ConfigPanelForType, ComponentConfig } from "@/components/widgets/ConfigPanel";
+import { CpuState, CPU_STATE_LABELS, ALL_CPU_STATES, isClockable } from "@/lib/simulator";
 
 interface Props {
   component: ComponentInstance;
@@ -13,7 +14,7 @@ interface Props {
 }
 
 /**
- * Config modal: label editing, manual port value overrides, and wire management.
+ * Config modal: label editing, manual port value overrides, tick step config, and wire management.
  */
 export default function ConfigModal({ component, onClose }: Props) {
   const updateLabel = useLayoutStore((s) => s.updateLabel);
@@ -27,6 +28,9 @@ export default function ConfigModal({ component, onClose }: Props) {
   const getWires  = useSimulatorStore((s) => s.getWires);
   const revision  = useSimulatorStore((s) => s.revision);
   const touch     = useSimulatorStore((s) => s.touch);
+  const tickSingleComponent = useSimulatorStore((s) => s.tickSingleComponent);
+  const getComponentTickSteps = useSimulatorStore((s) => s.getComponentTickSteps);
+  const setComponentTickSteps = useSimulatorStore((s) => s.setComponentTickSteps);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const wires = useMemo(() => getWires(), [getWires, revision]);
 
@@ -41,6 +45,17 @@ export default function ConfigModal({ component, onClose }: Props) {
 
   const obj = objects.get(component.id);
   const isConnectable = obj && "getPorts" in obj;
+  const isClockableObj = obj && isClockable(obj);
+  
+  // Tick steps configuration
+  const currentTickSteps = useMemo(() => getComponentTickSteps(component.id) ?? [], [component.id, getComponentTickSteps, revision]);
+  const [tickSteps, setTickSteps] = useState<CpuState[]>(currentTickSteps);
+  
+  // Update tickSteps when currentTickSteps changes
+  useEffect(() => {
+    setTickSteps(currentTickSteps);
+  }, [currentTickSteps]);
+  
   const ports = useMemo(() => {
     if (!isConnectable) return [];
     const portMap = (obj as { getPorts: () => Record<string, { name: string; direction: string; value: unknown; dataType: string; bitWidth: number | null }> }).getPorts();
@@ -63,6 +78,15 @@ export default function ConfigModal({ component, onClose }: Props) {
 
   // Helper: label for a component id
   const labelFor = (id: string) => layoutComponents.find((c) => c.id === id)?.label ?? id.slice(0, 8);
+  
+  // Toggle a tick step
+  const toggleTickStep = (state: CpuState) => {
+    setTickSteps((prev) =>
+      prev.includes(state)
+        ? prev.filter((s) => s !== state)
+        : [...prev, state].sort((a, b) => a - b)
+    );
+  };
 
   // Close on Escape
   useEffect(() => {
@@ -79,7 +103,17 @@ export default function ConfigModal({ component, onClose }: Props) {
     if (config.numInputs !== undefined) meta.numInputs = config.numInputs;
     if (config.wordCount !== undefined) meta.wordCount = config.wordCount;
     if (Object.keys(meta).length > 0) updateMeta(component.id, meta);
+    
+    // Save tick steps if they changed
+    if (isClockableObj && JSON.stringify(tickSteps) !== JSON.stringify(currentTickSteps)) {
+      setComponentTickSteps(component.id, tickSteps);
+    }
+    
     onClose();
+  };
+  
+  const handleTickComponent = () => {
+    tickSingleComponent(component.id);
   };
 
   /** Apply a typed value to the port directly */
@@ -207,6 +241,43 @@ export default function ConfigModal({ component, onClose }: Props) {
                   })}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* ── Tick Steps Configuration ────────────────── */}
+          {isClockableObj && component.type !== "CpuComponent" && (
+            <div className="p-4 border-b border-gray-800 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Tick Steps</h3>
+                <button
+                  onClick={handleTickComponent}
+                  className="text-[10px] px-2 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-colors"
+                  title="Manually tick this component"
+                >
+                  Tick Now
+                </button>
+              </div>
+              <p className="text-[10px] text-gray-500">
+                Select which CPU states trigger this component to tick.
+              </p>
+              <div className="grid grid-cols-3 gap-1.5">
+                {ALL_CPU_STATES.map((state) => {
+                  const isActive = tickSteps.includes(state);
+                  return (
+                    <button
+                      key={state}
+                      onClick={() => toggleTickStep(state)}
+                      className={`px-2 py-1 rounded text-[9px] font-mono font-semibold transition-colors ${
+                        isActive
+                          ? "bg-cyan-600 text-white"
+                          : "bg-gray-800 text-gray-500 hover:bg-gray-700 hover:text-gray-300"
+                      }`}
+                    >
+                      {CPU_STATE_LABELS[state]}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
 

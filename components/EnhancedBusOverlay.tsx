@@ -6,12 +6,14 @@ import { useDisplayStore, formatNum } from "@/lib/displayStore";
 import { useWireCreationStore } from "@/lib/wireCreationStore";
 import { useEnhancedWireStore, type EnhancedWire, type WireEndpoint } from "@/lib/enhancedWireStore";
 import { findPortPosition } from "@/lib/portPositioning";
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { pointsToSVGPath, snapToGrid } from "@/lib/wireRouting";
 
 const GRID_SIZE = 16;
 /** Invisible stroke width for easier hit detection */
 const HIT_AREA_WIDTH = 16;
+/** Duration of the data pulse animation in ms */
+const PULSE_ANIMATION_DURATION = 600;
 
 interface WireRenderData {
   wire: EnhancedWire;
@@ -47,6 +49,10 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
   const pathPoints = useWireCreationStore((s) => s.pathPoints);
   
   const [dragState, setDragState] = useState<{ wireId: string; nodeId: string } | null>(null);
+  
+  // Track wire values for animation
+  const prevWireValues = useRef<Map<string, string>>(new Map());
+  const [animatingWires, setAnimatingWires] = useState<Set<string>>(new Set());
 
   // Calculate wire render data
   const wireRenderData = useMemo((): WireRenderData[] => {
@@ -132,6 +138,36 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
 
     return results;
   }, [wires, components, objects, base]);
+
+  // Detect value changes and trigger animations
+  useEffect(() => {
+    const newAnimating = new Set<string>();
+    
+    for (const { wire, value } of wireRenderData) {
+      const prevValue = prevWireValues.current.get(wire.id);
+      if (prevValue !== undefined && prevValue !== value) {
+        newAnimating.add(wire.id);
+      }
+      prevWireValues.current.set(wire.id, value);
+    }
+    
+    if (newAnimating.size > 0) {
+      setAnimatingWires((prev) => new Set([...prev, ...newAnimating]));
+      
+      // Clear animations after duration
+      const timeout = setTimeout(() => {
+        setAnimatingWires((prev) => {
+          const updated = new Set(prev);
+          for (const id of newAnimating) {
+            updated.delete(id);
+          }
+          return updated;
+        });
+      }, PULSE_ANIMATION_DURATION);
+      
+      return () => clearTimeout(timeout);
+    }
+  }, [wireRenderData]);
 
   // Delete selected wire handler
   const handleDeleteSelectedWire = useCallback(() => {
@@ -241,8 +277,37 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
           <stop offset="100%" stopColor="#a855f7" stopOpacity="0.8" />
         </linearGradient>
         
+        {/* Animated gradient for data pulse */}
+        <linearGradient id="pulseGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="#22d3ee" stopOpacity="1">
+            <animate
+              attributeName="stop-color"
+              values="#22d3ee;#fbbf24;#22d3ee"
+              dur="0.6s"
+              repeatCount="1"
+            />
+          </stop>
+          <stop offset="100%" stopColor="#a855f7" stopOpacity="1">
+            <animate
+              attributeName="stop-color"
+              values="#a855f7;#f97316;#a855f7"
+              dur="0.6s"
+              repeatCount="1"
+            />
+          </stop>
+        </linearGradient>
+        
         <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
           <feGaussianBlur stdDeviation="3" result="coloredBlur" />
+          <feMerge>
+            <feMergeNode in="coloredBlur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+        
+        {/* Stronger glow for animated wires */}
+        <filter id="pulseGlow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="5" result="coloredBlur" />
           <feMerge>
             <feMergeNode in="coloredBlur" />
             <feMergeNode in="SourceGraphic" />
@@ -260,11 +325,24 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
         >
           <polygon points="0 0, 6 3, 0 6" fill="#22d3ee" />
         </marker>
+        
+        {/* Animated arrow marker */}
+        <marker
+          id="arrowheadPulse"
+          markerWidth="6"
+          markerHeight="6"
+          refX="5"
+          refY="3"
+          orient="auto"
+        >
+          <polygon points="0 0, 6 3, 0 6" fill="#fbbf24" />
+        </marker>
       </defs>
 
       {/* Render wires */}
       {wireRenderData.map(({ wire, path, startPos, hasAttachedEnd, value }) => {
         const isSelected = wire.id === selectedWireId;
+        const isAnimating = animatingWires.has(wire.id);
         const pathD = pointsToSVGPath(path);
 
         return (
@@ -293,14 +371,30 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
                 }
               }}
             />
+            {/* Animated pulse overlay when data changes */}
+            {isAnimating && (
+              <path
+                d={pathD}
+                fill="none"
+                stroke="#fbbf24"
+                strokeWidth={6}
+                strokeLinecap="round"
+                filter="url(#pulseGlow)"
+                opacity="0.9"
+                className="pointer-events-none animate-pulse-wire"
+                style={{
+                  animation: `wirePulse ${PULSE_ANIMATION_DURATION}ms ease-out forwards`,
+                }}
+              />
+            )}
             {/* Visible wire path */}
             <path
               d={pathD}
               fill="none"
-              stroke={isSelected ? "#fbbf24" : "url(#wireGradient)"}
-              strokeWidth={isSelected ? 4 : 3}
+              stroke={isSelected ? "#fbbf24" : isAnimating ? "url(#pulseGradient)" : "url(#wireGradient)"}
+              strokeWidth={isSelected ? 4 : isAnimating ? 4 : 3}
               strokeLinecap="round"
-              markerEnd="url(#arrowhead)"
+              markerEnd={isAnimating ? "url(#arrowheadPulse)" : "url(#arrowhead)"}
               filter="url(#glow)"
               opacity={hasAttachedEnd ? 0.75 : 0.55}
               className="pointer-events-none"
