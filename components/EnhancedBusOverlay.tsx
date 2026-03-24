@@ -13,7 +13,7 @@ const GRID_SIZE = 16;
 /** Invisible stroke width for easier hit detection */
 const HIT_AREA_WIDTH = 16;
 /** Duration of the data pulse animation in ms */
-const PULSE_ANIMATION_DURATION = 600;
+const PULSE_ANIMATION_DURATION = 1600;
 
 interface WireRenderData {
   wire: EnhancedWire;
@@ -375,29 +375,6 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
           </feMerge>
         </filter>
 
-        {/* Arrow marker - smaller size matching port indicators */}
-        <marker
-          id="arrowhead"
-          markerWidth="6"
-          markerHeight="6"
-          refX="5"
-          refY="3"
-          orient="auto"
-        >
-          <polygon points="0 0, 6 3, 0 6" fill="#22d3ee" />
-        </marker>
-        
-        {/* Animated arrow marker */}
-        <marker
-          id="arrowheadPulse"
-          markerWidth="6"
-          markerHeight="6"
-          refX="5"
-          refY="3"
-          orient="auto"
-        >
-          <polygon points="0 0, 6 3, 0 6" fill="#fbbf24" />
-        </marker>
       </defs>
 
       {/* Render wires */}
