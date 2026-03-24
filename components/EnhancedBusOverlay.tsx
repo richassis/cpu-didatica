@@ -13,7 +13,7 @@ const GRID_SIZE = 16;
 /** Invisible stroke width for easier hit detection */
 const HIT_AREA_WIDTH = 16;
 /** Duration of the data pulse animation in ms */
-const PULSE_ANIMATION_DURATION = 1600;
+const PULSE_ANIMATION_DURATION = 2500;
 
 interface WireRenderData {
   wire: EnhancedWire;

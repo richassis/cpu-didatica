@@ -359,6 +359,11 @@ export class CPU implements Clockable, Connectable {
     // First, execute the CPU's own state logic
     this.onTick();
 
+    // HLT cycles affect only the CPU control unit.
+    if (this._halted) {
+      return;
+    }
+
     // Then, tick all registered components that should tick on this state
     this.tickComponentsForState(this._state);
   }
