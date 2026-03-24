@@ -86,8 +86,8 @@ export class CPU implements Clockable, Connectable {
   readonly id: string;
   name: string;
 
-  // FSM state
-  private _state: CpuState = CpuState.FETCH;
+  // FSM state - starts in IDLE
+  private _state: CpuState = CpuState.IDLE;
   private _FSMindex: number = 0;
   private _halted: boolean = false;
   private _paused: boolean = false;
@@ -142,7 +142,7 @@ export class CPU implements Clockable, Connectable {
     this.out_muxAMem = new OutputPort<number>("out_muxAMem", "number", 1, 0);
     this.out_wrIR = new OutputPort<number>("out_wrIR", "number", 1, 0);
     this.out_opULA = new OutputPort<number>("out_opULA", "number", 3, UlaOperation.ADD);
-    this.out_state = new OutputPort<number>("out_state", "number", 4, CpuState.FETCH);
+    this.out_state = new OutputPort<number>("out_state", "number", 4, CpuState.IDLE);
     this.out_halted = new OutputPort<boolean>("out_halted", "boolean", 1, false);
 
     // Initialize previous signal values
@@ -252,15 +252,15 @@ export class CPU implements Clockable, Connectable {
 
   // ── Control Methods ──────────────────────────────────────────
 
-  /** Reset the CPU to initial state. */
+  /** Reset the CPU to initial IDLE state. */
   reset(): void {
-    this._state = CpuState.FETCH;
+    this._state = CpuState.IDLE;
     this._FSMindex = 0;
     this._halted = false;
     this._totalTicks = 0;
     this.clearAllSignals();
     this.initPrevSignals();
-    this.out_state.set(CpuState.FETCH);
+    this.out_state.set(CpuState.IDLE);
     this.out_halted.set(false);
   }
 
@@ -354,16 +354,22 @@ export class CPU implements Clockable, Connectable {
    * Called by the global clock on each tick.
    *
    * The pipeline is:
-   *   FETCH → DECODE → (opcode-specific states driven by _FSMindex) → back to FETCH
+   *   IDLE → FETCH → DECODE → (opcode-specific states driven by _FSMindex) → back to FETCH
    *
-   * FETCH and DECODE are always two fixed ticks.
+   * IDLE is the initial demonstrative state. On first tick, transitions to FETCH.
+   * FETCH and DECODE are two fixed ticks.
    * After DECODE the opcode is known; subsequent ticks walk _FSMindex through
    * the per-opcode step array until it is exhausted, then return to FETCH.
+   * If no opcode (or NOP-equivalent), returns to FETCH and loops.
    */
   onTick(): void {
     if (this._halted || this._paused) return;
 
     switch (this._state) {
+      case CpuState.IDLE:
+        this.doIdle();
+        break;
+
       case CpuState.FETCH:
         this.doFetch();
         break;
@@ -382,6 +388,14 @@ export class CPU implements Clockable, Connectable {
   }
 
   // ── Fixed phases ─────────────────────────────────────────────
+
+  /** IDLE state - initial demonstrative state. Transitions to FETCH on tick. */
+  private doIdle(): void {
+    // Clear all signals in IDLE state
+    this.clearAllSignals();
+    // Transition to FETCH on next tick
+    this._state = CpuState.FETCH;
+  }
 
   /** Tick 1 – read instruction from memory[PC] into IR. */
   private doFetch(): void {
@@ -403,6 +417,7 @@ export class CPU implements Clockable, Connectable {
 
     const opcode = this.in_opcode.get() as Opcode;
 
+    // Only HALT if HLT opcode is explicitly sent
     if (opcode === Opcode.HLT) {
       this._halted = true;
       this._state = CpuState.FETCH;
@@ -412,8 +427,8 @@ export class CPU implements Clockable, Connectable {
     const sequence = OPCODE_SEQUENCES[opcode];
 
     if (!sequence || sequence.length === 0) {
-      // Unknown opcode → halt
-      this._halted = true;
+      // Unknown or no-op opcode → return to FETCH (no halt)
+      this._state = CpuState.FETCH;
       return;
     }
 

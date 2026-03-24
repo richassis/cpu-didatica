@@ -70,7 +70,7 @@ export default function PortIndicator({
   return (
     <div
       style={positionStyles}
-      className="pointer-events-auto z-20"
+      className={`pointer-events-auto ${hover ? "z-[100]" : "z-20"}`}
       data-port-indicator
       data-port-component-id={componentId}
       data-port-name={portName}
@@ -88,7 +88,13 @@ export default function PortIndicator({
         `}
       >
         {hover && (
-          <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 px-2 py-1 bg-gray-900 border border-gray-700 rounded text-[9px] font-mono text-white whitespace-nowrap pointer-events-none z-50">
+          <div 
+            className="absolute left-1/2 -translate-x-1/2 mt-1 px-2 py-1 bg-gray-900 border border-gray-700 rounded text-[9px] font-mono text-white whitespace-nowrap pointer-events-none shadow-lg"
+            style={{ 
+              top: "100%",
+              zIndex: 1000,
+            }}
+          >
             <div className="font-semibold text-gray-300">{portName}</div>
             <div className={isInput ? "text-green-300" : "text-orange-300"}>{portValue}</div>
           </div>

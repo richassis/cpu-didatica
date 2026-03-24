@@ -15,6 +15,7 @@ import type { CPU } from "@/lib/simulator/Cpu";
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 const STATE_LABELS: Record<CpuState, string> = {
+  [CpuState.IDLE]:      "IDLE",
   [CpuState.FETCH]:     "FETCH",
   [CpuState.DECODE]:    "DECODE",
   [CpuState.EXECUTE]:   "EXEC",
@@ -29,6 +30,7 @@ const STATE_LABELS: Record<CpuState, string> = {
 };
 
 const STATE_COLORS: Record<CpuState, string> = {
+  [CpuState.IDLE]:      "text-gray-300    bg-gray-800/60    border-gray-600",
   [CpuState.FETCH]:     "text-indigo-300  bg-indigo-900/60  border-indigo-600",
   [CpuState.DECODE]:    "text-purple-300  bg-purple-900/60  border-purple-600",
   [CpuState.EXECUTE]:   "text-orange-300  bg-orange-900/60  border-orange-600",
@@ -108,6 +110,7 @@ export default function CpuComponent({ component, zoom }: Props) {
   const revision = useSimulatorStore((s) => s.revision);
   const cpu      = useSimulatorStore((s) => s.getCpu(id));
   const pauseCpu = useSimulatorStore((s) => s.pauseCpu);
+  const resetCpu = useSimulatorStore((s) => s.resetCpu);
   const base     = useDisplayStore((s) => s.numericBase);
   void revision;
 
@@ -146,8 +149,8 @@ export default function CpuComponent({ component, zoom }: Props) {
         {...attributes}
         data-draggable
         className={`
-          select-none cursor-grab active:cursor-grabbing
-          rounded-xl border-2 flex flex-col overflow-hidden
+          select-none cursor-grab active:cursor-grabbing relative
+          rounded-xl border-2 flex flex-col
           bg-gray-900 transition-colors
           ${isDragging
             ? "border-indigo-400 shadow-2xl opacity-90"
@@ -162,7 +165,7 @@ export default function CpuComponent({ component, zoom }: Props) {
       >
         {/* ── Header band ── */}
         <div
-          className={`shrink-0 px-3 py-1.5 flex items-center justify-between gap-2 border-b ${
+          className={`shrink-0 px-3 py-1.5 flex items-center justify-between gap-2 border-b rounded-t-xl ${
             halted ? "bg-red-950/60 border-red-800/40" : "bg-indigo-950/80 border-indigo-800/30"
           }`}
         >
@@ -193,8 +196,18 @@ export default function CpuComponent({ component, zoom }: Props) {
             </span>
           </div>
 
-          {/* Pause / Resume + Gear buttons */}
+          {/* Reset + Pause / Resume + Gear buttons */}
           <div className="flex items-center gap-1.5 shrink-0">
+            {/* Reset CPU */}
+            <button
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => { e.stopPropagation(); resetCpu(id); }}
+              className="text-indigo-400/70 hover:text-indigo-200 text-xs leading-none px-1 py-0.5 rounded transition-colors"
+              aria-label="Reset CPU"
+              title="Reset CPU to IDLE state"
+            >
+              ↺
+            </button>
             {/* Pause / Resume */}
             <button
               onPointerDown={(e) => e.stopPropagation()}
@@ -267,7 +280,7 @@ export default function CpuComponent({ component, zoom }: Props) {
         </div>
 
         {/* ── Bottom: opULA label when active ── */}
-        <div className="shrink-0 px-2 py-1 border-t border-gray-800 bg-gray-900/80 flex items-center justify-between">
+        <div className="shrink-0 px-2 py-1 border-t border-gray-800 bg-gray-900/80 rounded-b-xl flex items-center justify-between">
           <span className="text-[9px] text-gray-600 italic">dbl-click to configure</span>
           <span className="text-[9px] text-gray-600 font-mono">CPU</span>
         </div>

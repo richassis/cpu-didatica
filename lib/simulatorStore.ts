@@ -75,6 +75,9 @@ interface SimulatorState {
   /** Toggle or set the paused state of a CPU instance. */
   pauseCpu: (id: string, paused: boolean) => void;
 
+  /** Reset a specific CPU to IDLE state. */
+  resetCpu: (id: string) => void;
+
   /**
    * Trigger a re-render for subscribers watching a specific id.
    * Call this after mutating a data object (e.g. ula.execute()) so that
@@ -317,6 +320,15 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
     if (obj instanceof CPU) {
       obj.setPaused(paused);
       set((s) => ({ revision: s.revision + 1 }));
+    }
+  },
+
+  resetCpu: (id) => {
+    const obj = get().objects.get(id);
+    if (obj instanceof CPU) {
+      obj.reset();
+      set((s) => ({ revision: s.revision + 1 }));
+      getLayoutStore().getState().saveState();
     }
   },
 
