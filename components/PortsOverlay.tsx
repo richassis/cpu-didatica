@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useLayoutStore } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useWireCreationStore } from "@/lib/wireCreationStore";
+import { useDisplayStore } from "@/lib/displayStore";
 import { findPortPosition } from "@/lib/portPositioning";
 import PortIndicator from "./PortIndicator";
 
@@ -26,6 +27,7 @@ export default function PortsOverlay({ componentId }: Props) {
   const components = useLayoutStore((s) => s.components);
   const startWireCreation = useWireCreationStore((s) => s.startWireCreation);
   const isCreating = useWireCreationStore((s) => s.isCreating);
+  const showWiresAndPorts = useDisplayStore((s) => s.showWiresAndPorts);
 
   const [ports, setPorts] = useState<PortInfo[]>([]);
 
@@ -66,6 +68,11 @@ export default function PortsOverlay({ componentId }: Props) {
 
     startWireCreation(compId, portName, direction, startPosition);
   };
+
+  // Hide ports when wires are hidden
+  if (!showWiresAndPorts) {
+    return null;
+  }
 
   // Calculate port positions
   const inputPorts = ports.filter(p => p.direction === "input");

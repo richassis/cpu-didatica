@@ -13,6 +13,10 @@ export type NumericBase = "hex" | "dec" | "bin" | "oct";
 interface DisplayState {
   numericBase: NumericBase;
   setNumericBase: (base: NumericBase) => void;
+  
+  /** Whether wires and ports are visible */
+  showWiresAndPorts: boolean;
+  setShowWiresAndPorts: (show: boolean) => void;
 }
 
 export const useDisplayStore = create<DisplayState>()(
@@ -20,6 +24,9 @@ export const useDisplayStore = create<DisplayState>()(
     (set) => ({
       numericBase: "hex",
       setNumericBase: (base) => set({ numericBase: base }),
+      
+      showWiresAndPorts: true,
+      setShowWiresAndPorts: (show) => set({ showWiresAndPorts: show }),
     }),
     { name: "simulator-display" }
   )

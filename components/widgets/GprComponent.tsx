@@ -10,11 +10,14 @@ import React from "react";
 import ConfigModal from "@/components/ConfigModal";
 import PortsOverlay from "@/components/PortsOverlay";
 
+type ViewMode = "data" | "ports";
+
 export default function GprComponent({ component, zoom }: Props) {
   const { id, x, y, w, h, label } = component;
   const removeComponent = useLayoutStore((s) => s.removeComponent);
   const [configOpen, setConfigOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>("data");
 
   const revision        = useSimulatorStore((s) => s.revision);
   const gpr             = useSimulatorStore((s) => s.getGpr(id));
@@ -24,6 +27,12 @@ export default function GprComponent({ component, zoom }: Props) {
 
   const regs     = gpr ? gpr.snapshot() : [];
   const bitWidth  = gpr?.bitWidth ?? 16;
+  
+  // I/O port values
+  const addrIn   = gpr?.in_writeAddr?.value ?? 0;
+  const dataIn   = gpr?.in_writeData?.value ?? 0;
+  const wrSignal = gpr?.in_writeEnable?.value ?? 0;
+  const dataOut  = gpr?.output ?? 0;
 
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({ id });
@@ -62,17 +71,33 @@ export default function GprComponent({ component, zoom }: Props) {
             {label}
           </span>
           <div className="flex items-center gap-1">
+            {/* Toggle view mode */}
             <button
               onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => { e.stopPropagation(); setEditMode((v) => !v); }}
-              className={`text-[10px] leading-none px-1 rounded transition-colors ${
-                editMode
-                  ? "bg-teal-500 text-white"
+              onClick={(e) => { e.stopPropagation(); setViewMode(viewMode === "data" ? "ports" : "data"); }}
+              className={`text-[9px] leading-none px-1.5 py-0.5 rounded transition-colors ${
+                viewMode === "ports"
+                  ? "bg-teal-500 text-black"
                   : "text-teal-300/60 hover:text-teal-100"
               }`}
-              aria-label={editMode ? "Exit edit mode" : "Edit registers"}
-              title={editMode ? "Exit edit mode" : "Edit registers"}
-            >✏</button>
+              title={viewMode === "data" ? "Show I/O ports" : "Show register data"}
+            >
+              {viewMode === "data" ? "I/O" : "REG"}
+            </button>
+            {/* Edit mode button - only show in data view */}
+            {viewMode === "data" && (
+              <button
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => { e.stopPropagation(); setEditMode((v) => !v); }}
+                className={`text-[10px] leading-none px-1 rounded transition-colors ${
+                  editMode
+                    ? "bg-teal-500 text-white"
+                    : "text-teal-300/60 hover:text-teal-100"
+                }`}
+                aria-label={editMode ? "Exit edit mode" : "Edit registers"}
+                title={editMode ? "Exit edit mode" : "Edit registers"}
+              >✏</button>
+            )}
             <button
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => { e.stopPropagation(); removeComponent(id); }}
@@ -83,27 +108,82 @@ export default function GprComponent({ component, zoom }: Props) {
         </div>
 
         {/* ── Body ── */}
-        <div className="flex flex-col overflow-y-auto rounded-b-xl" style={{ height: h - 28 }}>
-          {regs.length === 0 ? (
-            <div className="flex items-center justify-center h-full text-[10px] text-gray-600">
-              no GPR
+        {viewMode === "ports" ? (
+          /* Port I/O view */
+          <div className="flex flex-col gap-1.5 px-2 py-2 text-[10px] font-mono" style={{ height: h - 28 }}>
+            {/* WR badge */}
+            <div className="flex items-center justify-center gap-2 mb-1">
+              <span className={`text-[9px] font-mono px-2 py-0.5 rounded ${
+                wrSignal ? "bg-teal-500 text-black font-bold" : "bg-gray-700 text-gray-400"
+              }`}>WR</span>
             </div>
-          ) : (
-            <div className="flex flex-col gap-px px-2 py-1.5">
-              {regs.map(({ value }, i) => (
-                <RegisterRow
-                  key={i}
-                  index={i}
-                  value={value}
-                  bitWidth={bitWidth}
-                  base={base}
-                  editMode={editMode}
-                  onPoke={(idx, val) => pokeGprRegister(id, idx, val)}
-                />
-              ))}
+
+            {/* Address */}
+            <div className="flex items-center justify-between">
+              <span className="text-teal-400/70 uppercase tracking-wide text-[9px]">addr</span>
+              <span className="text-teal-100 bg-teal-900/50 rounded px-1 py-px">
+                R{addrIn}
+              </span>
             </div>
-          )}
-        </div>
+
+            {/* Data-in */}
+            <div className="flex items-center justify-between">
+              <span className="text-teal-400/70 uppercase tracking-wide text-[9px]">data in</span>
+              <span className={`rounded px-1 py-px ${
+                wrSignal ? "text-teal-100 bg-teal-900/60" : "text-gray-500 bg-gray-800/60"
+              }`}>
+                {formatNum(dataIn, base, bitWidth)}
+              </span>
+            </div>
+
+            {/* Data-out */}
+            <div className="flex items-center justify-between">
+              <span className="text-teal-300/70 uppercase tracking-wide text-[9px]">data out</span>
+              <span className="text-teal-100 bg-teal-800/70 rounded px-1 py-px">
+                {formatNum(dataOut, base, bitWidth)}
+              </span>
+            </div>
+
+            {/* Current register preview */}
+            <div className="flex-1 flex flex-col justify-center">
+              <div className="text-[9px] text-gray-500 text-center mb-1">R{addrIn}</div>
+              <div className={`text-center text-sm font-mono rounded py-1 ${
+                wrSignal ? "bg-teal-900/50 text-teal-100" : "bg-gray-800/50 text-gray-400"
+              }`}>
+                {formatNum(regs[addrIn]?.value ?? 0, base, bitWidth)}
+              </div>
+            </div>
+
+            {/* Capacity footer */}
+            <div className="flex justify-between text-[8px] text-gray-600 border-t border-gray-800 pt-1">
+              <span>{regs.length} regs</span>
+              <span>{bitWidth}b</span>
+            </div>
+          </div>
+        ) : (
+          /* Default data view */
+          <div className="flex flex-col overflow-y-auto rounded-b-xl" style={{ height: h - 28 }}>
+            {regs.length === 0 ? (
+              <div className="flex items-center justify-center h-full text-[10px] text-gray-600">
+                no GPR
+              </div>
+            ) : (
+              <div className="flex flex-col gap-px px-2 py-1.5">
+                {regs.map(({ value }, i) => (
+                  <RegisterRow
+                    key={i}
+                    index={i}
+                    value={value}
+                    bitWidth={bitWidth}
+                    base={base}
+                    editMode={editMode}
+                    onPoke={(idx, val) => pokeGprRegister(id, idx, val)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         
         {/* Port indicators */}
         <PortsOverlay componentId={id} />

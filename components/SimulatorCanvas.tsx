@@ -35,7 +35,8 @@ export default function SimulatorCanvas() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // UI state
-  const [showBusOverlay, setShowBusOverlay] = useState(true);
+  const showWiresAndPorts = useDisplayStore((s) => s.showWiresAndPorts);
+  const setShowWiresAndPorts = useDisplayStore((s) => s.setShowWiresAndPorts);
   const [showConnectionModal, setShowConnectionModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [fabOpen, setFabOpen] = useState(false);
@@ -353,7 +354,7 @@ export default function SimulatorCanvas() {
               backgroundSize: `${GRID_SIZE}px ${GRID_SIZE}px`,
             }}
           >
-            <EnhancedBusOverlay visible={showBusOverlay} />
+            <EnhancedBusOverlay visible={showWiresAndPorts} />
             {components.map((c) => (
               <WidgetRenderer key={c.id} component={c} zoom={zoom} />
             ))}
@@ -395,14 +396,14 @@ export default function SimulatorCanvas() {
 
             {/* Toggle wires */}
             <FabItem
-              label={showBusOverlay ? "Hide wires" : "Show wires"}
+              label={showWiresAndPorts ? "Hide wires" : "Show wires"}
               icon={
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
               }
-              color={showBusOverlay ? "bg-indigo-600 hover:bg-indigo-500" : "bg-gray-600 hover:bg-gray-500"}
-              onClick={() => { setShowBusOverlay((v) => !v); setFabOpen(false); }}
+              color={showWiresAndPorts ? "bg-indigo-600 hover:bg-indigo-500" : "bg-gray-600 hover:bg-gray-500"}
+              onClick={() => { setShowWiresAndPorts(!showWiresAndPorts); setFabOpen(false); }}
             />
 
             {/* Save project to file */}

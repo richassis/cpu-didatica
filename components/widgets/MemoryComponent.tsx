@@ -15,11 +15,14 @@ function addrHex(addr: number, addrBits: number): string {
   return "0x" + addr.toString(16).toUpperCase().padStart(digits, "0");
 }
 
+type ViewMode = "data" | "ports";
+
 export default function MemoryComponent({ component, zoom }: Props) {
   const { id, x, y, w, h, label } = component;
   const removeComponent = useLayoutStore((s) => s.removeComponent);
   const [configOpen, setConfigOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>("data");
 
   const revision  = useSimulatorStore((s) => s.revision);
   const mem       = useSimulatorStore((s) => s.getMemory(id));
@@ -39,7 +42,6 @@ export default function MemoryComponent({ component, zoom }: Props) {
   const addrFmt   = addrHex(addr, addrBits);
   const dataInFmt = formatNum(dataIn,  base, bitWidth);
   const dataOutFmt= formatNum(dataOut, base, bitWidth);
-  const lastAddr  = wordCount - 1;
 
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({ id });
@@ -88,24 +90,33 @@ export default function MemoryComponent({ component, zoom }: Props) {
             {label}
           </span>
           <div className="flex items-center gap-1">
-            {/* control-signal badges */}
-            <span className={`text-[8px] font-mono px-1 rounded leading-tight ${
-              rdMem ? "bg-amber-500 text-black" : "bg-gray-700 text-gray-400"
-            }`}>RD</span>
-            <span className={`text-[8px] font-mono px-1 rounded leading-tight ${
-              wrMem ? "bg-orange-500 text-black" : "bg-gray-700 text-gray-400"
-            }`}>WR</span>
+            {/* Toggle view mode */}
             <button
               onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => { e.stopPropagation(); setEditMode((v) => !v); }}
-              className={`text-[10px] leading-none px-1 rounded transition-colors ${
-                editMode
+              onClick={(e) => { e.stopPropagation(); setViewMode(viewMode === "data" ? "ports" : "data"); }}
+              className={`text-[9px] leading-none px-1.5 py-0.5 rounded transition-colors ${
+                viewMode === "ports"
                   ? "bg-amber-500 text-black"
-                  : "text-amber-300/50 hover:text-amber-100"
+                  : "text-amber-300/60 hover:text-amber-100"
               }`}
-              aria-label={editMode ? "Exit edit mode" : "Edit memory cells"}
-              title={editMode ? "Exit edit mode" : "Edit memory cells"}
-            >✏</button>
+              title={viewMode === "data" ? "Show I/O ports" : "Show memory data"}
+            >
+              {viewMode === "data" ? "I/O" : "MEM"}
+            </button>
+            {/* Edit mode button - only show in data view */}
+            {viewMode === "data" && (
+              <button
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => { e.stopPropagation(); setEditMode((v) => !v); }}
+                className={`text-[10px] leading-none px-1 rounded transition-colors ${
+                  editMode
+                    ? "bg-amber-500 text-black"
+                    : "text-amber-300/50 hover:text-amber-100"
+                }`}
+                aria-label={editMode ? "Exit edit mode" : "Edit memory cells"}
+                title={editMode ? "Exit edit mode" : "Edit memory cells"}
+              >✏</button>
+            )}
             <button
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => { e.stopPropagation(); removeComponent(id); }}
@@ -116,7 +127,64 @@ export default function MemoryComponent({ component, zoom }: Props) {
         </div>
 
         {/* ── Body ── */}
-        {editMode ? (
+        {viewMode === "ports" ? (
+          /* Port I/O view */
+          <div className="flex flex-col gap-1.5 px-2 py-2 text-[10px] font-mono" style={{ height: h - 28 }}>
+            {/* RD/WR badges */}
+            <div className="flex items-center justify-center gap-2 mb-1">
+              <span className={`text-[9px] font-mono px-2 py-0.5 rounded ${
+                rdMem ? "bg-amber-500 text-black font-bold" : "bg-gray-700 text-gray-400"
+              }`}>RD</span>
+              <span className={`text-[9px] font-mono px-2 py-0.5 rounded ${
+                wrMem ? "bg-orange-500 text-black font-bold" : "bg-gray-700 text-gray-400"
+              }`}>WR</span>
+            </div>
+
+            {/* Address */}
+            <div className="flex items-center justify-between">
+              <span className="text-amber-400/70 uppercase tracking-wide text-[9px]">addr</span>
+              <span className="text-amber-100 bg-amber-900/50 rounded px-1 py-px">
+                {addrFmt}
+              </span>
+            </div>
+
+            {/* Data-in */}
+            <div className="flex items-center justify-between">
+              <span className="text-orange-400/70 uppercase tracking-wide text-[9px]">data in</span>
+              <span className={`rounded px-1 py-px ${
+                wrMem ? "text-orange-100 bg-orange-900/60" : "text-gray-500 bg-gray-800/60"
+              }`}>
+                {dataInFmt}
+              </span>
+            </div>
+
+            {/* Data-out */}
+            <div className="flex items-center justify-between">
+              <span className="text-amber-300/70 uppercase tracking-wide text-[9px]">data out</span>
+              <span className={`rounded px-1 py-px ${
+                rdMem ? "text-amber-100 bg-amber-800/70 font-bold" : "text-gray-500 bg-gray-800/60"
+              }`}>
+                {dataOutFmt}
+              </span>
+            </div>
+
+            {/* Current cell preview */}
+            <div className="flex-1 flex flex-col justify-center">
+              <div className="text-[9px] text-gray-500 text-center mb-1">Cell @ {addrFmt}</div>
+              <div className={`text-center text-sm font-mono rounded py-1 ${
+                accessing ? "bg-amber-900/50 text-amber-100" : "bg-gray-800/50 text-gray-400"
+              }`}>
+                {formatNum(mem?.peek(addr) ?? 0, base, bitWidth)}
+              </div>
+            </div>
+
+            {/* Capacity footer */}
+            <div className="flex justify-between text-[8px] text-gray-600 border-t border-gray-800 pt-1">
+              <span>{wordCount} words</span>
+              <span>{bitWidth}b</span>
+            </div>
+          </div>
+        ) : editMode ? (
           /* Edit mode: scrollable table of all cells */
           <div
             className="overflow-y-auto px-2 py-1.5 text-[10px] font-mono"
@@ -140,72 +208,22 @@ export default function MemoryComponent({ component, zoom }: Props) {
             </div>
           </div>
         ) : (
-        <div className="flex flex-col gap-1.5 px-2 py-2 text-[10px] font-mono">
-
-          {/* Address */}
-          <div className="flex items-center justify-between">
-            <span className="text-amber-400/70 uppercase tracking-wide text-[9px]">addr</span>
-            <span className="text-amber-100 bg-amber-900/50 rounded px-1 py-px">
-              {addrFmt}
-            </span>
+          /* Default data view: GPR-like layout showing addresses and values */
+          <div className="flex flex-col overflow-y-auto" style={{ height: h - 28 }}>
+            <div className="flex flex-col gap-px px-2 py-1.5">
+              {Array.from({ length: wordCount }).map((_, a) => (
+                <MemoryDataRow
+                  key={a}
+                  addr={a}
+                  value={mem?.peek(a) ?? 0}
+                  bitWidth={bitWidth}
+                  addrBits={addrBits}
+                  base={base}
+                  isActive={a === addr && accessing}
+                />
+              ))}
+            </div>
           </div>
-
-          {/* Data-in */}
-          <div className="flex items-center justify-between">
-            <span className="text-orange-400/70 uppercase tracking-wide text-[9px]">data in</span>
-            <span className={`rounded px-1 py-px ${
-              wrMem ? "text-orange-100 bg-orange-900/60" : "text-gray-500 bg-gray-800/60"
-            }`}>
-              {dataInFmt}
-            </span>
-          </div>
-
-          {/* Divider / cell strip */}
-          <div className="w-full flex flex-col gap-px my-0.5">
-            {Array.from({ length: 4 }).map((_, i) => {
-              const a = addr - 1 + i;
-              const inRange = a >= 0 && a < wordCount;
-              const isActive = inRange && a === addr;
-              return (
-                <div
-                  key={i}
-                  className={`h-2 rounded-sm border text-[7px] leading-tight flex items-center justify-between px-1 ${
-                    isActive
-                      ? "bg-amber-700/70 border-amber-500"
-                      : "bg-gray-800/60 border-gray-700/40"
-                  }`}
-                >
-                  {inRange && (
-                    <>
-                      <span className="text-gray-500">{addrHex(a, addrBits)}</span>
-                      <span className={isActive ? "text-amber-200" : "text-gray-600"}>
-                        {formatNum(mem?.peek(a) ?? 0, base, bitWidth)}
-                      </span>
-                    </>
-                  )}
-                </div>
-              );
-            })}
-            <span className="text-[8px] text-gray-600 text-center">···</span>
-          </div>
-
-          {/* Data-out */}
-          <div className="flex items-center justify-between">
-            <span className="text-amber-300/70 uppercase tracking-wide text-[9px]">out</span>
-            <span className={`rounded px-1 py-px ${
-              rdMem ? "text-amber-100 bg-amber-800/70 font-bold" : "text-gray-500 bg-gray-800/60"
-            }`}>
-              {dataOutFmt}
-            </span>
-          </div>
-
-          {/* Capacity footer */}
-          <div className="flex justify-between text-[8px] text-gray-600 border-t border-gray-800 pt-1 mt-0.5">
-            <span>{wordCount} words</span>
-            <span>{bitWidth}b</span>
-            <span>{addrHex(0, addrBits)}–{addrHex(lastAddr, addrBits)}</span>
-          </div>
-        </div>
         )}
         
         {/* Port indicators */}
@@ -216,6 +234,34 @@ export default function MemoryComponent({ component, zoom }: Props) {
         <ConfigModal component={component} onClose={() => setConfigOpen(false)} />
       )}
     </>
+  );
+}
+
+/* ─── Memory data row (read-only display) ──────────────────────────────────── */
+
+interface DataRowProps {
+  addr: number;
+  value: number;
+  bitWidth: number;
+  addrBits: number;
+  base: import("@/lib/displayStore").NumericBase;
+  isActive: boolean;
+}
+
+function MemoryDataRow({ addr, value, bitWidth, addrBits, base, isActive }: DataRowProps) {
+  const displayed = formatNum(value, base, bitWidth);
+  
+  return (
+    <div className={`flex items-center justify-between py-0.5 px-0.5 rounded ${
+      isActive ? "bg-amber-700/40" : ""
+    }`}>
+      <span className={`text-[9px] font-mono ${isActive ? "text-amber-300 font-semibold" : "text-gray-600"}`}>
+        {addrHex(addr, addrBits)}
+      </span>
+      <span className={`text-[10px] font-mono ${isActive ? "text-amber-100" : "text-gray-400"}`}>
+        {displayed}
+      </span>
+    </div>
   );
 }
 

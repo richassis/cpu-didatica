@@ -139,6 +139,9 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
     return results;
   }, [wires, components, objects, base]);
 
+  // Track animation progress for flowing effect
+  const [animationProgress, setAnimationProgress] = useState<Map<string, number>>(new Map());
+  
   // Detect value changes and trigger animations
   useEffect(() => {
     const newAnimating = new Set<string>();
@@ -154,20 +157,78 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
     if (newAnimating.size > 0) {
       setAnimatingWires((prev) => new Set([...prev, ...newAnimating]));
       
-      // Clear animations after duration
-      const timeout = setTimeout(() => {
-        setAnimatingWires((prev) => {
-          const updated = new Set(prev);
+      // Animate progress from 0 to 1
+      const startTime = Date.now();
+      const animate = () => {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / PULSE_ANIMATION_DURATION, 1);
+        
+        setAnimationProgress((prev) => {
+          const updated = new Map(prev);
           for (const id of newAnimating) {
-            updated.delete(id);
+            updated.set(id, progress);
           }
           return updated;
         });
-      }, PULSE_ANIMATION_DURATION);
+        
+        if (progress < 1) {
+          requestAnimationFrame(animate);
+        } else {
+          // Clear animations after completion
+          setAnimatingWires((prev) => {
+            const updated = new Set(prev);
+            for (const id of newAnimating) {
+              updated.delete(id);
+            }
+            return updated;
+          });
+          setAnimationProgress((prev) => {
+            const updated = new Map(prev);
+            for (const id of newAnimating) {
+              updated.delete(id);
+            }
+            return updated;
+          });
+        }
+      };
       
-      return () => clearTimeout(timeout);
+      requestAnimationFrame(animate);
     }
   }, [wireRenderData]);
+
+  // Calculate a point along a path at a given progress (0-1)
+  const getPointAlongPath = useCallback((path: Array<{ x: number; y: number }>, progress: number) => {
+    if (path.length < 2) return path[0] || { x: 0, y: 0 };
+    
+    // Calculate total path length
+    let totalLength = 0;
+    const segments: { start: { x: number; y: number }; end: { x: number; y: number }; length: number }[] = [];
+    
+    for (let i = 0; i < path.length - 1; i++) {
+      const dx = path[i + 1].x - path[i].x;
+      const dy = path[i + 1].y - path[i].y;
+      const length = Math.sqrt(dx * dx + dy * dy);
+      segments.push({ start: path[i], end: path[i + 1], length });
+      totalLength += length;
+    }
+    
+    // Find point at progress
+    const targetLength = totalLength * progress;
+    let accLength = 0;
+    
+    for (const seg of segments) {
+      if (accLength + seg.length >= targetLength) {
+        const segProgress = (targetLength - accLength) / seg.length;
+        return {
+          x: seg.start.x + (seg.end.x - seg.start.x) * segProgress,
+          y: seg.start.y + (seg.end.y - seg.start.y) * segProgress,
+        };
+      }
+      accLength += seg.length;
+    }
+    
+    return path[path.length - 1];
+  }, []);
 
   // Delete selected wire handler
   const handleDeleteSelectedWire = useCallback(() => {
@@ -371,32 +432,69 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
                 }
               }}
             />
-            {/* Animated pulse overlay when data changes */}
+            {/* Animated flowing dot when data changes */}
             {isAnimating && (
-              <path
-                d={pathD}
-                fill="none"
-                stroke="#fbbf24"
-                strokeWidth={6}
-                strokeLinecap="round"
-                filter="url(#pulseGlow)"
-                opacity="0.9"
-                className="pointer-events-none animate-pulse-wire"
-                style={{
-                  animation: `wirePulse ${PULSE_ANIMATION_DURATION}ms ease-out forwards`,
-                }}
-              />
+              <>
+                {/* Glow path effect */}
+                <path
+                  d={pathD}
+                  fill="none"
+                  stroke="#fbbf24"
+                  strokeWidth={6}
+                  strokeLinecap="round"
+                  filter="url(#pulseGlow)"
+                  opacity={0.5}
+                  className="pointer-events-none"
+                />
+                {/* Flowing data indicator */}
+                {(() => {
+                  const progress = animationProgress.get(wire.id) ?? 0;
+                  const point = getPointAlongPath(path, progress);
+                  return (
+                    <g transform={`translate(${point.x}, ${point.y})`}>
+                      {/* Glowing circle */}
+                      <circle
+                        r="8"
+                        fill="#fbbf24"
+                        filter="url(#pulseGlow)"
+                        opacity="0.9"
+                      />
+                      {/* Value badge */}
+                      <g transform="translate(0, -18)">
+                        <rect
+                          x="-20"
+                          y="-8"
+                          width="40"
+                          height="16"
+                          rx="4"
+                          fill="#1f2937"
+                          stroke="#fbbf24"
+                          strokeWidth="1.5"
+                        />
+                        <text
+                          textAnchor="middle"
+                          dominantBaseline="middle"
+                          className="font-mono fill-amber-300"
+                          style={{ fontSize: "9px", fontWeight: "bold" }}
+                        >
+                          {value}
+                        </text>
+                      </g>
+                    </g>
+                  );
+                })()}
+              </>
             )}
             {/* Visible wire path */}
             <path
               d={pathD}
               fill="none"
-              stroke={isSelected ? "#fbbf24" : isAnimating ? "url(#pulseGradient)" : "url(#wireGradient)"}
+              stroke={isSelected ? "#fbbf24" : isAnimating ? "#fbbf24" : "url(#wireGradient)"}
               strokeWidth={isSelected ? 4 : isAnimating ? 4 : 3}
               strokeLinecap="round"
               markerEnd={isAnimating ? "url(#arrowheadPulse)" : "url(#arrowhead)"}
               filter="url(#glow)"
-              opacity={hasAttachedEnd ? 0.75 : 0.55}
+              opacity={hasAttachedEnd ? (isAnimating ? 0.9 : 0.75) : 0.55}
               className="pointer-events-none"
             />
 
@@ -422,30 +520,6 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
                 }}
               />
             ))}
-
-            {/* Value badge */}
-            {path.length > 0 && (
-              <g transform={`translate(${startPos.x + 20}, ${startPos.y})`}>
-                <rect
-                  x="-16"
-                  y="-10"
-                  width="32"
-                  height="16"
-                  rx="4"
-                  fill="#1f2937"
-                  stroke="#374151"
-                  strokeWidth="1"
-                />
-                <text
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  className="text-xs font-mono fill-cyan-300"
-                  style={{ fontSize: "10px" }}
-                >
-                  {value}
-                </text>
-              </g>
-            )}
           </g>
         );
       })}
