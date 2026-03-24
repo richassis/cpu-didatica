@@ -50,6 +50,7 @@ export default function SimulatorCanvas() {
   const getPrimaryCpu = useSimulatorStore((s) => s.getPrimaryCpu);
   const createSimulatorWire = useSimulatorStore((s) => s.createWire);
   const revision = useSimulatorStore((s) => s.revision);
+  void revision;
   
   // Get total ticks from the primary CPU
   const cpu = getPrimaryCpu();
@@ -236,15 +237,35 @@ export default function SimulatorCanvas() {
       const nodes = pathPoints.slice(1, -1);
       const floatingEnd = pathPoints[pathPoints.length - 1];
 
+      const isConnectedWire = Boolean(endEndpoint);
+      const shouldNormalizeDirection =
+        isConnectedWire && sourceDirection === "input" && endEndpoint?.direction === "output";
+
+      const enhancedStart = shouldNormalizeDirection
+        ? {
+            componentId: endEndpoint!.componentId,
+            portName: endEndpoint!.portName,
+            direction: "output" as const,
+          }
+        : {
+            componentId: sourceComponentId,
+            portName: sourcePortName,
+            direction: sourceDirection,
+          };
+
+      const enhancedEnd = shouldNormalizeDirection
+        ? {
+            componentId: sourceComponentId,
+            portName: sourcePortName,
+            direction: "input" as const,
+          }
+        : endEndpoint;
+
       createEnhancedWire({
-        start: {
-          componentId: sourceComponentId,
-          portName: sourcePortName,
-          direction: sourceDirection,
-        },
-        end: endEndpoint,
+        start: enhancedStart,
+        end: enhancedEnd,
         floatingEnd: endEndpoint ? null : floatingEnd,
-        nodes,
+        nodes: shouldNormalizeDirection ? [...nodes].reverse() : nodes,
       });
 
       if (endEndpoint) {

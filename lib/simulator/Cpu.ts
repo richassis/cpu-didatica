@@ -101,6 +101,10 @@ export class CPU implements Clockable, Connectable {
   // Previous signal values for change detection
   private _prevSignals: Map<string, number | boolean> = new Map();
 
+  // Testing mode: force a specific opcode
+  private _testingModeOpcode: Opcode | null = null;
+  private _testingModeEnabled: boolean = false;
+
   // ── Input Ports ──────────────────────────────────────────────
   readonly in_opcode: InputPort<number>;
   readonly in_flagZero: InputPort<number>;
@@ -250,7 +254,39 @@ export class CPU implements Clockable, Connectable {
     this._paused = paused;
   }
 
-  // ── Control Methods ──────────────────────────────────────────
+  /** Set testing mode opcode - keeps in_opcode locked to this value. */
+  setTestingModeOpcode(opcode: Opcode | null): void {
+    this._testingModeOpcode = opcode;
+    this._testingModeEnabled = opcode !== null;
+    if (opcode !== null) {
+      this.in_opcode.set(opcode);
+    }
+  }
+
+  /** Get the current testing mode opcode, or null if disabled. */
+  getTestingModeOpcode(): Opcode | null {
+    return this._testingModeOpcode;
+  }
+
+  /** Check if testing mode is enabled. */
+  isTestingModeEnabled(): boolean {
+    return this._testingModeEnabled;
+  }
+
+  /** Returns opcode source, honoring testing mode override when enabled. */
+  private getActiveOpcode(): Opcode {
+    if (this._testingModeEnabled && this._testingModeOpcode !== null) {
+      return this._testingModeOpcode;
+    }
+    return this.in_opcode.get() as Opcode;
+  }
+
+  /** Keeps the opcode input port aligned with testing mode selection. */
+  private syncTestingOpcodeInput(): void {
+    if (this._testingModeEnabled && this._testingModeOpcode !== null) {
+      this.in_opcode.set(this._testingModeOpcode);
+    }
+  }
 
   /** Reset the CPU to initial IDLE state. */
   reset(): void {
@@ -317,6 +353,7 @@ export class CPU implements Clockable, Connectable {
   tick(): void {
     if (this._halted || this._paused) return;
 
+    this.syncTestingOpcodeInput();
     this._totalTicks++;
 
     // First, execute the CPU's own state logic
@@ -415,7 +452,7 @@ export class CPU implements Clockable, Connectable {
     this.setSignalIfChanged(this.out_wrIR, "wrIR", 0);
     this.setSignalIfChanged(this.out_rdMem, "rdMem", 0);
 
-    const opcode = this.in_opcode.get() as Opcode;
+    const opcode = this.getActiveOpcode();
 
     // Only HALT if HLT opcode is explicitly sent
     if (opcode === Opcode.HLT) {
@@ -443,7 +480,7 @@ export class CPU implements Clockable, Connectable {
    * which step within the sequence we are on.
    */
   private doStep(): void {
-    const opcode = this.in_opcode.get() as Opcode;
+    const opcode = this.getActiveOpcode();
 
     // Emit control signals for the current state
     this.emitSignals(this._state, opcode);

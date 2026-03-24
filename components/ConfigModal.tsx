@@ -7,6 +7,9 @@ import { useSimulatorStore } from "@/lib/simulatorStore";
 import { getWidgetDefinition } from "@/lib/widgetDefinitions";
 import { ConfigPanelForType, ComponentConfig } from "@/components/widgets/ConfigPanel";
 import { CpuState, CPU_STATE_LABELS, ALL_CPU_STATES, isClockable } from "@/lib/simulator";
+import { Opcode, INSTRUCTION_SET } from "@/lib/simulator/ISA";
+import { OPCODE_SEQUENCES } from "@/lib/simulator/Cpu";
+import type { CPU } from "@/lib/simulator/Cpu";
 
 interface Props {
   component: ComponentInstance;
@@ -42,10 +45,15 @@ export default function ConfigModal({ component, onClose }: Props) {
   });
   // portInputs: map portName → current text being typed
   const [portInputs, setPortInputs] = useState<Record<string, string>>({});
+  
+  // CPU testing mode: opcode to force set and keep
+  const [testingModeOpcode, setTestingModeOpcode] = useState<Opcode | null>(null);
 
   const obj = objects.get(component.id);
   const isConnectable = obj && "getPorts" in obj;
   const isClockableObj = obj && isClockable(obj);
+  const isCpu = component.type === "CpuComponent";
+  const cpu = isCpu ? (obj as CPU | undefined) : undefined;
   
   // Tick steps configuration
   const currentTickSteps = useMemo(() => getComponentTickSteps(component.id) ?? [], [component.id, getComponentTickSteps, revision]);
@@ -88,6 +96,14 @@ export default function ConfigModal({ component, onClose }: Props) {
     );
   };
 
+  // Sync testing mode from CPU when modal is opened for this component
+  useEffect(() => {
+    if (isCpu && cpu) {
+      const currentOpcode = cpu.getTestingModeOpcode();
+      setTestingModeOpcode(currentOpcode);
+    }
+  }, [isCpu, cpu, component.id]);
+
   // Close on Escape
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -104,6 +120,22 @@ export default function ConfigModal({ component, onClose }: Props) {
     if (config.wordCount !== undefined) meta.wordCount = config.wordCount;
     if (Object.keys(meta).length > 0) updateMeta(component.id, meta);
     
+    // Apply all pending port value changes
+    if (isConnectable && Object.keys(portInputs).length > 0) {
+      for (const [portName, rawText] of Object.entries(portInputs)) {
+        const port = ports.find(p => p.name === portName);
+        if (port) {
+          applyPortValue(portName, rawText, port.dataType);
+        }
+      }
+    }
+    
+    // Apply CPU testing mode if set
+    if (isCpu && cpu) {
+      cpu.setTestingModeOpcode(testingModeOpcode);
+      touch();
+    }
+    
     // Save tick steps if they changed
     if (isClockableObj && JSON.stringify(tickSteps) !== JSON.stringify(currentTickSteps)) {
       setComponentTickSteps(component.id, tickSteps);
@@ -114,6 +146,11 @@ export default function ConfigModal({ component, onClose }: Props) {
   
   const handleTickComponent = () => {
     tickSingleComponent(component.id);
+  };
+
+  // CPU Testing Mode: set opcode and keep it
+  const handleSetTestingOpcode = (opcode: Opcode) => {
+    setTestingModeOpcode(opcode);
   };
 
   /** Apply a typed value to the port directly */
@@ -197,16 +234,9 @@ export default function ConfigModal({ component, onClose }: Props) {
                           type="text"
                           value={inputVal}
                           onChange={(e) => setPortInputs((prev) => ({ ...prev, [key]: e.target.value }))}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") applyPortValue(key, inputVal, port.dataType);
-                          }}
                           className="flex-1 bg-gray-800 border border-gray-600 rounded px-2 py-0.5 text-[10px] font-mono text-cyan-200 focus:border-cyan-500 focus:outline-none"
                           placeholder={port.dataType === "boolean" ? "0 / 1" : "0x0000"}
                         />
-                        <button
-                          onClick={() => applyPortValue(key, inputVal, port.dataType)}
-                          className="text-[10px] px-1.5 py-0.5 rounded bg-green-700 hover:bg-green-600 text-white transition-colors shrink-0"
-                        >Set</button>
                       </div>
                     );
                   })}
@@ -226,19 +256,100 @@ export default function ConfigModal({ component, onClose }: Props) {
                           type="text"
                           value={inputVal}
                           onChange={(e) => setPortInputs((prev) => ({ ...prev, [key]: e.target.value }))}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") applyPortValue(key, inputVal, port.dataType);
-                          }}
                           className="flex-1 bg-gray-800 border border-gray-600 rounded px-2 py-0.5 text-[10px] font-mono text-purple-200 focus:border-purple-500 focus:outline-none"
                           placeholder={port.dataType === "boolean" ? "0 / 1" : "0x0000"}
                         />
-                        <button
-                          onClick={() => applyPortValue(key, inputVal, port.dataType)}
-                          className="text-[10px] px-1.5 py-0.5 rounded bg-orange-700 hover:bg-orange-600 text-white transition-colors shrink-0"
-                        >Set</button>
                       </div>
                     );
                   })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── CPU Testing Mode ────────────────────────── */}
+          {isCpu && (
+            <div className="p-4 border-b border-gray-800 space-y-3">
+              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Testing Mode</h3>
+              <p className="text-[10px] text-gray-500">
+                Select an instruction to force the CPU in_opcode port and keep it set.
+              </p>
+              
+              {/* Opcode selector dropdown */}
+              <select
+                value={testingModeOpcode ?? ""}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const opcode = val ? (Number(val) as Opcode) : null;
+                  if (opcode !== null) {
+                    handleSetTestingOpcode(opcode);
+                  } else {
+                    setTestingModeOpcode(null);
+                  }
+                }}
+                className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors"
+              >
+                <option value="">-- Disable Testing Mode --</option>
+                {Object.entries(INSTRUCTION_SET).map(([mnemonic, descriptor]) => (
+                  <option key={mnemonic} value={descriptor.opcode}>
+                    {mnemonic} (0b{descriptor.opcode.toString(2).padStart(5, "0")})
+                  </option>
+                ))}
+              </select>
+
+              {/* Display selected instruction info */}
+              {testingModeOpcode !== null && (
+                <div className="bg-gray-800/50 rounded-lg p-3 space-y-2">
+                  {(() => {
+                    const selectedInstruction = Object.entries(INSTRUCTION_SET).find(([, descriptor]) => descriptor.opcode === testingModeOpcode);
+                    if (!selectedInstruction) return null;
+
+                    const [mnemonic, descriptor] = selectedInstruction;
+                    const steps = OPCODE_SEQUENCES[testingModeOpcode] ?? [];
+                    const isStandard = descriptor.format === "standard";
+
+                    return (
+                      <div key={mnemonic} className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] font-bold text-indigo-300">{mnemonic}</span>
+                          <span className="text-[10px] text-gray-500 font-mono">
+                            0x{descriptor.opcode.toString(16).toUpperCase().padStart(2, "0")}
+                          </span>
+                        </div>
+
+                        <p className="text-[10px] text-gray-400">{descriptor.description}</p>
+
+                        <div className="text-[10px] text-gray-500">
+                          <span className="font-semibold">Format:</span> {isStandard ? "Standard" : "ULA"}
+                        </div>
+
+                        <div className="space-y-1">
+                          <div className="text-[10px] font-semibold text-cyan-400">Pipeline Steps:</div>
+                          <div className="flex flex-wrap gap-1">
+                            <span className="text-[9px] px-2 py-1 rounded bg-indigo-900/60 border border-indigo-600 text-indigo-200 font-mono">
+                              FETCH
+                            </span>
+                            <span className="text-[9px] px-2 py-1 rounded bg-purple-900/60 border border-purple-600 text-purple-200 font-mono">
+                              DECODE
+                            </span>
+
+                            {steps.length > 0 ? (
+                              steps.map((state, idx) => (
+                                <span
+                                  key={idx}
+                                  className="text-[9px] px-2 py-1 rounded bg-cyan-900/60 border border-cyan-600 text-cyan-200 font-mono"
+                                >
+                                  {CPU_STATE_LABELS[state] || `STATE_${state}`}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-[9px] text-gray-500 italic">no extra steps</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </div>

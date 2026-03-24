@@ -113,15 +113,38 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
     const results: WireRenderData[] = [];
 
     for (const wire of wires) {
-      const startPos = resolveEndpointPosition(wire.start);
+      const isAttached = Boolean(wire.end);
+
+      const outputEndpoint = wire.start.direction === "output"
+        ? wire.start
+        : wire.end?.direction === "output"
+          ? wire.end
+          : null;
+
+      const inputEndpoint = wire.start.direction === "input"
+        ? wire.start
+        : wire.end?.direction === "input"
+          ? wire.end
+          : null;
+
+      const shouldRenderOutputToInput = isAttached && Boolean(outputEndpoint && inputEndpoint);
+
+      const startEndpoint = shouldRenderOutputToInput ? outputEndpoint! : wire.start;
+      const endEndpoint = shouldRenderOutputToInput ? inputEndpoint! : wire.end;
+
+      const startPos = resolveEndpointPosition(startEndpoint);
       if (!startPos) continue;
 
-      const endPos = wire.end ? resolveEndpointPosition(wire.end) : wire.floatingEnd;
+      const endPos = endEndpoint ? resolveEndpointPosition(endEndpoint) : wire.floatingEnd;
       if (!endPos) continue;
+
+      const orderedNodes = shouldRenderOutputToInput && wire.start.direction === "input"
+        ? [...wire.nodes].reverse()
+        : wire.nodes;
 
       const basePath = [
         startPos,
-        ...wire.nodes.map((node) => ({ x: node.x, y: node.y })),
+        ...orderedNodes.map((node) => ({ x: node.x, y: node.y })),
         endPos,
       ];
 

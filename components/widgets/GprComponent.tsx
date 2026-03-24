@@ -32,7 +32,7 @@ export default function GprComponent({ component, zoom }: Props) {
   const addrIn   = gpr?.in_writeAddr?.value ?? 0;
   const dataIn   = gpr?.in_writeData?.value ?? 0;
   const wrSignal = gpr?.in_writeEnable?.value ?? 0;
-  const dataOut  = gpr?.output ?? 0;
+  const dataOut  = gpr?.out_readDataA?.value ?? 0;
 
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({ id });
