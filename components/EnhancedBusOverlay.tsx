@@ -12,8 +12,23 @@ import { pointsToSVGPath, snapToGrid } from "@/lib/wireRouting";
 const GRID_SIZE = 16;
 /** Invisible stroke width for easier hit detection */
 const HIT_AREA_WIDTH = 16;
-/** Duration of the data pulse animation in ms */
-const PULSE_ANIMATION_DURATION = 2500;
+/** Animation speed in pixels per millisecond */
+const PULSE_ANIMATION_SPEED = 0.1; // 150 px/sec
+/** Minimum animation duration for short wires */
+const MIN_ANIMATION_DURATION = 2000;
+/** Maximum animation duration for very long wires */
+const MAX_ANIMATION_DURATION = 4000;
+
+/** Calculate total path length from array of points */
+function calculatePathLength(path: Array<{ x: number; y: number }>): number {
+  let totalLength = 0;
+  for (let i = 0; i < path.length - 1; i++) {
+    const dx = path[i + 1].x - path[i].x;
+    const dy = path[i + 1].y - path[i].y;
+    totalLength += Math.sqrt(dx * dx + dy * dy);
+  }
+  return totalLength;
+}
 
 interface WireRenderData {
   wire: EnhancedWire;
@@ -164,44 +179,63 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
 
   // Track animation progress for flowing effect
   const [animationProgress, setAnimationProgress] = useState<Map<string, number>>(new Map());
-  
+  // Store per-wire durations for speed-based animation
+  const wireDurationsRef = useRef<Map<string, number>>(new Map());
+
   // Detect value changes and trigger animations
   useEffect(() => {
     const newAnimating = new Set<string>();
-    
-    for (const { wire, value } of wireRenderData) {
+    const newDurations = new Map<string, number>();
+
+    for (const { wire, path, value } of wireRenderData) {
       const prevValue = prevWireValues.current.get(wire.id);
       if (prevValue !== undefined && prevValue !== value) {
         newAnimating.add(wire.id);
+        // Calculate duration based on path length for consistent speed
+        const pathLength = calculatePathLength(path);
+        const duration = Math.min(
+          MAX_ANIMATION_DURATION,
+          Math.max(MIN_ANIMATION_DURATION, pathLength / PULSE_ANIMATION_SPEED)
+        );
+        newDurations.set(wire.id, duration);
       }
       prevWireValues.current.set(wire.id, value);
     }
-    
+
     if (newAnimating.size > 0) {
+      // Store durations for this animation batch
+      for (const [id, duration] of newDurations) {
+        wireDurationsRef.current.set(id, duration);
+      }
+
       setAnimatingWires((prev) => new Set([...prev, ...newAnimating]));
-      
-      // Animate progress from 0 to 1
+
+      // Animate progress from 0 to 1 using per-wire durations
       const startTime = Date.now();
       const animate = () => {
         const elapsed = Date.now() - startTime;
-        const progress = Math.min(elapsed / PULSE_ANIMATION_DURATION, 1);
-        
+        let allComplete = true;
+
         setAnimationProgress((prev) => {
           const updated = new Map(prev);
           for (const id of newAnimating) {
+            const duration = wireDurationsRef.current.get(id) ?? MIN_ANIMATION_DURATION;
+            const progress = Math.min(elapsed / duration, 1);
             updated.set(id, progress);
+            if (progress < 1) allComplete = false;
           }
           return updated;
         });
-        
-        if (progress < 1) {
+
+        if (!allComplete) {
           requestAnimationFrame(animate);
         } else {
-          // Clear animations after completion
+          // Clear animations after all complete
           setAnimatingWires((prev) => {
             const updated = new Set(prev);
             for (const id of newAnimating) {
               updated.delete(id);
+              wireDurationsRef.current.delete(id);
             }
             return updated;
           });
@@ -214,7 +248,7 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
           });
         }
       };
-      
+
       requestAnimationFrame(animate);
     }
   }, [wireRenderData]);

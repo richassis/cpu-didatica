@@ -15,7 +15,7 @@ import type { CPU } from "@/lib/simulator/Cpu";
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 const STATE_LABELS: Record<CpuState, string> = {
-  [CpuState.IDLE]:      "IDLE",
+  [CpuState.RESET]:     "RESET",
   [CpuState.FETCH]:     "FETCH",
   [CpuState.DECODE]:    "DECODE",
   [CpuState.EXECUTE]:   "EXEC",
@@ -27,10 +27,11 @@ const STATE_LABELS: Record<CpuState, string> = {
   [CpuState.WRITEREG2]: "WRREG2",
   [CpuState.WRITEREG3]: "WRREG3",
   [CpuState.WRITEPC]:   "WRPC",
+  [CpuState.HALT]:      "HALT",
 };
 
 const STATE_COLORS: Record<CpuState, string> = {
-  [CpuState.IDLE]:      "text-gray-300    bg-gray-800/60    border-gray-600",
+  [CpuState.RESET]:     "text-gray-300    bg-gray-800/60    border-gray-600",
   [CpuState.FETCH]:     "text-indigo-300  bg-indigo-900/60  border-indigo-600",
   [CpuState.DECODE]:    "text-purple-300  bg-purple-900/60  border-purple-600",
   [CpuState.EXECUTE]:   "text-orange-300  bg-orange-900/60  border-orange-600",
@@ -42,6 +43,7 @@ const STATE_COLORS: Record<CpuState, string> = {
   [CpuState.WRITEREG2]: "text-emerald-300 bg-emerald-900/60 border-emerald-600",
   [CpuState.WRITEREG3]: "text-emerald-300 bg-emerald-900/60 border-emerald-600",
   [CpuState.WRITEPC]:   "text-rose-300    bg-rose-900/60    border-rose-600",
+  [CpuState.HALT]:      "text-red-300     bg-red-900/60     border-red-600",
 };
 
 /** Read every control-signal output port value from the CPU instance. */
@@ -204,7 +206,7 @@ export default function CpuComponent({ component, zoom }: Props) {
               onClick={(e) => { e.stopPropagation(); resetCpu(id); }}
               className="text-indigo-400/70 hover:text-indigo-200 text-xs leading-none px-1 py-0.5 rounded transition-colors"
               aria-label="Reset CPU"
-              title="Reset CPU to IDLE state"
+              title="Reset CPU to RESET state"
             >
               ↺
             </button>

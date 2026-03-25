@@ -18,6 +18,9 @@
  */
 export type PortDataType = "number" | "opcode" | "boolean";
 
+/** Position for manual port placement on component widget */
+export type PortPosition = "left" | "right" | "top" | "bottom";
+
 export interface PortDescriptor {
   /** Unique name within the owning component, e.g. "result", "opcode", "a". */
   name: string;
@@ -29,6 +32,10 @@ export interface PortDescriptor {
   bitWidth: number | null;
   /** Human-readable description for UI tooltips. */
   description?: string;
+  /** Manual position override: which edge to place the port on */
+  position?: PortPosition;
+  /** Manual offset override: 0-100 percentage along the edge */
+  offset?: number;
 }
 
 // ── Base Port class ──────────────────────────────────────────────────────────
@@ -39,6 +46,10 @@ export abstract class Port<T = number> {
   readonly dataType: PortDataType;
   readonly bitWidth: number | null;
   readonly description: string;
+  /** Manual position override for this port (top/bottom/left/right) */
+  readonly position?: PortPosition;
+  /** Manual offset override (0-100 percentage along edge) */
+  readonly offset?: number;
 
   /** Back-reference to owning component's ID (set when registering). */
   componentId: string | null = null;
@@ -51,6 +62,8 @@ export abstract class Port<T = number> {
     this.dataType    = descriptor.dataType;
     this.bitWidth    = descriptor.bitWidth;
     this.description = descriptor.description ?? "";
+    this.position    = descriptor.position;
+    this.offset      = descriptor.offset;
     this._value      = initialValue;
   }
 
@@ -67,6 +80,8 @@ export abstract class Port<T = number> {
       dataType: this.dataType,
       bitWidth: this.bitWidth,
       description: this.description,
+      position: this.position,
+      offset: this.offset,
     };
   }
 }
@@ -84,14 +99,41 @@ export class InputPort<T = number> extends Port<T> {
   /** Optional callback when value changes. */
   onChange: ((value: T) => void) | null = null;
 
+  /**
+   * Creates a new InputPort.
+   *
+   * @example Manual port positioning
+   * ```ts
+   * // Place port on top edge at 30% from left
+   * new InputPort("myInput", "number", 16, 0, "Description", {
+   *   position: "top",
+   *   offset: 30
+   * })
+   *
+   * // Place on left edge (default for inputs) at 75% from top
+   * new InputPort("myInput", "number", 16, 0, "Description", {
+   *   position: "left",
+   *   offset: 75
+   * })
+   * ```
+   */
   constructor(
     name: string,
     dataType: PortDataType,
     bitWidth: number | null,
     initialValue: T,
     description?: string,
+    options?: { position?: PortPosition; offset?: number },
   ) {
-    super({ name, direction: "input", dataType, bitWidth, description }, initialValue);
+    super({
+      name,
+      direction: "input",
+      dataType,
+      bitWidth,
+      description,
+      position: options?.position,
+      offset: options?.offset
+    }, initialValue);
   }
 
   /** Get the current value. */
@@ -152,14 +194,41 @@ export class OutputPort<T = number> extends Port<T> {
   /** All InputPorts currently connected to this output. */
   private readonly _targets: Set<InputPort<T>> = new Set();
 
+  /**
+   * Creates a new OutputPort.
+   *
+   * @example Manual port positioning
+   * ```ts
+   * // Place port on bottom edge at 50% from left
+   * new OutputPort("myOutput", "number", 16, 0, "Description", {
+   *   position: "bottom",
+   *   offset: 50
+   * })
+   *
+   * // Place on right edge (default for outputs) at 25% from top
+   * new OutputPort("myOutput", "number", 16, 0, "Description", {
+   *   position: "right",
+   *   offset: 25
+   * })
+   * ```
+   */
   constructor(
     name: string,
     dataType: PortDataType,
     bitWidth: number | null,
     initialValue: T,
     description?: string,
+    options?: { position?: PortPosition; offset?: number },
   ) {
-    super({ name, direction: "output", dataType, bitWidth, description }, initialValue);
+    super({
+      name,
+      direction: "output",
+      dataType,
+      bitWidth,
+      description,
+      position: options?.position,
+      offset: options?.offset
+    }, initialValue);
   }
 
   /**

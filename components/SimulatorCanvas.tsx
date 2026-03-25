@@ -47,14 +47,13 @@ export default function SimulatorCanvas() {
   // Clock state
   const tickClock = useSimulatorStore((s) => s.tickClock);
   const resetClock = useSimulatorStore((s) => s.resetClock);
-  const getPrimaryCpu = useSimulatorStore((s) => s.getPrimaryCpu);
+  const getTotalTicks = useSimulatorStore((s) => s.getTotalTicks);
   const createSimulatorWire = useSimulatorStore((s) => s.createWire);
   const revision = useSimulatorStore((s) => s.revision);
   void revision;
-  
-  // Get total ticks from the primary CPU
-  const cpu = getPrimaryCpu();
-  const totalTicks = cpu?.totalTicks ?? 0;
+
+  // Get total ticks (from CPU if exists, otherwise global counter)
+  const totalTicks = getTotalTicks();
 
   // Numeric base setting
   const numericBase = useDisplayStore((s) => s.numericBase);
@@ -356,6 +355,33 @@ export default function SimulatorCanvas() {
     }
   };
 
+  // Zoom while keeping the viewport center stable
+  const zoomToCenter = useCallback((newZoom: number) => {
+    const el = scrollRef.current;
+    if (!el) {
+      setZoom(newZoom);
+      return;
+    }
+
+    // Calculate current viewport center in canvas coordinates
+    const centerX = el.scrollLeft + el.clientWidth / 2;
+    const centerY = el.scrollTop + el.clientHeight / 2;
+
+    // Calculate new scroll position to keep center stable
+    const scrollX = (centerX / zoom) * newZoom - el.clientWidth / 2;
+    const scrollY = (centerY / zoom) * newZoom - el.clientHeight / 2;
+
+    setZoom(newZoom);
+
+    // Apply scroll after zoom
+    requestAnimationFrame(() => {
+      if (scrollRef.current) {
+        scrollRef.current.scrollLeft = scrollX;
+        scrollRef.current.scrollTop = scrollY;
+      }
+    });
+  }, [zoom, setZoom]);
+
   return (
     <div 
       ref={scrollRef} 
@@ -501,18 +527,18 @@ export default function SimulatorCanvas() {
         {/* Zoom controls */}
         <div className="flex items-center gap-1 bg-gray-900/90 border border-gray-700 rounded-full px-3 py-1.5 shadow-xl backdrop-blur-sm">
           <button
-            onClick={() => setZoom(zoom - ZOOM_STEP)}
+            onClick={() => zoomToCenter(Math.max(ZOOM_MIN, zoom - ZOOM_STEP))}
             disabled={zoom <= ZOOM_MIN}
             className="w-7 h-7 flex items-center justify-center rounded-full text-gray-300 hover:bg-gray-700 disabled:opacity-30 transition-colors text-lg leading-none"
             aria-label="Zoom out"
           >−</button>
           <button
-            onClick={() => setZoom(1)}
+            onClick={() => zoomToCenter(1)}
             className="min-w-[3.5rem] text-center text-sm font-mono text-gray-300 hover:text-white transition-colors"
             aria-label="Reset zoom"
           >{Math.round(zoom * 100)}%</button>
           <button
-            onClick={() => setZoom(zoom + ZOOM_STEP)}
+            onClick={() => zoomToCenter(Math.min(ZOOM_MAX, zoom + ZOOM_STEP))}
             disabled={zoom >= ZOOM_MAX}
             className="w-7 h-7 flex items-center justify-center rounded-full text-gray-300 hover:bg-gray-700 disabled:opacity-30 transition-colors text-lg leading-none"
             aria-label="Zoom in"

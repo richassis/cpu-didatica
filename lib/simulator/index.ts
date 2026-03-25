@@ -10,6 +10,8 @@ export { Ula } from "./Ula";
 export { Adder } from "./Adder";
 export { Mux } from "./Mux";
 export { Memory } from "./Memory";
+export { InstructionMemory } from "./InstructionMemory";
+export { MainMemory } from "./MainMemory";
 export { Clock } from "./Clock";
 export {
   type Clockable,

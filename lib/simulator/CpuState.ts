@@ -6,10 +6,11 @@
 
 /**
  * FSM states for instruction execution.
- * IDLE is the default state before FETCH, used for demonstration purposes.
+ * RESET is the initial state where control signals are set to defaults
+ * and no components tick. Transitions to FETCH on first tick.
  */
 export enum CpuState {
-  IDLE = -1,      // Default demonstrative state before FETCH
+  RESET = -1,     // Initial reset state - no components tick, default signals
   FETCH = 0,
   DECODE = 1,
   EXECUTE = 2,
@@ -21,13 +22,14 @@ export enum CpuState {
   WRITEREG2 = 8,
   WRITEREG3 = 9,
   WRITEPC = 10,
+  HALT = 11,      // Halt state - executes when HLT opcode is encountered
 }
 
 /**
  * Human-readable labels for each CPU state.
  */
 export const CPU_STATE_LABELS: Record<CpuState, string> = {
-  [CpuState.IDLE]: "IDLE",
+  [CpuState.RESET]: "RESET",
   [CpuState.FETCH]: "FETCH",
   [CpuState.DECODE]: "DECODE",
   [CpuState.EXECUTE]: "EXECUTE",
@@ -39,11 +41,12 @@ export const CPU_STATE_LABELS: Record<CpuState, string> = {
   [CpuState.WRITEREG2]: "WRITEREG2",
   [CpuState.WRITEREG3]: "WRITEREG3",
   [CpuState.WRITEPC]: "WRITEPC",
+  [CpuState.HALT]: "HALT",
 };
 
 /**
  * All available CPU states as an array for UI iteration.
- * Note: IDLE is excluded as it's only for reset/initial state, not tick configuration.
+ * Note: RESET is excluded as it's only for initial/reset state, not tick configuration.
  */
 export const ALL_CPU_STATES: CpuState[] = [
   CpuState.FETCH,
@@ -57,4 +60,5 @@ export const ALL_CPU_STATES: CpuState[] = [
   CpuState.WRITEREG2,
   CpuState.WRITEREG3,
   CpuState.WRITEPC,
+  CpuState.HALT,
 ];

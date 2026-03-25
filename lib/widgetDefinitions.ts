@@ -68,6 +68,24 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     description: "Unified memory — addr/data/rdMem/wrMem ports, 256×16b default",
   },
   {
+    type: "InstructionMemoryComponent",
+    label: "Instruction Memory",
+    namePrefix: "IMEM",
+    icon: "\u{1F4D6}",
+    defaultWidth: 160,  // 10 grid cells
+    defaultHeight: 192, // 12 grid cells
+    description: "Read-only instruction memory — addr/instruction ports, 256×16b default",
+  },
+  {
+    type: "MainMemoryComponent",
+    label: "Main Memory (RAM)",
+    namePrefix: "RAM",
+    icon: "\u{1F4BE}",
+    defaultWidth: 160,  // 10 grid cells
+    defaultHeight: 192, // 12 grid cells
+    description: "Main memory with exclusive read OR write — 256×16b default",
+  },
+  {
     type: "UlaComponent",
     label: "ULA / ALU",
     namePrefix: "ULA",

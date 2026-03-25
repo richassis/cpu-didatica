@@ -60,10 +60,10 @@ export class Mux implements Clockable, Connectable {
 
   getPorts(): PortMap {
     const ports: PortMap = {
-      in_0:   this.in_0,
-      in_1:   this.in_1,
-      sel:    this.in_sel,
-      result: this.out_result,
+      in_0:       this.in_0,
+      in_1:       this.in_1,
+      in_sel:     this.in_sel,
+      out_result: this.out_result,
     };
     if (this.in_2) {
       ports["in_2"] = this.in_2;

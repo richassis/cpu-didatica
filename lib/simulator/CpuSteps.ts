@@ -40,6 +40,17 @@ export const DEFAULT_TICK_STEPS: Record<string, CpuState[]> = {
     CpuState.WRITEMEM, // Data write
   ],
 
+  // Instruction memory ticks only on instruction fetch
+  InstructionMemoryComponent: [
+    CpuState.FETCH,    // Instruction fetch
+  ],
+
+  // Main memory ticks only on data read/write (not instruction fetch)
+  MainMemoryComponent: [
+    CpuState.READMEM,  // Data read
+    CpuState.WRITEMEM, // Data write
+  ],
+
   // ULA ticks during execute phase
   UlaComponent: [
     CpuState.EXECUTE,

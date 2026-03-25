@@ -5,6 +5,8 @@ import LabelWidget from "./widgets/LabelWidget";
 import ValueDisplayWidget from "./widgets/ValueDisplayWidget";
 import GprComponent from "./widgets/GprComponent";
 import MemoryComponent from "./widgets/MemoryComponent";
+import InstructionMemoryComponent from "./widgets/InstructionMemoryComponent";
+import MainMemoryComponent from "./widgets/MainMemoryComponent";
 import UlaComponent from "./widgets/UlaComponent";
 import AdderComponent from "./widgets/AdderComponent";
 import MuxComponent from "./widgets/MuxComponent";
@@ -27,6 +29,10 @@ export default function WidgetRenderer({ component, zoom }: Props) {
       return <GprComponent component={component} zoom={zoom} />;
     case "MemoryComponent":
       return <MemoryComponent component={component} zoom={zoom} />;
+    case "InstructionMemoryComponent":
+      return <InstructionMemoryComponent component={component} zoom={zoom} />;
+    case "MainMemoryComponent":
+      return <MainMemoryComponent component={component} zoom={zoom} />;
     case "UlaComponent":
       return <UlaComponent component={component} zoom={zoom} />;
     case "AdderComponent":

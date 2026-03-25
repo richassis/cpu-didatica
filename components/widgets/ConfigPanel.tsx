@@ -101,6 +101,10 @@ export function MemoryComponentConfigPanel(props: PanelProps) {
   );
 }
 
+// InstructionMemory and MainMemory use the same config as Memory
+export const InstructionMemoryComponentConfigPanel = MemoryComponentConfigPanel;
+export const MainMemoryComponentConfigPanel = MemoryComponentConfigPanel;
+
 export function UlaComponentConfigPanel(props: PanelProps) {
   return <NameField {...props} />;
 }
@@ -151,6 +155,10 @@ export function ConfigPanelForType({
       return <GprComponentConfigPanel {...props} />;
     case "MemoryComponent":
       return <MemoryComponentConfigPanel {...props} />;
+    case "InstructionMemoryComponent":
+      return <InstructionMemoryComponentConfigPanel {...props} />;
+    case "MainMemoryComponent":
+      return <MainMemoryComponentConfigPanel {...props} />;
     case "UlaComponent":
       return <UlaComponentConfigPanel {...props} />;
     case "Register":

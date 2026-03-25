@@ -51,7 +51,7 @@ export const OPCODE_SEQUENCES: Readonly<Partial<Record<Opcode, CpuState[]>>> = {
   [Opcode.JC]:   [CpuState.WRITEPC],
   [Opcode.JN]:   [CpuState.WRITEPC],
   [Opcode.JMP]:  [CpuState.WRITEPC],
-  // HLT and unknown opcodes handled specially in doDecode()
+  [Opcode.HLT]:  [CpuState.HALT],  // HLT enters HALT state before halting
 };
 
 /**
@@ -86,8 +86,8 @@ export class CPU implements Clockable, Connectable {
   readonly id: string;
   name: string;
 
-  // FSM state - starts in IDLE
-  private _state: CpuState = CpuState.IDLE;
+  // FSM state - starts in RESET
+  private _state: CpuState = CpuState.RESET;
   private _FSMindex: number = 0;
   private _halted: boolean = false;
   private _paused: boolean = false;
@@ -146,7 +146,7 @@ export class CPU implements Clockable, Connectable {
     this.out_muxAMem = new OutputPort<number>("out_muxAMem", "number", 1, 0);
     this.out_wrIR = new OutputPort<number>("out_wrIR", "number", 1, 0);
     this.out_opULA = new OutputPort<number>("out_opULA", "number", 3, UlaOperation.ADD);
-    this.out_state = new OutputPort<number>("out_state", "number", 4, CpuState.IDLE);
+    this.out_state = new OutputPort<number>("out_state", "number", 4, CpuState.RESET);
     this.out_halted = new OutputPort<boolean>("out_halted", "boolean", 1, false);
 
     // Initialize previous signal values
@@ -288,15 +288,15 @@ export class CPU implements Clockable, Connectable {
     }
   }
 
-  /** Reset the CPU to initial IDLE state. */
+  /** Reset the CPU to initial RESET state. */
   reset(): void {
-    this._state = CpuState.IDLE;
+    this._state = CpuState.RESET;
     this._FSMindex = 0;
     this._halted = false;
     this._totalTicks = 0;
     this.clearAllSignals();
     this.initPrevSignals();
-    this.out_state.set(CpuState.IDLE);
+    this.out_state.set(CpuState.RESET);
     this.out_halted.set(false);
   }
 
@@ -322,8 +322,8 @@ export class CPU implements Clockable, Connectable {
     this.out_wrPC.set(0);
     this.out_muxPC.set(1);
     this.out_rdMem.set(0);
-    this.out_wrMem.set(0);
-    this.out_muxAMem.set(1);
+    this.out_wrMem.set(1);
+    this.out_muxAMem.set(0);
     this.out_wrIR.set(0);
     this.out_opULA.set(UlaOperation.ADD);
   }
@@ -356,7 +356,10 @@ export class CPU implements Clockable, Connectable {
     this.syncTestingOpcodeInput();
     this._totalTicks++;
 
-    // First, execute the CPU's own state logic
+    // Capture current state BEFORE onTick changes it
+    const currentState = this._state;
+
+    // Execute the CPU's own state logic (this may change _state)
     this.onTick();
 
     // HLT cycles affect only the CPU control unit.
@@ -364,14 +367,18 @@ export class CPU implements Clockable, Connectable {
       return;
     }
 
-    // Then, tick all registered components that should tick on this state
-    this.tickComponentsForState(this._state);
+    // Tick components for the state we WERE in, not the new state
+    this.tickComponentsForState(currentState);
   }
 
   /**
    * Tick all components registered for the given state.
+   * No components tick during RESET state.
    */
   private tickComponentsForState(state: CpuState): void {
+    // Do NOT tick components during RESET state
+    if (state === CpuState.RESET) return;
+
     for (const entry of this._registeredComponents.values()) {
       if (entry.tickSteps.includes(state)) {
         entry.component.onTick();
@@ -396,9 +403,9 @@ export class CPU implements Clockable, Connectable {
    * Called by the global clock on each tick.
    *
    * The pipeline is:
-   *   IDLE → FETCH → DECODE → (opcode-specific states driven by _FSMindex) → back to FETCH
+   *   RESET → FETCH → DECODE → (opcode-specific states driven by _FSMindex) → back to FETCH
    *
-   * IDLE is the initial demonstrative state. On first tick, transitions to FETCH.
+   * RESET is the initial state with default control signals. On first tick, transitions to FETCH.
    * FETCH and DECODE are two fixed ticks.
    * After DECODE the opcode is known; subsequent ticks walk _FSMindex through
    * the per-opcode step array until it is exhausted, then return to FETCH.
@@ -408,8 +415,8 @@ export class CPU implements Clockable, Connectable {
     if (this._halted || this._paused) return;
 
     switch (this._state) {
-      case CpuState.IDLE:
-        this.doIdle();
+      case CpuState.RESET:
+        this.doReset();
         break;
 
       case CpuState.FETCH:
@@ -431,9 +438,9 @@ export class CPU implements Clockable, Connectable {
 
   // ── Fixed phases ─────────────────────────────────────────────
 
-  /** IDLE state - initial demonstrative state. Transitions to FETCH on tick. */
-  private doIdle(): void {
-    // Clear all signals in IDLE state
+  /** RESET state - initial state with default control signals. Transitions to FETCH on tick. */
+  private doReset(): void {
+    // Clear all signals in RESET state
     this.clearAllSignals();
     // Transition to FETCH on next tick
     this._state = CpuState.FETCH;
@@ -458,13 +465,6 @@ export class CPU implements Clockable, Connectable {
     this.setSignalIfChanged(this.out_rdMem, "rdMem", 0);
 
     const opcode = this.getActiveOpcode();
-
-    // Only HALT if HLT opcode is explicitly sent
-    if (opcode === Opcode.HLT) {
-      this._halted = true;
-      this._state = CpuState.FETCH;
-      return;
-    }
 
     const sequence = OPCODE_SEQUENCES[opcode];
 
@@ -576,6 +576,12 @@ export class CPU implements Clockable, Connectable {
         }
         break;
       }
+
+      // ── Halt ──────────────────────────────────────────────────
+      case CpuState.HALT:
+        // Set halted flag during the HALT state
+        this._halted = true;
+        break;
 
       default:
         break;

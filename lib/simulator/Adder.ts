@@ -17,6 +17,9 @@ export class Adder implements Clockable, Connectable {
   readonly bitWidth: number;
 
   // ── Ports ────────────────────────────────────────────────────
+  // Note: To manually position ports, pass options with position/offset:
+  // Example: new InputPort("a", "number", 16, 0, "Operand A", { position: "top", offset: 30 })
+  // This overrides the default left/right positioning. See Port.ts for details.
 
   /** Input: operand A */
   readonly in_a: InputPort<number>;

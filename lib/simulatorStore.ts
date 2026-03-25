@@ -12,7 +12,7 @@
  */
 
 import { create } from "zustand";
-import { Register, Gpr, Ula, Adder, Mux, Memory, CPU, Decoder, Bus, isClockable, CpuState, ALL_CPU_STATES } from "@/lib/simulator";
+import { Register, Gpr, Ula, Adder, Mux, Memory, InstructionMemory, MainMemory, CPU, Decoder, Bus, isClockable, CpuState, ALL_CPU_STATES } from "@/lib/simulator";
 import type { Connectable, WireDescriptor } from "@/lib/simulator";
 import type { ComponentState } from "@/lib/store";
 // Lazy import via getter to avoid circular initialisation (store.ts imports simulatorStore).
@@ -20,7 +20,7 @@ const getLayoutStore = () =>
   (require("@/lib/store") as typeof import("@/lib/store")).useLayoutStore;
 
 /** Union of every data-layer object type */
-export type SimulatorObject = Register | Gpr | Ula | Adder | Mux | Memory | CPU | Decoder;
+export type SimulatorObject = Register | Gpr | Ula | Adder | Mux | Memory | InstructionMemory | MainMemory | CPU | Decoder;
 
 /** Type guard to check if an object is Connectable */
 function isConnectable(obj: unknown): obj is Connectable {
@@ -39,6 +39,9 @@ interface SimulatorState {
 
   /** The signal bus for component interconnection */
   bus: Bus;
+
+  /** Tick counter for non-CPU mode (when no CPU component exists) */
+  globalTicks: number;
 
   /**
    * Create the data-layer object that matches a widget type.
@@ -69,13 +72,15 @@ interface SimulatorState {
   getAdder: (id: string) => Adder | undefined;
   getMux: (id: string) => Mux | undefined;
   getMemory: (id: string) => Memory | undefined;
+  getInstructionMemory: (id: string) => InstructionMemory | undefined;
+  getMainMemory: (id: string) => MainMemory | undefined;
   getCpu: (id: string) => CPU | undefined;
   getDecoder: (id: string) => Decoder | undefined;
 
   /** Toggle or set the paused state of a CPU instance. */
   pauseCpu: (id: string, paused: boolean) => void;
 
-  /** Reset a specific CPU to IDLE state. */
+  /** Reset a specific CPU to RESET state. */
   resetCpu: (id: string) => void;
 
   /**
@@ -95,6 +100,11 @@ interface SimulatorState {
    * Returns null if no CPU exists.
    */
   getPrimaryCpu: () => CPU | null;
+
+  /**
+   * Get total tick count (from CPU if exists, otherwise global counter).
+   */
+  getTotalTicks: () => number;
 
   /**
    * Advance the simulation by one tick via the CPU.
@@ -179,6 +189,7 @@ interface SimulatorState {
 export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
   objects: new Map<string, SimulatorObject>(),
   bus: new Bus(),
+  globalTicks: 0,
   revision: 0,
 
   createObject: (id, type, label, meta) => {
@@ -217,6 +228,18 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
         const wordCount = typeof meta?.wordCount === "number" ? meta.wordCount : 256;
         const bitWidth  = typeof meta?.bitWidth  === "number" ? meta.bitWidth  : 16;
         newObj = new Memory(id, label, wordCount, bitWidth);
+        break;
+      }
+      case "InstructionMemoryComponent": {
+        const wordCount = typeof meta?.wordCount === "number" ? meta.wordCount : 256;
+        const bitWidth  = typeof meta?.bitWidth  === "number" ? meta.bitWidth  : 16;
+        newObj = new InstructionMemory(id, label, wordCount, bitWidth);
+        break;
+      }
+      case "MainMemoryComponent": {
+        const wordCount = typeof meta?.wordCount === "number" ? meta.wordCount : 256;
+        const bitWidth  = typeof meta?.bitWidth  === "number" ? meta.bitWidth  : 16;
+        newObj = new MainMemory(id, label, wordCount, bitWidth);
         break;
       }
       // Types without a data-layer (LabelWidget, ValueDisplayWidget)
@@ -305,6 +328,16 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
     return obj instanceof Memory ? obj : undefined;
   },
 
+  getInstructionMemory: (id) => {
+    const obj = get().objects.get(id);
+    return obj instanceof InstructionMemory ? obj : undefined;
+  },
+
+  getMainMemory: (id) => {
+    const obj = get().objects.get(id);
+    return obj instanceof MainMemory ? obj : undefined;
+  },
+
   getCpu: (id) => {
     const obj = get().objects.get(id);
     return obj instanceof CPU ? obj : undefined;
@@ -348,9 +381,14 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
     return null;
   },
 
+  getTotalTicks: () => {
+    const cpu = get().getPrimaryCpu();
+    return cpu ? cpu.totalTicks : get().globalTicks;
+  },
+
   tickClock: () => {
     const { objects } = get();
-    
+
     // Find the primary CPU
     let cpu: CPU | null = null;
     for (const obj of objects.values()) {
@@ -364,7 +402,8 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
       // CPU-controlled ticking: CPU decides which components tick
       cpu.tick();
     } else {
-      // Fallback: tick all Clockable objects if no CPU exists
+      // No CPU: increment global tick counter and tick all Clockable objects
+      set((s) => ({ globalTicks: s.globalTicks + 1 }));
       for (const obj of objects.values()) {
         if (isClockable(obj)) {
           obj.onTick();
@@ -388,7 +427,8 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
       }
     }
 
-    set((s) => ({ revision: s.revision + 1 }));
+    // Reset global tick counter and bump revision
+    set((s) => ({ globalTicks: 0, revision: s.revision + 1 }));
     // Persist cleared values
     getLayoutStore().getState().saveState();
   },
@@ -485,8 +525,8 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
       if (obj instanceof Gpr) {
         entry.registers = obj.snapshot().map((r) => r.value);
       }
-      // Memory: also save the cells array
-      if (obj instanceof Memory) {
+      // Memory: also save the cells array (includes all memory types)
+      if (obj instanceof Memory || obj instanceof InstructionMemory || obj instanceof MainMemory) {
         entry.cells = obj.dump();
       }
       result.set(id, entry);
@@ -503,7 +543,7 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
       if (obj instanceof Gpr && state.registers) {
         state.registers.forEach((v, i) => obj.write(i, v));
       }
-      if (obj instanceof Memory && state.cells) {
+      if ((obj instanceof Memory || obj instanceof InstructionMemory || obj instanceof MainMemory) && state.cells) {
         obj.load(state.cells);
       }
       // Restore port values (output ports only — inputs are driven by wires)
@@ -523,7 +563,7 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
 
   pokeMemory: (id, addr, value) => {
     const obj = get().objects.get(id);
-    if (obj instanceof Memory) {
+    if (obj instanceof Memory || obj instanceof InstructionMemory || obj instanceof MainMemory) {
       obj.poke(addr, value);
       set((s) => ({ revision: s.revision + 1 }));
       getLayoutStore().getState().saveState();
