@@ -10,7 +10,7 @@ export default function ProjectTabBar() {
   const closeTab = useProjectStore((s) => s.closeTab);
   const createProject = useProjectStore((s) => s.createProject);
   const renameProject = useProjectStore((s) => s.renameProject);
-  const exportProject = useProjectStore((s) => s.exportProject);
+  const { exportProject, getCurrentProjectDataEnhanced } = useProjectStore();
   const importProject = useProjectStore((s) => s.importProject);
   const markSaved = useProjectStore((s) => s.markSaved);
 
@@ -37,7 +37,7 @@ export default function ProjectTabBar() {
   };
 
   const handleSave = (tabId: string) => {
-    const data = exportProject(tabId);
+    const data = getCurrentProjectDataEnhanced();
     if (data) {
       saveProjectToFile(data);
       markSaved(tabId);

@@ -32,6 +32,7 @@ export default function ProjectSwitcher() {
     createProject,
     importProject,
     exportProject,
+    getCurrentProjectDataEnhanced,
     closeTab,
     markSaved,
   } = useProjectStore();
@@ -99,7 +100,7 @@ export default function ProjectSwitcher() {
   const handleExport = () => {
     if (!activeTabId) return;
     
-    const project = exportProject(activeTabId);
+    const project = getCurrentProjectDataEnhanced();
     if (project) {
       saveProjectToFile(project);
       markSaved(activeTabId);

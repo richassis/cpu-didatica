@@ -509,7 +509,7 @@ export class CPU implements Clockable, Connectable {
     this.syncTestingOpcodeInput();
     this._totalTicks++;
 
-    // First, execute the CPU's own state logic
+    // First, execute the CPU's own state logic (emits signals and transitions to next state)
     this.onTick();
 
     // HLT cycles affect only the CPU control unit.
@@ -517,8 +517,9 @@ export class CPU implements Clockable, Connectable {
       return;
     }
 
-    // Then, tick all registered components that should tick on this state
-    this.tickComponentsForState(this._state);
+    // Tick components for the state that was EXECUTED (previousState), not the next state.
+    // This ensures components see the control signals that were just emitted.
+    this.tickComponentsForState(this._previousState);
   }
 
   /**

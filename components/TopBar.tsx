@@ -18,7 +18,7 @@ import { useModeStore } from "@/lib/modeStore";
  * - Clock controls (tick, reset)
  */
 export default function TopBar() {
-  const { activeTabId, exportProject, markSaved } = useProjectStore();
+  const { activeTabId, exportProject, markSaved, getCurrentProjectDataEnhanced } = useProjectStore();
   const { tickClock, resetClock, getPrimaryCpu, serializeObjects, applyObjectStates } = useSimulatorStore();
   const { mode, getSnapshot } = useModeStore();
 
@@ -31,7 +31,8 @@ export default function TopBar() {
   const handleSave = () => {
     if (!activeTabId) return;
     
-    const project = exportProject(activeTabId);
+    // Use enhanced export to include component configurations
+    const project = getCurrentProjectDataEnhanced();
     if (project) {
       saveProjectToFile(project);
       markSaved(activeTabId);

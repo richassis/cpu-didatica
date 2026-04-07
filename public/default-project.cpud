@@ -2,20 +2,20 @@
   "id": "default-full-datapath",
   "name": "Full Datapath",
   "createdAt": "2026-04-07T03:40:44.124Z",
-  "updatedAt": "2026-04-07T03:55:54.533Z",
+  "updatedAt": "2026-04-07T17:00:22.984Z",
   "components": [
     {
       "id": "cpu-1",
       "type": "CpuComponent",
       "label": "CPU",
-      "x": 800,
-      "y": 100,
+      "x": 1280,
+      "y": 64,
       "w": 176,
       "h": 304,
       "meta": {},
       "state": {
         "ports": {
-          "in_opcode": 2,
+          "in_opcode": 1,
           "in_flagZero": 0,
           "in_flagCarry": 0,
           "in_flagNegative": 0,
@@ -38,8 +38,8 @@
       "id": "pc-1",
       "type": "Register",
       "label": "PC",
-      "x": 352,
-      "y": 480,
+      "x": 336,
+      "y": 512,
       "w": 144,
       "h": 48,
       "meta": {
@@ -47,9 +47,9 @@
       },
       "state": {
         "ports": {
-          "data": 4,
+          "data": 3,
           "writeEnable": 1,
-          "value": 4
+          "value": 2
         }
       }
     },
@@ -57,8 +57,8 @@
       "id": "ir-1",
       "type": "Register",
       "label": "IR",
-      "x": 600,
-      "y": 300,
+      "x": 848,
+      "y": 544,
       "w": 144,
       "h": 48,
       "meta": {
@@ -66,9 +66,9 @@
       },
       "state": {
         "ports": {
-          "data": 0,
-          "writeEnable": 0,
-          "value": 0
+          "data": 2562,
+          "writeEnable": 1,
+          "value": 2305
         }
       }
     },
@@ -76,8 +76,8 @@
       "id": "memory-1",
       "type": "MemoryComponent",
       "label": "Memory",
-      "x": 1344,
-      "y": 480,
+      "x": 736,
+      "y": 768,
       "w": 160,
       "h": 192,
       "meta": {
@@ -88,17 +88,17 @@
         "ports": {
           "addr": 0,
           "data": 0,
-          "rdMem": 0,
+          "rdMem": 1,
           "wrMem": 0,
-          "out": 0
+          "out": 10
         },
         "cells": [
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
           0,
           0,
           0,
@@ -356,8 +356,8 @@
       "id": "gpr-1",
       "type": "GprComponent",
       "label": "GPR",
-      "x": 1000,
-      "y": 500,
+      "x": 1328,
+      "y": 672,
       "w": 176,
       "h": 256,
       "meta": {},
@@ -366,13 +366,13 @@
           "in_readAddrA": 0,
           "in_readAddrB": 0,
           "in_writeAddr": 0,
-          "in_writeData": 0,
-          "in_writeEnable": 0,
+          "in_writeData": 10,
+          "in_writeEnable": 1,
           "out_readDataA": 0,
           "out_readDataB": 0
         },
         "registers": [
-          0,
+          10,
           0,
           0,
           0,
@@ -387,8 +387,8 @@
       "id": "ula-1",
       "type": "UlaComponent",
       "label": "ULA",
-      "x": 800,
-      "y": 700,
+      "x": 1552,
+      "y": 480,
       "w": 128,
       "h": 176,
       "meta": {},
@@ -408,15 +408,15 @@
       "id": "decoder-1",
       "type": "DecoderComponent",
       "label": "Decoder",
-      "x": 1200,
-      "y": 240,
+      "x": 1088,
+      "y": 448,
       "w": 144,
       "h": 192,
       "meta": {},
       "state": {
         "ports": {
-          "instruction": 0,
-          "opcode": 0,
+          "instruction": 2305,
+          "opcode": 1,
           "gprAddr": 0,
           "operand": 0,
           "srcA": 0,
@@ -429,16 +429,16 @@
       "id": "adder-pc",
       "type": "AdderComponent",
       "label": "PC+1",
-      "x": 320,
-      "y": 576,
+      "x": 272,
+      "y": 624,
       "w": 128,
       "h": 176,
       "meta": {},
       "state": {
         "ports": {
-          "a": 4,
+          "a": 2,
           "b": 1,
-          "result": 4,
+          "result": 3,
           "carry": 0
         }
       }
@@ -448,7 +448,7 @@
       "type": "MuxComponent",
       "label": "MUX_PC",
       "x": 192,
-      "y": 464,
+      "y": 480,
       "w": 64,
       "h": 96,
       "meta": {
@@ -457,50 +457,9 @@
       "state": {
         "ports": {
           "in_0": 0,
-          "in_1": 4,
+          "in_1": 3,
           "sel": 1,
-          "result": 4
-        }
-      }
-    },
-    {
-      "id": "mux-mem-addr",
-      "type": "MuxComponent",
-      "label": "MUX_Addr",
-      "x": 432,
-      "y": 272,
-      "w": 64,
-      "h": 96,
-      "meta": {
-        "numInputs": 2
-      },
-      "state": {
-        "ports": {
-          "in_0": 0,
-          "in_1": 0,
-          "sel": 0,
-          "result": 0
-        }
-      }
-    },
-    {
-      "id": "mux-gpr-data",
-      "type": "MuxComponent",
-      "label": "MUX_Data",
-      "x": 900,
-      "y": 600,
-      "w": 64,
-      "h": 96,
-      "meta": {
-        "numInputs": 3
-      },
-      "state": {
-        "ports": {
-          "in_0": 0,
-          "in_1": 0,
-          "sel": 0,
-          "result": 0,
-          "in_2": 0
+          "result": 3
         }
       }
     },
@@ -508,24 +467,24 @@
       "id": "9effa048-4a2e-4064-b42c-dda2468dcf62",
       "type": "InstructionMemoryComponent",
       "label": "IMEM1",
-      "w": 192,
-      "h": 240,
-      "x": 640,
-      "y": 448,
+      "w": 160,
+      "h": 192,
+      "x": 624,
+      "y": 464,
       "state": {
         "ports": {
-          "addr": 4,
-          "out": 0
+          "addr": 2,
+          "out": 2562
         },
         "cells": [
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
+          2048,
+          2305,
+          2562,
+          2819,
+          3076,
+          3333,
+          3590,
+          3847,
           0,
           0,
           0,
@@ -775,6 +734,47 @@
           0,
           0
         ]
+      }
+    },
+    {
+      "id": "71514764-4187-4f67-af42-21f0b8742c3a",
+      "type": "Register",
+      "label": "ONE",
+      "w": 144,
+      "h": 48,
+      "x": 304,
+      "y": 864,
+      "meta": {
+        "bitWidth": 16
+      },
+      "state": {
+        "ports": {
+          "data": 0,
+          "writeEnable": 0,
+          "value": 1
+        }
+      }
+    },
+    {
+      "id": "9c3b9c7b-52e0-4388-9287-b4e8144873b2",
+      "type": "MuxComponent",
+      "label": "muxDReg",
+      "w": 64,
+      "h": 96,
+      "x": 992,
+      "y": 816,
+      "meta": {
+        "bitWidth": 16,
+        "numInputs": 3
+      },
+      "state": {
+        "ports": {
+          "in_0": 0,
+          "in_1": 10,
+          "sel": 2,
+          "result": 10,
+          "in_2": 0
+        }
       }
     }
   ],
@@ -816,7 +816,34 @@
       "visible": true
     },
     {
-      "id": "2db6f8c8-cd07-4b89-9984-e4e4816a3f96",
+      "id": "2001983a-a1d8-45ed-989b-ef6ae1e96451",
+      "sourceComponentId": "ir-1",
+      "sourcePortName": "value",
+      "targetComponentId": "decoder-1",
+      "targetPortName": "instruction",
+      "label": "",
+      "visible": true
+    },
+    {
+      "id": "050c9462-8eca-495b-968b-9d0885e03656",
+      "sourceComponentId": "decoder-1",
+      "sourcePortName": "gprAddr",
+      "targetComponentId": "gpr-1",
+      "targetPortName": "in_writeAddr",
+      "label": "",
+      "visible": true
+    },
+    {
+      "id": "5f41640b-71d1-4393-bb64-5da45661a547",
+      "sourceComponentId": "decoder-1",
+      "sourcePortName": "dst",
+      "targetComponentId": "memory-1",
+      "targetPortName": "addr",
+      "label": "",
+      "visible": true
+    },
+    {
+      "id": "ca08f9a0-94ee-4cb6-8f6c-d211ea7f4bc0",
       "sourceComponentId": "cpu-1",
       "sourcePortName": "out_muxPC",
       "targetComponentId": "mux-pc",
@@ -825,11 +852,101 @@
       "visible": true
     },
     {
-      "id": "51141f91-9d34-4516-a9f9-c495b8e4d23f",
+      "id": "b0487f23-7ad5-4936-b0eb-d63d3da1bb8b",
+      "sourceComponentId": "cpu-1",
+      "sourcePortName": "out_wrIR",
+      "targetComponentId": "ir-1",
+      "targetPortName": "writeEnable",
+      "label": "",
+      "visible": true
+    },
+    {
+      "id": "374db4d8-ba2d-431a-8ee4-595eb37f4c15",
       "sourceComponentId": "pc-1",
       "sourcePortName": "value",
       "targetComponentId": "9effa048-4a2e-4064-b42c-dda2468dcf62",
       "targetPortName": "addr",
+      "label": "",
+      "visible": true
+    },
+    {
+      "id": "e2d28e19-8ffd-4489-a166-abf4d6aad06e",
+      "sourceComponentId": "cpu-1",
+      "sourcePortName": "out_rdMem",
+      "targetComponentId": "memory-1",
+      "targetPortName": "rdMem",
+      "label": "",
+      "visible": true
+    },
+    {
+      "id": "8e375980-2844-4d36-9fa9-6c8c005425f4",
+      "sourceComponentId": "cpu-1",
+      "sourcePortName": "out_wrMem",
+      "targetComponentId": "memory-1",
+      "targetPortName": "wrMem",
+      "label": "",
+      "visible": true
+    },
+    {
+      "id": "3df2206a-ac5b-4421-a9c7-690a55bb4611",
+      "sourceComponentId": "memory-1",
+      "sourcePortName": "out",
+      "targetComponentId": "9c3b9c7b-52e0-4388-9287-b4e8144873b2",
+      "targetPortName": "in_1",
+      "label": "",
+      "visible": true
+    },
+    {
+      "id": "fae285db-6a4a-4fd9-b4b9-e48d3e447a88",
+      "sourceComponentId": "cpu-1",
+      "sourcePortName": "out_muxDReg",
+      "targetComponentId": "9c3b9c7b-52e0-4388-9287-b4e8144873b2",
+      "targetPortName": "sel",
+      "label": "",
+      "visible": true
+    },
+    {
+      "id": "aa3d685d-52c0-4dc0-a19f-b2fc14353dc0",
+      "sourceComponentId": "9c3b9c7b-52e0-4388-9287-b4e8144873b2",
+      "sourcePortName": "result",
+      "targetComponentId": "gpr-1",
+      "targetPortName": "in_writeData",
+      "label": "",
+      "visible": true
+    },
+    {
+      "id": "c47b82b2-b744-4859-aa44-7a4def15c1f2",
+      "sourceComponentId": "71514764-4187-4f67-af42-21f0b8742c3a",
+      "sourcePortName": "value",
+      "targetComponentId": "adder-pc",
+      "targetPortName": "b",
+      "label": "",
+      "visible": true
+    },
+    {
+      "id": "e333a1f6-8ad2-4b7f-9f0d-9f0a72109d1a",
+      "sourceComponentId": "9effa048-4a2e-4064-b42c-dda2468dcf62",
+      "sourcePortName": "out",
+      "targetComponentId": "ir-1",
+      "targetPortName": "data",
+      "label": "",
+      "visible": true
+    },
+    {
+      "id": "ce9b6fe9-a988-42c6-9f70-0c53ec1aecac",
+      "sourceComponentId": "decoder-1",
+      "sourcePortName": "opcode",
+      "targetComponentId": "cpu-1",
+      "targetPortName": "in_opcode",
+      "label": "",
+      "visible": true
+    },
+    {
+      "id": "d5c58870-1a99-4ad8-905a-9c3952b1e982",
+      "sourceComponentId": "cpu-1",
+      "sourcePortName": "out_wrReg",
+      "targetComponentId": "gpr-1",
+      "targetPortName": "in_writeEnable",
       "label": "",
       "visible": true
     }
@@ -838,5 +955,140 @@
     "width": 4000,
     "height": 3000
   },
-  "zoom": 0.8
+  "zoom": 0.75,
+  "componentConfigs": [
+    {
+      "id": "pc-1",
+      "type": "Register",
+      "name": "PC",
+      "tickSteps": [
+        0
+      ],
+      "config": {
+        "bitWidth": 16
+      }
+    },
+    {
+      "id": "ir-1",
+      "type": "Register",
+      "name": "IR",
+      "tickSteps": [
+        1
+      ],
+      "config": {
+        "bitWidth": 16
+      }
+    },
+    {
+      "id": "memory-1",
+      "type": "MemoryComponent",
+      "name": "Memory",
+      "tickSteps": [
+        3,
+        4
+      ],
+      "config": {
+        "bitWidth": 16,
+        "wordCount": 256
+      }
+    },
+    {
+      "id": "gpr-1",
+      "type": "GprComponent",
+      "name": "GPR",
+      "tickSteps": [
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "config": {}
+    },
+    {
+      "id": "ula-1",
+      "type": "UlaComponent",
+      "name": "ULA",
+      "tickSteps": [
+        2
+      ],
+      "config": {}
+    },
+    {
+      "id": "decoder-1",
+      "type": "DecoderComponent",
+      "name": "Decoder",
+      "tickSteps": [
+        1
+      ],
+      "config": {}
+    },
+    {
+      "id": "adder-pc",
+      "type": "AdderComponent",
+      "name": "PC+1",
+      "tickSteps": [
+        0
+      ],
+      "config": {}
+    },
+    {
+      "id": "mux-pc",
+      "type": "MuxComponent",
+      "name": "MUX_PC",
+      "tickSteps": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "config": {
+        "numInputs": 2
+      }
+    },
+    {
+      "id": "9effa048-4a2e-4064-b42c-dda2468dcf62",
+      "type": "InstructionMemoryComponent",
+      "name": "IMEM1",
+      "tickSteps": [
+        0
+      ],
+      "config": {}
+    },
+    {
+      "id": "71514764-4187-4f67-af42-21f0b8742c3a",
+      "type": "Register",
+      "name": "ONE",
+      "tickSteps": [
+        0,
+        1,
+        10
+      ],
+      "config": {
+        "bitWidth": 16
+      }
+    },
+    {
+      "id": "9c3b9c7b-52e0-4388-9287-b4e8144873b2",
+      "type": "MuxComponent",
+      "name": "muxDReg",
+      "tickSteps": [
+        7,
+        8,
+        9
+      ],
+      "config": {
+        "bitWidth": 16,
+        "numInputs": 3
+      }
+    }
+  ],
+  "version": 2
 }

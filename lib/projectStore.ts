@@ -11,6 +11,7 @@ import { persist } from "zustand/middleware";
 import { v4 as uuidv4 } from "uuid";
 import type { ComponentInstance } from "@/lib/store";
 import type { WireDescriptor } from "@/lib/simulator";
+import { useSimulatorStore } from "@/lib/simulatorStore";
 import { 
   createDefaultProject, 
   createEmptyProject, 
@@ -18,6 +19,17 @@ import {
   DEFAULT_PROJECT_NAME,
   isDefaultProject,
 } from "./defaultProject";
+
+/** Component configuration data for export */
+export interface ComponentConfig {
+  id: string;
+  type: string;
+  name: string;
+  /** CPU states/steps this component ticks on */
+  tickSteps?: number[];
+  /** Additional configuration metadata */
+  config?: Record<string, unknown>;
+}
 
 /** Serializable project data structure */
 export interface ProjectData {
@@ -29,6 +41,10 @@ export interface ProjectData {
   wires: WireDescriptor[];
   canvasSize: { width: number; height: number };
   zoom: number;
+  /** Component configurations including tick steps and metadata (v2+) */
+  componentConfigs?: ComponentConfig[];
+  /** Format version for backwards compatibility */
+  version?: number;
 }
 
 /** Tab metadata (project reference) */
@@ -74,6 +90,9 @@ interface ProjectState {
   
   /** Get current project data */
   getCurrentProjectData: () => ProjectData | null;
+  
+  /** Get current project data with enhanced component configurations */
+  getCurrentProjectDataEnhanced: () => ProjectData | null;
   
   /** Import a project from file data */
   importProject: (data: ProjectData) => string;
@@ -215,6 +234,14 @@ export const useProjectStore = create<ProjectState>()(
         if (!activeTabId) return null;
         return projectData[activeTabId] || null;
       },
+      
+      getCurrentProjectDataEnhanced: () => {
+        const { activeTabId } = get();
+        if (!activeTabId) return null;
+        
+        const state = get();
+        return state.exportProject(activeTabId);
+      },
 
       importProject: (data) => {
         // Generate new ID to avoid conflicts (unless it's being restored as default)
@@ -226,6 +253,7 @@ export const useProjectStore = create<ProjectState>()(
           ...data,
           id,
           updatedAt: now,
+          version: data.version || 1, // Ensure version is set
         };
 
         const newTab: ProjectTab = {
@@ -242,12 +270,60 @@ export const useProjectStore = create<ProjectState>()(
           showWelcome: false,
         }));
 
+        // If this is a v2+ project with component configurations, restore them
+        if (data.componentConfigs && Array.isArray(data.componentConfigs) && data.version && data.version >= 2) {
+          // Delay the restoration to allow components to be created first
+          setTimeout(() => {
+            const simStore = useSimulatorStore.getState();
+            const cpu = simStore.getPrimaryCpu();
+            
+            if (cpu && data.componentConfigs) {
+              for (const config of data.componentConfigs) {
+                if (config.tickSteps) {
+                  cpu.setComponentTickSteps(config.id, config.tickSteps);
+                }
+              }
+              // Force update to reflect changes
+              simStore.touch();
+            }
+          }, 100);
+        }
+
         return id;
       },
 
       exportProject: (tabId) => {
         const { projectData } = get();
-        return projectData[tabId] || null;
+        const basicProject = projectData[tabId];
+        if (!basicProject) return null;
+
+        // Get enhanced data from simulator store
+        const simStore = useSimulatorStore.getState();
+        const cpu = simStore.getPrimaryCpu();
+        
+        // Collect component configurations including tick steps
+        const componentConfigs: ComponentConfig[] = [];
+        
+        if (cpu) {
+          const registeredComponents = cpu.getRegisteredComponents();
+          for (const regComp of registeredComponents) {
+            const layoutComponent = basicProject.components.find(c => c.id === regComp.id);
+            componentConfigs.push({
+              id: regComp.id,
+              type: regComp.type,
+              name: layoutComponent?.label || regComp.type,
+              tickSteps: regComp.tickSteps,
+              config: layoutComponent?.meta || {},
+            });
+          }
+        }
+
+        // Return enhanced project data
+        return {
+          ...basicProject,
+          componentConfigs,
+          version: 2,
+        };
       },
 
       setShowWelcome: (show) => {
@@ -360,6 +436,11 @@ export async function loadProjectFromFile(file: File): Promise<ProjectData> {
         // Basic validation
         if (!data.id || !data.name || !Array.isArray(data.components)) {
           throw new Error("Invalid project file format");
+        }
+
+        // Set default version for older files
+        if (!data.version) {
+          data.version = 1;
         }
         
         resolve(data);
