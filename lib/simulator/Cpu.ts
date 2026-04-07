@@ -242,7 +242,7 @@ export class CPU implements Clockable, Connectable {
   name: string;
 
   // FSM state - starts in RESET
-  private _state: CpuState = CpuState.RESET;
+  private _state: CpuState = CpuState.FETCH;
   private _FSMindex: number = 0;
   private _halted: boolean = false;
   private _paused: boolean = false;
@@ -255,6 +255,9 @@ export class CPU implements Clockable, Connectable {
 
   // Previous signal values for change detection
   private _prevSignals: Map<string, number | boolean> = new Map();
+  
+  // Track the state that was just executed (whose signals are currently active)
+  private _previousState: CpuState = CpuState.RESET;
 
   // Testing mode: force a specific opcode
   private _testingModeOpcode: Opcode | null = null;
@@ -391,6 +394,10 @@ export class CPU implements Clockable, Connectable {
   get state(): CpuState {
     return this._state;
   }
+  
+  get previousState(): CpuState {
+    return this._previousState;
+  }
 
   get halted(): boolean {
     return this._halted;
@@ -446,14 +453,17 @@ export class CPU implements Clockable, Connectable {
   /** Reset the CPU to initial RESET state. */
   reset(): void {
     this._state = CpuState.RESET;
+    this._previousState = CpuState.RESET;
     this._FSMindex = 0;
     this._halted = false;
     this._totalTicks = 0;
     this.initPrevSignals();
-    // Apply RESET state control signals
+    // Apply RESET state control signals immediately
     this.emitSignals(CpuState.RESET, Opcode.HLT, true);
     this.out_state.set(CpuState.RESET);
     this.out_halted.set(false);
+    // After reset, the next state should be FETCH
+    this._state = CpuState.FETCH;
   }
 
   /** Initialize previous signal values for change detection. */
@@ -481,10 +491,10 @@ export class CPU implements Clockable, Connectable {
     force_update: boolean = false
   ): void {
     const prevValue = this._prevSignals.get(signalName);
-    if (prevValue !== value || force_update) {
+    // if (prevValue !== value || force_update) {
       port.set(value);
       this._prevSignals.set(signalName, value);
-    }
+    // }
   }
 
   // ── Tick orchestration ───────────────────────────────────────
@@ -494,7 +504,7 @@ export class CPU implements Clockable, Connectable {
    * This replaces the old global clock tick.
    */
   tick(): void {
-    if (this._halted || this._paused) return;
+    if (this._paused) return;
 
     this.syncTestingOpcodeInput();
     this._totalTicks++;
@@ -548,7 +558,7 @@ export class CPU implements Clockable, Connectable {
    * After HALT or invalid instructions, CPU returns to RESET.
    */
   onTick(): void {
-    if (this._halted || this._paused) return;
+    if (this._paused) return;
 
     switch (this._state) {
       case CpuState.RESET:
@@ -561,6 +571,10 @@ export class CPU implements Clockable, Connectable {
 
       case CpuState.DECODE:
         this.doDecode();
+        break;
+
+      case CpuState.HALT:
+        this.doHalt();
         break;
 
       default:
@@ -578,6 +592,8 @@ export class CPU implements Clockable, Connectable {
   private doReset(): void {
     // Emit RESET state signals (clears all signals)
     this.emitSignals(CpuState.RESET, this.getActiveOpcode(), true);
+    // Track that we executed RESET
+    this._previousState = CpuState.RESET;
     // Transition to FETCH on next tick
     this._state = CpuState.FETCH;
   }
@@ -586,6 +602,8 @@ export class CPU implements Clockable, Connectable {
   private doFetch(): void {
     // Emit FETCH state signals
     this.emitSignals(CpuState.FETCH, this.getActiveOpcode(), true);
+    // Track that we executed FETCH
+    this._previousState = CpuState.FETCH;
     this._state = CpuState.DECODE;
   }
 
@@ -598,12 +616,14 @@ export class CPU implements Clockable, Connectable {
     // Emit DECODE state signals
     const opcode = this.getActiveOpcode();
     this.emitSignals(CpuState.DECODE, opcode);
+    // Track that we executed DECODE
+    this._previousState = CpuState.DECODE;
 
     const sequence = OPCODE_SEQUENCES[opcode];
     
     if (opcode === Opcode.HLT || !sequence || sequence.length === 0) {
-      this._halted = true;
-      this._state = CpuState.RESET;
+      // Enter explicit HALT state; it becomes the executed state on the next tick.
+      this._state = CpuState.HALT;
       return;
     }
 
@@ -619,9 +639,12 @@ export class CPU implements Clockable, Connectable {
    */
   private doStep(): void {
     const opcode = this.getActiveOpcode();
+    const currentExecutingState = this._state;
 
     // Emit control signals for the current state
-    this.emitSignals(this._state, opcode);
+    this.emitSignals(currentExecutingState, opcode);
+    // Track that we executed this state
+    this._previousState = currentExecutingState;
 
     // Advance to next step in the sequence
     const sequence = OPCODE_SEQUENCES[opcode];
@@ -635,6 +658,13 @@ export class CPU implements Clockable, Connectable {
       this._FSMindex = nextIndex;
       this._state = sequence[nextIndex];
     }
+  }
+
+  /** HALT state - CPU remains halted until reset. */
+  private doHalt(): void {
+    this._previousState = CpuState.HALT;
+    this._halted = true;
+    this._state = CpuState.HALT;
   }
 
   // ── Signal emission ───────────────────────────────────────────

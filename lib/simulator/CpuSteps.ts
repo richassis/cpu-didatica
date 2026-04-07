@@ -35,9 +35,13 @@ export const DEFAULT_TICK_STEPS: Record<string, CpuState[]> = {
 
   // Memory ticks on read and write operations
   MemoryComponent: [
-    CpuState.FETCH,    // Instruction fetch
+    // CpuState.FETCH,    // Instruction fetch
     CpuState.READMEM,  // Data read
     CpuState.WRITEMEM, // Data write
+  ],
+
+  InstructionMemoryComponent: [
+    CpuState.FETCH,    // Instruction fetch
   ],
 
   // ULA ticks during execute phase
@@ -48,7 +52,7 @@ export const DEFAULT_TICK_STEPS: Record<string, CpuState[]> = {
   // Adder ticks on fetch (PC+1) and execute
   AdderComponent: [
     CpuState.FETCH,
-    CpuState.EXECUTE,
+    // CpuState.EXECUTE,
   ],
 
   // Mux is combinational, ticks whenever its inputs might change

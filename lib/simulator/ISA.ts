@@ -204,3 +204,60 @@ export const OPCODE_TO_ULA_OP: Readonly<Partial<Record<Opcode, UlaOperation>>> =
   [Opcode.OR]:  UlaOperation.OR,
   [Opcode.NOT]: UlaOperation.NOT,
 };
+
+// ── Instruction encoding helpers ─────────────────────────────────────────────
+
+/**
+ * Encode a standard-format instruction into a 16-bit word.
+ * @param opcode - The instruction opcode (5 bits)
+ * @param gprAddr - GPR address (3 bits, bits [10:8])
+ * @param operand - Operand value (8 bits, bits [7:0])
+ * @returns Encoded 16-bit instruction word
+ */
+export function encodeStandard(opcode: Opcode, gprAddr: number, operand: number): number {
+  const opcodeField = (opcode & 0b11111) << OPCODE_SHIFT;
+  const gprField = (gprAddr & 0b111) << GPR_ADDR_SHIFT;
+  const operandField = (operand & 0xFF) << OPERAND_SHIFT;
+  return opcodeField | gprField | operandField;
+}
+
+/**
+ * Encode a ULA-format instruction into a 16-bit word.
+ * @param opcode - The instruction opcode (5 bits)
+ * @param srcA - Source A register address (3 bits, bits [10:8])
+ * @param srcB - Source B register address (3 bits, bits [7:5])
+ * @param dst - Destination register address (3 bits, bits [2:0])
+ * @returns Encoded 16-bit instruction word
+ */
+export function encodeULA(opcode: Opcode, srcA: number, srcB: number, dst: number): number {
+  const opcodeField = (opcode & 0b11111) << OPCODE_SHIFT;
+  const srcAField = (srcA & 0b111) << ULA_SRC_A_SHIFT;
+  const srcBField = (srcB & 0b111) << ULA_SRC_B_SHIFT;
+  const dstField = (dst & 0b111) << ULA_DST_SHIFT;
+  return opcodeField | srcAField | srcBField | dstField;
+}
+
+/**
+ * Encode an instruction based on its descriptor and field values.
+ * @param mnemonic - Instruction mnemonic (e.g., "LDA", "ADD")
+ * @param fields - Object with field values based on format
+ * @returns Encoded 16-bit instruction word
+ */
+export function encodeInstruction(
+  mnemonic: keyof typeof Opcode,
+  fields: { gprAddr?: number; operand?: number; srcA?: number; srcB?: number; dst?: number }
+): number {
+  const descriptor = getDescriptor(mnemonic);
+  
+  if (descriptor.format === "standard") {
+    const gprAddr = descriptor.usesGPR ? (fields.gprAddr ?? 0) : 0;
+    const operand = descriptor.usesOperand ? (fields.operand ?? 0) : 0;
+    return encodeStandard(descriptor.opcode, gprAddr, operand);
+  } else {
+    // ULA format
+    const srcA = fields.srcA ?? 0;
+    const srcB = descriptor.usesSrcB ? (fields.srcB ?? 0) : 0;
+    const dst = fields.dst ?? 0;
+    return encodeULA(descriptor.opcode, srcA, srcB, dst);
+  }
+}

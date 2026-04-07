@@ -9,13 +9,16 @@ import { findPortPosition } from "@/lib/portPositioning";
 import { getWidgetDefinition } from "@/lib/widgetDefinitions";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { pointsToSVGPath, snapToGrid } from "@/lib/wireRouting";
-import { CPU } from "@/lib/simulator";
 
 const GRID_SIZE = 16;
 /** Invisible stroke width for easier hit detection */
 const HIT_AREA_WIDTH = 16;
-/** Duration of the data pulse animation in ms */
-const PULSE_ANIMATION_DURATION = 2500;
+/** Duration of the CPU control signal animation in ms */
+const CPU_ANIMATION_DURATION = 1500;
+/** Duration of the component data animation in ms */
+const COMPONENT_ANIMATION_DURATION = 2000;
+/** Total animation duration */
+const TOTAL_ANIMATION_DURATION = CPU_ANIMATION_DURATION + COMPONENT_ANIMATION_DURATION;
 
 interface WireRenderData {
   wire: EnhancedWire;
@@ -30,6 +33,7 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
   const zoom = useLayoutStore((s) => s.zoom);
   const objects = useSimulatorStore((s) => s.objects);
   const revision = useSimulatorStore((s) => s.revision);
+  const getPrimaryCpu = useSimulatorStore((s) => s.getPrimaryCpu);
   const base = useDisplayStore((s) => s.numericBase);
   
   // Enhanced wire state
@@ -46,15 +50,20 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
   const removeSimulatorWire = useSimulatorStore((s) => s.removeWire);
   const bus = useSimulatorStore((s) => s.bus);
   
-  // Wire creation state
+  // Wire creation state  
   const isCreating = useWireCreationStore((s) => s.isCreating);
   const pathPoints = useWireCreationStore((s) => s.pathPoints);
   
   const [dragState, setDragState] = useState<{ wireId: string; nodeId: string } | null>(null);
   
-  // Track wire values for animation
-  const prevWireValues = useRef<Map<string, string>>(new Map());
+  // Animation state - triggered on every tick, not just value changes
   const [animatingWires, setAnimatingWires] = useState<Set<string>>(new Set());
+  const [animationProgress, setAnimationProgress] = useState<Map<string, number>>(new Map());
+  const animationRef = useRef<number | null>(null);
+  
+  // Track wire classification for sequencing
+  const cpuControlWiresRef = useRef<Set<string>>(new Set());
+  const componentWiresRef = useRef<Set<string>>(new Set());
 
   // Calculate wire render data
   const wireRenderData = useMemo((): WireRenderData[] => {
@@ -168,77 +177,108 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
     return results;
   }, [wires, components, objects, base]);
 
-  // Track animation progress for flowing effect
-  const [animationProgress, setAnimationProgress] = useState<Map<string, number>>(new Map());
-  
-  // Detect value changes and trigger animations
+  // Trigger animations on every tick (revision change)
+  // CPU control signals always animate, component wires only if their source is subscribed to current state
   useEffect(() => {
-    const newAnimating = new Set<string>();
+    // Cancel any existing animation
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+      animationRef.current = null;
+    }
     
-    for (const { wire, value } of wireRenderData) {
-      const prevValue = prevWireValues.current.get(wire.id);
+    // Get CPU to check component tick subscriptions
+    const cpu = getPrimaryCpu();
+    // Use the last executed CPU state, not the next scheduled state.
+    // This prevents RESET from being interpreted as FETCH for animation gating.
+    const currentState = cpu?.previousState ?? cpu?.state;
+    const halted = cpu?.halted ?? false;
+    
+    // Classify wires based on source component
+    const cpuControlWires: string[] = [];
+    const componentWires: string[] = [];
+    
+    for (const { wire } of wireRenderData) {
+      if (!wire.end) continue; // Skip incomplete wires
       
-      // Determine if this wire is a CPU control signal
-      const outputEndpoint = wire.start.direction === "output" ? wire.start : wire.end?.direction === "output" ? wire.end : null;
-      const sourceComponent = outputEndpoint ? components.find(c => c.id === outputEndpoint.componentId) : null;
-      const isCpuControlSignal = sourceComponent?.type === "CpuComponent" && outputEndpoint?.direction === "output";
+      // Find source component (the one with output port)
+      const sourceEndpoint = wire.start.direction === "output" ? wire.start : wire.end;
+      const sourceComponent = sourceEndpoint ? components.find(c => c.id === sourceEndpoint.componentId) : null;
       
-      // Trigger animation on:
-      // 1. CPU control signals - ALWAYS animate on every tick/state change (new behavior)
-      // 2. Other component outputs - only animate when values change (original behavior)
-      if (isCpuControlSignal) {
-        // CPU control signals always animate regardless of value changes
-        newAnimating.add(wire.id);
-      } else if (prevValue !== undefined && prevValue !== value) {
-        // Other components only animate on value changes
-        newAnimating.add(wire.id);
+      if (!sourceComponent) continue;
+      
+      if (sourceComponent.type === "CpuComponent") {
+        // CPU control signals always animate
+        cpuControlWires.push(wire.id);
+      } else {
+        // Check if source component is subscribed to tick on the executed CPU state
+        const tickSteps = cpu?.getComponentTickSteps?.(sourceComponent.id);
+
+        if (!halted && tickSteps !== undefined && currentState !== undefined && tickSteps.includes(currentState)) {
+          // Component is registered and should tick on this state
+          componentWires.push(wire.id);
+        }
+        // Otherwise: component is registered but not subscribed to this state - don't animate
+      }
+    }
+    
+    // Store classification for sequencing
+    cpuControlWiresRef.current = new Set(cpuControlWires);
+    componentWiresRef.current = new Set(componentWires);
+    
+    const allWires = new Set([...cpuControlWires, ...componentWires]);
+    
+    if (allWires.size === 0) return;
+    
+    // Start animation
+    setAnimatingWires(allWires);
+    
+    const startTime = Date.now();
+    
+    const animate = () => {
+      const elapsed = Date.now() - startTime;
+      
+      if (elapsed >= TOTAL_ANIMATION_DURATION) {
+        // Animation complete - clear everything
+        setAnimatingWires(new Set());
+        setAnimationProgress(new Map());
+        animationRef.current = null;
+        return;
       }
       
-      prevWireValues.current.set(wire.id, value);
-    }
-    
-    if (newAnimating.size > 0) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setAnimatingWires((prev) => new Set([...prev, ...newAnimating]));
+      // Update progress with sequencing
+      const newProgress = new Map<string, number>();
       
-      // Animate progress from 0 to 1
-      const startTime = Date.now();
-      const animate = () => {
-        const elapsed = Date.now() - startTime;
-        const progress = Math.min(elapsed / PULSE_ANIMATION_DURATION, 1);
-        
-        setAnimationProgress((prev) => {
-          const updated = new Map(prev);
-          for (const id of newAnimating) {
-            updated.set(id, progress);
-          }
-          return updated;
-        });
-        
-        if (progress < 1) {
-          requestAnimationFrame(animate);
+      // CPU control signals: animate from 0 to CPU_ANIMATION_DURATION
+      for (const id of cpuControlWiresRef.current) {
+        const progress = Math.min(1, elapsed / CPU_ANIMATION_DURATION);
+        newProgress.set(id, progress);
+      }
+      
+      // Component wires: start after CPU signals complete
+      for (const id of componentWiresRef.current) {
+        if (elapsed > CPU_ANIMATION_DURATION) {
+          const componentElapsed = elapsed - CPU_ANIMATION_DURATION;
+          const progress = Math.min(1, componentElapsed / COMPONENT_ANIMATION_DURATION);
+          newProgress.set(id, progress);
         } else {
-          // Clear animations after completion
-          setAnimatingWires((prev) => {
-            const updated = new Set(prev);
-            for (const id of newAnimating) {
-              updated.delete(id);
-            }
-            return updated;
-          });
-          setAnimationProgress((prev) => {
-            const updated = new Map(prev);
-            for (const id of newAnimating) {
-              updated.delete(id);
-            }
-            return updated;
-          });
+          newProgress.set(id, 0); // Not started yet - dot stays at start
         }
-      };
+      }
       
-      requestAnimationFrame(animate);
-    }
-  }, [wireRenderData, revision, components]); // Added revision and components to dependencies
+      setAnimationProgress(newProgress);
+      animationRef.current = requestAnimationFrame(animate);
+    };
+    
+    animationRef.current = requestAnimationFrame(animate);
+    
+    // Cleanup on unmount or new tick
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+      }
+    };
+  }, [revision, wireRenderData, components, getPrimaryCpu]); // Trigger on tick with proper dependencies
 
   // Calculate a point along a path at a given progress (0-1)
   const getPointAlongPath = useCallback((path: Array<{ x: number; y: number }>, progress: number) => {
@@ -377,9 +417,68 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
       }}
     >
       <defs>
+        {/* Arrowhead marker for wire endpoints - data signals */}
+        <marker
+          id="arrowhead"
+          markerWidth="10"
+          markerHeight="10"
+          refX="9"
+          refY="3"
+          orient="auto"
+          markerUnits="strokeWidth"
+        >
+          <polygon points="0 0, 6 3, 0 6" fill="#a855f7" />
+        </marker>
+        
+        {/* Pulsing arrowhead for animated data wires */}
+        <marker
+          id="arrowheadPulse"
+          markerWidth="10"
+          markerHeight="10"
+          refX="9"
+          refY="3"
+          orient="auto"
+          markerUnits="strokeWidth"
+        >
+          <polygon points="0 0, 6 3, 0 6" fill="#fbbf24" />
+        </marker>
+        
+        {/* Arrowhead for control signal wires */}
+        <marker
+          id="arrowheadControl"
+          markerWidth="10"
+          markerHeight="10"
+          refX="9"
+          refY="3"
+          orient="auto"
+          markerUnits="strokeWidth"
+        >
+          <polygon points="0 0, 6 3, 0 6" fill="#3b82f6" />
+        </marker>
+        
+        {/* Pulsing arrowhead for animated control wires */}
+        <marker
+          id="arrowheadControlPulse"
+          markerWidth="10"
+          markerHeight="10"
+          refX="9"
+          refY="3"
+          orient="auto"
+          markerUnits="strokeWidth"
+        >
+          <polygon points="0 0, 6 3, 0 6" fill="#60a5fa" />
+        </marker>
+        
+        {/* Static gradient for normal data wires */}
         <linearGradient id="wireGradient" x1="0%" y1="0%" x2="100%" y2="0%">
           <stop offset="0%" stopColor="#22d3ee" stopOpacity="0.8" />
           <stop offset="100%" stopColor="#a855f7" stopOpacity="0.8" />
+        </linearGradient>
+        
+        {/* Static gradient for control signal wires */}
+        <linearGradient id="wireGradientControl" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.8" />
+          <stop offset="100%" stopColor="#60a5fa" stopOpacity="0.8" />
         </linearGradient>
         
         {/* Animated gradient for data pulse */}
@@ -396,6 +495,26 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
             <animate
               attributeName="stop-color"
               values="#a855f7;#f97316;#a855f7"
+              dur="0.6s"
+              repeatCount="1"
+            />
+          </stop>
+        </linearGradient>
+        
+        {/* Animated gradient for control signal pulse */}
+        <linearGradient id="pulseGradientControl" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="#3b82f6" stopOpacity="1">
+            <animate
+              attributeName="stop-color"
+              values="#3b82f6;#60a5fa;#3b82f6"
+              dur="0.6s"
+              repeatCount="1"
+            />
+          </stop>
+          <stop offset="100%" stopColor="#60a5fa" stopOpacity="1">
+            <animate
+              attributeName="stop-color"
+              values="#60a5fa;#93c5fd;#60a5fa"
               dur="0.6s"
               repeatCount="1"
             />
@@ -426,6 +545,19 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
         const isSelected = wire.id === selectedWireId;
         const isAnimating = animatingWires.has(wire.id);
         const pathD = pointsToSVGPath(path);
+        
+        // Determine if this wire is a CPU control signal
+        const outputEndpoint = wire.start.direction === "output" ? wire.start : wire.end?.direction === "output" ? wire.end : null;
+        const sourceComponent = outputEndpoint ? components.find(c => c.id === outputEndpoint.componentId) : null;
+        const isCpuControlSignal = sourceComponent?.type === "CpuComponent" && outputEndpoint?.direction === "output";
+
+        // Colors based on wire type
+        const wireColor = isCpuControlSignal ? "url(#wireGradientControl)" : "url(#wireGradient)";
+        const pulseColor = isCpuControlSignal ? "#60a5fa" : "#fbbf24";
+        const valueColor = isCpuControlSignal ? "fill-blue-300" : "fill-amber-300";
+        const arrowMarker = isCpuControlSignal 
+          ? (isAnimating ? "url(#arrowheadControlPulse)" : "url(#arrowheadControl)")
+          : (isAnimating ? "url(#arrowheadPulse)" : "url(#arrowhead)");
 
         return (
           <g key={wire.id}>
@@ -460,7 +592,7 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
                 <path
                   d={pathD}
                   fill="none"
-                  stroke="#fbbf24"
+                  stroke={pulseColor}
                   strokeWidth={6}
                   strokeLinecap="round"
                   filter="url(#pulseGlow)"
@@ -476,7 +608,7 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
                       {/* Glowing circle */}
                       <circle
                         r="8"
-                        fill="#fbbf24"
+                        fill={pulseColor}
                         filter="url(#pulseGlow)"
                         opacity="0.9"
                       />
@@ -489,13 +621,13 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
                           height="16"
                           rx="4"
                           fill="#1f2937"
-                          stroke="#fbbf24"
+                          stroke={pulseColor}
                           strokeWidth="1.5"
                         />
                         <text
                           textAnchor="middle"
                           dominantBaseline="middle"
-                          className="font-mono fill-amber-300"
+                          className={`font-mono ${valueColor}`}
                           style={{ fontSize: "9px", fontWeight: "bold" }}
                         >
                           {value}
@@ -510,10 +642,10 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
             <path
               d={pathD}
               fill="none"
-              stroke={isSelected ? "#fbbf24" : isAnimating ? "#fbbf24" : "url(#wireGradient)"}
+              stroke={isSelected ? pulseColor : isAnimating ? pulseColor : wireColor}
               strokeWidth={isSelected ? 4 : isAnimating ? 4 : 3}
               strokeLinecap="round"
-              markerEnd={isAnimating ? "url(#arrowheadPulse)" : "url(#arrowhead)"}
+              markerEnd={arrowMarker}
               filter="url(#glow)"
               opacity={hasAttachedEnd ? (isAnimating ? 0.9 : 0.75) : 0.55}
               className="pointer-events-none"
@@ -526,7 +658,7 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
                 cx={node.x}
                 cy={node.y}
                 r={selectedNodeId === node.id ? 6 : 4}
-                fill={selectedNodeId === node.id ? "#fbbf24" : "#22d3ee"}
+                fill={selectedNodeId === node.id ? "#fbbf24" : isCpuControlSignal ? "#3b82f6" : "#22d3ee"}
                 stroke="#fff"
                 strokeWidth="2"
                 className="pointer-events-auto cursor-move"

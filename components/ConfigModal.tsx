@@ -10,6 +10,7 @@ import { CpuState, CPU_STATE_LABELS, ALL_CPU_STATES, isClockable } from "@/lib/s
 import { Opcode, INSTRUCTION_SET } from "@/lib/simulator/ISA";
 import { OPCODE_SEQUENCES } from "@/lib/simulator/Cpu";
 import type { CPU } from "@/lib/simulator/Cpu";
+import InstructionBuilder from "@/components/InstructionBuilder";
 
 interface Props {
   component: ComponentInstance;
@@ -55,6 +56,8 @@ export default function ConfigModal({ component, onClose }: Props) {
   const isClockableObj = obj && isClockable(obj);
   const isCpu = component.type === "CpuComponent";
   const cpu = isCpu ? (obj as CPU | undefined) : undefined;
+  const isInstructionMemory = component.type === "InstructionMemory";
+  const imem = isInstructionMemory ? useSimulatorStore.getState().getInstructionMemory(component.id) : undefined;
   
   // Tick steps configuration
   const currentTickSteps = useMemo(() => getComponentTickSteps(component.id) ?? [], [component.id, getComponentTickSteps, revision]);
@@ -200,6 +203,21 @@ export default function ConfigModal({ component, onClose }: Props) {
 
   const inputPorts  = ports.filter((p) => p.direction === "input");
   const outputPorts = ports.filter((p) => p.direction === "output");
+
+  // If this is instruction memory, show the builder instead of the default config
+  if (isInstructionMemory && imem) {
+    return createPortal(
+      <div className="fixed inset-0 z-50 flex items-center justify-center">
+        {/* Backdrop */}
+        <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+        {/* Instruction Builder */}
+        <div className="relative z-10">
+          <InstructionBuilder imem={imem} onClose={onClose} />
+        </div>
+      </div>,
+      document.body
+    );
+  }
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center">

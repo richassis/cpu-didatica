@@ -22,6 +22,7 @@ export enum CpuState {
   WRITEREG2 = 8,
   WRITEREG3 = 9,
   WRITEPC = 10,
+  HALT = 11,
 }
 
 /**
@@ -40,6 +41,7 @@ export const CPU_STATE_LABELS: Record<CpuState, string> = {
   [CpuState.WRITEREG2]: "WRITEREG2",
   [CpuState.WRITEREG3]: "WRITEREG3",
   [CpuState.WRITEPC]: "WRITEPC",
+  [CpuState.HALT]: "HALT",
 };
 
 /**

@@ -27,6 +27,7 @@ const STATE_LABELS: Record<CpuState, string> = {
   [CpuState.WRITEREG2]: "WRREG2",
   [CpuState.WRITEREG3]: "WRREG3",
   [CpuState.WRITEPC]:   "WRPC",
+  [CpuState.HALT]:      "HALT",
 };
 
 const STATE_COLORS: Record<CpuState, string> = {
@@ -42,6 +43,7 @@ const STATE_COLORS: Record<CpuState, string> = {
   [CpuState.WRITEREG2]: "text-emerald-300 bg-emerald-900/60 border-emerald-600",
   [CpuState.WRITEREG3]: "text-emerald-300 bg-emerald-900/60 border-emerald-600",
   [CpuState.WRITEPC]:   "text-rose-300    bg-rose-900/60    border-rose-600",
+  [CpuState.HALT]:      "text-red-300     bg-red-900/40     border-red-700/60",
 };
 
 /** Read every control-signal output port value from the CPU instance. */
@@ -133,12 +135,20 @@ export default function CpuComponent({ component, zoom }: Props) {
   };
 
   // ── derived display ────────────────────────────────────────────
-  const cpuState   = cpu ? (cpu.state as CpuState) : CpuState.FETCH;
+  const nextState  = cpu ? (cpu.state as CpuState) : CpuState.FETCH;
   const halted     = cpu ? cpu.halted : false;
   const paused     = cpu ? cpu.paused : false;
   const signals    = cpu ? readSignals(cpu) : {};
-  const stateLabel = STATE_LABELS[cpuState] ?? "???";
-  const stateColor = STATE_COLORS[cpuState] ?? "text-gray-300 bg-gray-800 border-gray-600";
+  
+  // Calculate the current/executed state (the one whose signals are active)
+  // The CPU's state field points to the NEXT state to execute after tick
+  // previousState shows the state that was just executed and whose signals are currently active
+  const currentState = cpu ? (cpu.previousState as CpuState) : CpuState.RESET;
+  
+  const nextLabel = halted ? "HALT" : (STATE_LABELS[nextState] ?? "???");
+  const nextColor = STATE_COLORS[nextState] ?? "text-gray-300 bg-gray-800 border-gray-600";
+  const currentLabel = STATE_LABELS[currentState] ?? "???";
+  const currentColor = STATE_COLORS[currentState] ?? "text-gray-300 bg-gray-800 border-gray-600";
 
   return (
     <>
@@ -237,23 +247,36 @@ export default function CpuComponent({ component, zoom }: Props) {
           </div>
         </div>
 
-        {/* ── FSM state badge ── */}
-        <div className="shrink-0 px-3 py-1.5 flex items-center justify-between gap-2 border-b border-gray-800">
-          <span className="text-[10px] text-gray-500 font-mono">STATE</span>
-          {halted ? (
-            <span className="text-[10px] font-bold text-red-400 bg-red-900/40 border border-red-700/60 rounded px-1.5 py-0.5">
-              HALTED
-            </span>
-          ) : paused ? (
-            <span className="text-[10px] font-bold text-yellow-400 bg-yellow-900/40 border border-yellow-700/60 rounded px-1.5 py-0.5">
-              PAUSED
-            </span>
-          ) : (
-            <span
-              className={`text-[10px] font-bold border rounded px-1.5 py-0.5 ${stateColor}`}
-            >
-              {stateLabel}
-            </span>
+        {/* ── FSM state badges ── */}
+        <div className="shrink-0 px-3 py-1.5 border-b border-gray-800 space-y-1.5">
+          {/* Current/Executed State */}
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[9px] text-gray-500 font-mono uppercase">Executed</span>
+            {paused ? (
+              <span className="text-[10px] font-bold text-yellow-400 bg-yellow-900/40 border border-yellow-700/60 rounded px-1.5 py-0.5">
+                PAUSED
+              </span>
+            ) : (
+              <span
+                className={`text-[10px] font-bold border rounded px-1.5 py-0.5 ${currentColor}`}
+              >
+                {currentLabel}
+              </span>
+            )}
+          </div>
+          
+          {/* Next State */}
+          {!paused && (
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[9px] text-gray-600 font-mono uppercase">Next</span>
+              <span
+                className={`text-[9px] font-semibold border rounded px-1.5 py-0.5 opacity-60 ${
+                  halted ? "text-red-300 bg-red-900/40 border-red-700/60" : nextColor
+                }`}
+              >
+                {nextLabel}
+              </span>
+            </div>
           )}
         </div>
 

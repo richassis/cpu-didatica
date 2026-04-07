@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useSimulatorStore } from "@/lib/simulatorStore";
+import { useLayoutStore } from "@/lib/store";
 
 interface Props {
   portName: string;
@@ -17,6 +18,40 @@ interface Props {
   offset?: number;
 }
 
+/**
+ * Determine if a port is a control signal based on component type and port name
+ */
+function isControlSignalPort(componentType: string, portName: string, direction: "input" | "output"): boolean {
+  // CPU outputs are all control signals
+  if (componentType === "CpuComponent" && direction === "output") {
+    return true;
+  }
+  
+  // Mux/Multiplexer select signals are control
+  if (portName === "select" || portName === "sel" || portName.includes("select")) {
+    return true;
+  }
+  
+  // Write enables and read enables are control signals
+  if (portName.includes("writeEnable") || portName.includes("wrEnable") || 
+      portName.includes("rdMem") || portName.includes("wrMem") ||
+      portName.includes("wrReg") || portName.includes("wrPC") || portName.includes("wrIR")) {
+    return true;
+  }
+  
+  // Operation selectors are control signals
+  if (portName.includes("operation") || portName.includes("opULA")) {
+    return true;
+  }
+  
+  // Mux selectors are control signals
+  if (portName.includes("mux")) {
+    return true;
+  }
+  
+  return false;
+}
+
 export default function PortIndicator({ 
   portName, 
   direction, 
@@ -29,6 +64,12 @@ export default function PortIndicator({
   const [portValue, setPortValue] = useState<string>("");
   const objects = useSimulatorStore((s) => s.objects);
   const revision = useSimulatorStore((s) => s.revision);
+  const components = useLayoutStore((s) => s.components);
+
+  // Get component type for control signal detection
+  const component = components.find(c => c.id === componentId);
+  const componentType = component?.type ?? "";
+  const isControlSignal = isControlSignalPort(componentType, portName, direction);
 
   useEffect(() => {
     const obj = objects.get(componentId);
@@ -63,9 +104,28 @@ export default function PortIndicator({
   };
 
   const isInput = direction === "input";
-  const color = isInput ? "bg-green-500" : "bg-orange-500";
-  const hoverColor = isInput ? "bg-green-400" : "bg-orange-400";
-  const borderColor = isInput ? "border-green-600" : "border-orange-600";
+  
+  // Color scheme based on port type
+  let color, hoverColor, borderColor, tooltipColor;
+  if (isControlSignal) {
+    // Blue for control signals
+    color = "bg-blue-500";
+    hoverColor = "bg-blue-400";
+    borderColor = "border-blue-600";
+    tooltipColor = "text-blue-300";
+  } else if (isInput) {
+    // Green for data inputs
+    color = "bg-green-500";
+    hoverColor = "bg-green-400";
+    borderColor = "border-green-600";
+    tooltipColor = "text-green-300";
+  } else {
+    // Orange for data outputs
+    color = "bg-orange-500";
+    hoverColor = "bg-orange-400";
+    borderColor = "border-orange-600";
+    tooltipColor = "text-orange-300";
+  }
 
   return (
     <div
@@ -96,7 +156,7 @@ export default function PortIndicator({
             }}
           >
             <div className="font-semibold text-gray-300">{portName}</div>
-            <div className={isInput ? "text-green-300" : "text-orange-300"}>{portValue}</div>
+            <div className={tooltipColor}>{portValue}</div>
           </div>
         )}
       </div>
