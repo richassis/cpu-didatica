@@ -52,12 +52,12 @@ export default function AdderComponent({ component, zoom }: Props) {
         className="select-none cursor-grab active:cursor-grabbing relative"
         onDoubleClick={(e) => { e.stopPropagation(); setConfigOpen(true); }}
       >
-        {/* ── SVG fills full widget bounds — amber/orange tint ── */}
+        {/* ── SVG fills full widget bounds — amber/orange tint, horizontally mirrored ── */}
         <Image
           src="/images/ula_white.svg"
           alt="Adder"
-          width={w}
-          height={h}
+          width={!w || isNaN(w) ? 128 : w}
+          height={!h || isNaN(h) ? 176 : h}
           priority
           draggable={false}
           style={{
@@ -68,6 +68,7 @@ export default function AdderComponent({ component, zoom }: Props) {
             display: "block",
             width: "100%",
             height: "auto",
+            transform: "scaleX(-1)", // Horizontally mirror the SVG
           }}
         />
 

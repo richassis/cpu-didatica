@@ -2,22 +2,20 @@
 
 import { useEffect, useState } from "react";
 import SimulatorCanvas from "@/components/SimulatorCanvas";
-import ProjectTabBar from "@/components/ProjectTabBar";
-import WelcomeModal from "@/components/WelcomeModal";
+import TopBar from "@/components/TopBar";
 import { useProjectStore } from "@/lib/projectStore";
 import { useLayoutStore } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 
 export default function Home() {
-  const tabs = useProjectStore((s) => s.tabs);
   const activeTabId = useProjectStore((s) => s.activeTabId);
-  const showWelcome = useProjectStore((s) => s.showWelcome);
-  const setShowWelcome = useProjectStore((s) => s.setShowWelcome);
   const projectData = useProjectStore((s) => s.projectData);
   const updateProjectData = useProjectStore((s) => s.updateProjectData);
   const markDirty = useProjectStore((s) => s.markDirty);
+  const loadDefaultProject = useProjectStore((s) => s.loadDefaultProject);
   
   const layoutComponents = useLayoutStore((s) => s.components);
+  const layoutWires = useLayoutStore((s) => s.wires);
   const setComponents = useLayoutStore.setState;
   const clearComponents = useLayoutStore((s) => s.clearComponents);
   
@@ -31,6 +29,16 @@ export default function Home() {
   useEffect(() => {
     setIsHydrated(true);
   }, []);
+
+  // Load default project data if needed
+  useEffect(() => {
+    if (!isHydrated || !activeTabId) return;
+    
+    // If active tab is default project but data not loaded, load it
+    if (activeTabId === 'default' && !projectData[activeTabId]) {
+      loadDefaultProject();
+    }
+  }, [isHydrated, activeTabId, projectData, loadDefaultProject]);
 
   // Sync layout store with project data when switching tabs
   useEffect(() => {
@@ -46,6 +54,7 @@ export default function Home() {
     setComponents((state) => ({
       ...state,
       components: data.components,
+      wires: data.wires,
       canvasSize: data.canvasSize,
       zoom: data.zoom,
     }));
@@ -98,30 +107,8 @@ export default function Home() {
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
-      <ProjectTabBar />
-      
-      {tabs.length > 0 && activeTabId ? (
-        <SimulatorCanvas />
-      ) : (
-        <div className="flex-1 flex items-center justify-center bg-gray-950">
-          <div className="text-center">
-            <div className="text-6xl mb-4">🖥️</div>
-            <h2 className="text-xl font-semibold text-gray-300 mb-2">No Project Open</h2>
-            <p className="text-gray-500 mb-4">Create a new project to get started</p>
-            <button
-              onClick={() => setShowWelcome(true)}
-              className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg transition-colors"
-            >
-              Create Project
-            </button>
-          </div>
-        </div>
-      )}
-
-      <WelcomeModal 
-        isOpen={showWelcome && tabs.length === 0} 
-        onClose={() => setShowWelcome(false)} 
-      />
+      <TopBar />
+      <SimulatorCanvas />
     </div>
   );
 }

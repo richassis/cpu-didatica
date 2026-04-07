@@ -110,7 +110,7 @@ export default function GprComponent({ component, zoom }: Props) {
         {/* ── Body ── */}
         {viewMode === "ports" ? (
           /* Port I/O view */
-          <div className="flex flex-col gap-1.5 px-2 py-2 text-[10px] font-mono" style={{ height: h - 28 }}>
+          <div className="flex flex-col gap-1.5 px-2 py-2 text-[10px] font-mono" style={{ height: Math.max(0, (h || 256) - 28) }}>
             {/* WR badge */}
             <div className="flex items-center justify-center gap-2 mb-1">
               <span className={`text-[9px] font-mono px-2 py-0.5 rounded ${
@@ -162,7 +162,7 @@ export default function GprComponent({ component, zoom }: Props) {
           </div>
         ) : (
           /* Default data view */
-          <div className="flex flex-col overflow-y-auto rounded-b-xl" style={{ height: h - 28 }}>
+          <div className="flex flex-col overflow-y-auto rounded-b-xl" style={{ height: Math.max(0, (h || 256) - 28) }}>
             {regs.length === 0 ? (
               <div className="flex items-center justify-center h-full text-[10px] text-gray-600">
                 no GPR

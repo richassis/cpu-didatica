@@ -451,7 +451,7 @@ export class CPU implements Clockable, Connectable {
     this._totalTicks = 0;
     this.initPrevSignals();
     // Apply RESET state control signals
-    this.emitSignals(CpuState.RESET, Opcode.HLT);
+    this.emitSignals(CpuState.RESET, Opcode.HLT, true);
     this.out_state.set(CpuState.RESET);
     this.out_halted.set(false);
   }
@@ -477,10 +477,11 @@ export class CPU implements Clockable, Connectable {
   private setSignalIfChanged<T extends number | boolean>(
     port: OutputPort<T>,
     signalName: string,
-    value: T
+    value: T, 
+    force_update: boolean = false
   ): void {
     const prevValue = this._prevSignals.get(signalName);
-    if (prevValue !== value) {
+    if (prevValue !== value || force_update) {
       port.set(value);
       this._prevSignals.set(signalName, value);
     }
@@ -576,7 +577,7 @@ export class CPU implements Clockable, Connectable {
   /** RESET state - clears all control signals. Transitions to FETCH on tick. */
   private doReset(): void {
     // Emit RESET state signals (clears all signals)
-    this.emitSignals(CpuState.RESET, this.getActiveOpcode());
+    this.emitSignals(CpuState.RESET, this.getActiveOpcode(), true);
     // Transition to FETCH on next tick
     this._state = CpuState.FETCH;
   }
@@ -584,7 +585,7 @@ export class CPU implements Clockable, Connectable {
   /** Tick 1 – read instruction from memory[PC] into IR. */
   private doFetch(): void {
     // Emit FETCH state signals
-    this.emitSignals(CpuState.FETCH, this.getActiveOpcode());
+    this.emitSignals(CpuState.FETCH, this.getActiveOpcode(), true);
     this._state = CpuState.DECODE;
   }
 
@@ -645,7 +646,7 @@ export class CPU implements Clockable, Connectable {
    * Uses STATE_CONTROL_SIGNALS configuration for most states, with special
    * handling for EXECUTE (opcode-dependent ULA operation) and WRITEPC (conditional jumps).
    */
-  private emitSignals(state: CpuState, opcode: Opcode): void {
+  private emitSignals(state: CpuState, opcode: Opcode, force_write: boolean = false): void {
     // Get base configuration for this state
     const config = STATE_CONTROL_SIGNALS[state];
     
@@ -656,31 +657,31 @@ export class CPU implements Clockable, Connectable {
 
     // Apply all configured signals
     if (config.wrReg !== undefined) {
-      this.setSignalIfChanged(this.out_wrReg, "wrReg", config.wrReg);
+      this.setSignalIfChanged(this.out_wrReg, "wrReg", config.wrReg, force_write);
     }
     if (config.muxAReg !== undefined) {
-      this.setSignalIfChanged(this.out_muxAReg, "muxAReg", config.muxAReg);
+      this.setSignalIfChanged(this.out_muxAReg, "muxAReg", config.muxAReg, force_write);
     }
     if (config.muxDReg !== undefined) {
-      this.setSignalIfChanged(this.out_muxDReg, "muxDReg", config.muxDReg);
+      this.setSignalIfChanged(this.out_muxDReg, "muxDReg", config.muxDReg, force_write);
     }
     if (config.wrPC !== undefined) {
-      this.setSignalIfChanged(this.out_wrPC, "wrPC", config.wrPC);
+      this.setSignalIfChanged(this.out_wrPC, "wrPC", config.wrPC, force_write);
     }
     if (config.muxPC !== undefined) {
-      this.setSignalIfChanged(this.out_muxPC, "muxPC", config.muxPC);
+      this.setSignalIfChanged(this.out_muxPC, "muxPC", config.muxPC, force_write);
     }
     if (config.rdMem !== undefined) {
-      this.setSignalIfChanged(this.out_rdMem, "rdMem", config.rdMem);
+      this.setSignalIfChanged(this.out_rdMem, "rdMem", config.rdMem, force_write);
     }
     if (config.wrMem !== undefined) {
-      this.setSignalIfChanged(this.out_wrMem, "wrMem", config.wrMem);
+      this.setSignalIfChanged(this.out_wrMem, "wrMem", config.wrMem, force_write);
     }
     if (config.muxAMem !== undefined) {
-      this.setSignalIfChanged(this.out_muxAMem, "muxAMem", config.muxAMem);
+      this.setSignalIfChanged(this.out_muxAMem, "muxAMem", config.muxAMem, force_write);
     }
     if (config.wrIR !== undefined) {
-      this.setSignalIfChanged(this.out_wrIR, "wrIR", config.wrIR);
+      this.setSignalIfChanged(this.out_wrIR, "wrIR", config.wrIR, force_write);
     }
 
     // Special handling for state-specific logic

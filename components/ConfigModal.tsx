@@ -34,6 +34,7 @@ export default function ConfigModal({ component, onClose }: Props) {
   const tickSingleComponent = useSimulatorStore((s) => s.tickSingleComponent);
   const getComponentTickSteps = useSimulatorStore((s) => s.getComponentTickSteps);
   const setComponentTickSteps = useSimulatorStore((s) => s.setComponentTickSteps);
+  const recreateObject = useSimulatorStore((s) => s.recreateObject);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const wires = useMemo(() => getWires(), [getWires, revision]);
 
@@ -112,16 +113,31 @@ export default function ConfigModal({ component, onClose }: Props) {
   }, [onClose]);
 
   const handleSave = () => {
-    updateLabel(component.id, config.label.trim() || (def?.label ?? component.type));
-    // Persist any meta fields (bitWidth, numInputs, wordCount) that were changed
+    const newLabel = config.label.trim() || (def?.label ?? component.type);
+    updateLabel(component.id, newLabel);
+    
+    // Build meta object with any changed fields
     const meta: Record<string, unknown> = {};
     if (config.bitWidth  !== undefined) meta.bitWidth  = config.bitWidth;
     if (config.numInputs !== undefined) meta.numInputs = config.numInputs;
     if (config.wordCount !== undefined) meta.wordCount = config.wordCount;
-    if (Object.keys(meta).length > 0) updateMeta(component.id, meta);
     
-    // Apply all pending port value changes
-    if (isConnectable && Object.keys(portInputs).length > 0) {
+    // Check if we need to recreate the object (when port structure changes)
+    const currentNumInputs = component.meta?.numInputs;
+    const needsRecreate = component.type === "MuxComponent" && 
+                          config.numInputs !== undefined && 
+                          config.numInputs !== currentNumInputs;
+    
+    if (needsRecreate) {
+      // Recreate Mux with new numInputs (changes port structure)
+      updateMeta(component.id, meta);
+      recreateObject(component.id, component.type, newLabel, { ...component.meta, ...meta });
+    } else if (Object.keys(meta).length > 0) {
+      updateMeta(component.id, meta);
+    }
+    
+    // Apply all pending port value changes (only if not recreated)
+    if (!needsRecreate && isConnectable && Object.keys(portInputs).length > 0) {
       for (const [portName, rawText] of Object.entries(portInputs)) {
         const port = ports.find(p => p.name === portName);
         if (port) {

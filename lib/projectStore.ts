@@ -11,6 +11,13 @@ import { persist } from "zustand/middleware";
 import { v4 as uuidv4 } from "uuid";
 import type { ComponentInstance } from "@/lib/store";
 import type { WireDescriptor } from "@/lib/simulator";
+import { 
+  createDefaultProject, 
+  createEmptyProject, 
+  DEFAULT_PROJECT_ID,
+  DEFAULT_PROJECT_NAME,
+  isDefaultProject,
+} from "./defaultProject";
 
 /** Serializable project data structure */
 export interface ProjectData {
@@ -29,6 +36,7 @@ export interface ProjectTab {
   id: string;
   name: string;
   isDirty: boolean;
+  isDefaultProject: boolean; // Flag to mark the default project
 }
 
 interface ProjectState {
@@ -78,6 +86,9 @@ interface ProjectState {
   
   /** Mark project as saved (not dirty) */
   markSaved: (tabId: string) => void;
+  
+  /** Load default project data asynchronously */
+  loadDefaultProject: () => Promise<void>;
 }
 
 export const useProjectStore = create<ProjectState>()(
@@ -90,23 +101,13 @@ export const useProjectStore = create<ProjectState>()(
 
       createProject: (name) => {
         const id = uuidv4();
-        const now = new Date().toISOString();
-        
-        const newProject: ProjectData = {
-          id,
-          name,
-          createdAt: now,
-          updatedAt: now,
-          components: [],
-          wires: [],
-          canvasSize: { width: 3000, height: 2000 },
-          zoom: 1,
-        };
+        const newProject = createEmptyProject(name, id);
 
         const newTab: ProjectTab = {
           id,
           name,
           isDirty: false,
+          isDefaultProject: false,
         };
 
         set((state) => ({
@@ -125,14 +126,22 @@ export const useProjectStore = create<ProjectState>()(
 
       closeTab: (tabId) => {
         set((state) => {
+          // Cannot close default project
+          if (isDefaultProject(tabId)) {
+            console.warn("Cannot close the default project");
+            return state;
+          }
+          
           const newTabs = state.tabs.filter((t) => t.id !== tabId);
           const newProjectData = { ...state.projectData };
           delete newProjectData[tabId];
 
-          // If closing active tab, switch to another
+          // If closing active tab, switch to default or another tab
           let newActiveId = state.activeTabId;
           if (state.activeTabId === tabId) {
-            newActiveId = newTabs.length > 0 ? newTabs[newTabs.length - 1].id : null;
+            // Prefer default project, or any other available tab
+            const defaultTab = newTabs.find(t => t.isDefaultProject);
+            newActiveId = defaultTab ? defaultTab.id : (newTabs.length > 0 ? newTabs[0].id : null);
           }
 
           return {
@@ -208,8 +217,9 @@ export const useProjectStore = create<ProjectState>()(
       },
 
       importProject: (data) => {
-        // Generate new ID to avoid conflicts
-        const id = uuidv4();
+        // Generate new ID to avoid conflicts (unless it's being restored as default)
+        const isRestoringDefault = data.id === DEFAULT_PROJECT_ID;
+        const id = isRestoringDefault ? DEFAULT_PROJECT_ID : uuidv4();
         const now = new Date().toISOString();
 
         const importedProject: ProjectData = {
@@ -222,6 +232,7 @@ export const useProjectStore = create<ProjectState>()(
           id,
           name: data.name,
           isDirty: false,
+          isDefaultProject: isRestoringDefault,
         };
 
         set((state) => ({
@@ -242,6 +253,25 @@ export const useProjectStore = create<ProjectState>()(
       setShowWelcome: (show) => {
         set({ showWelcome: show });
       },
+      
+      loadDefaultProject: async () => {
+        const { projectData } = get();
+        
+        // Only load if not already loaded
+        if (!projectData[DEFAULT_PROJECT_ID]) {
+          try {
+            const defaultProject = await createDefaultProject();
+            set((state) => ({
+              projectData: {
+                ...state.projectData,
+                [DEFAULT_PROJECT_ID]: defaultProject,
+              },
+            }));
+          } catch (error) {
+            console.error('Failed to load default project:', error);
+          }
+        }
+      },
     }),
     {
       name: "simulator-projects",
@@ -251,9 +281,48 @@ export const useProjectStore = create<ProjectState>()(
         projectData: state.projectData,
         showWelcome: state.tabs.length === 0,
       }),
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          // Ensure default project exists
+          ensureDefaultProject(state);
+        }
+      },
     }
   )
 );
+
+/**
+ * Ensure the default project exists in the store.
+ * Called on rehydration and can be called manually.
+ */
+function ensureDefaultProject(state: ProjectState): void {
+  const hasDefault = state.tabs.some(t => t.id === DEFAULT_PROJECT_ID);
+  
+  if (!hasDefault) {
+    // Create the default project tab (data loaded on demand)
+    const defaultTab: ProjectTab = {
+      id: DEFAULT_PROJECT_ID,
+      name: DEFAULT_PROJECT_NAME,
+      isDirty: false,
+      isDefaultProject: true,
+    };
+    
+    // Add to beginning of tabs array
+    state.tabs.unshift(defaultTab);
+    
+    // If no active tab, set default as active
+    if (!state.activeTabId) {
+      state.activeTabId = DEFAULT_PROJECT_ID;
+      state.showWelcome = false;
+    }
+  }
+  
+  // Migration: mark existing default project if it exists but isn't flagged
+  state.tabs = state.tabs.map(tab => ({
+    ...tab,
+    isDefaultProject: tab.id === DEFAULT_PROJECT_ID,
+  }));
+}
 
 // ── File I/O utilities ──────────────────────────────────────────
 

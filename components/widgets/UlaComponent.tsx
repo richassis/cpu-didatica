@@ -10,11 +10,15 @@ import { useDisplayStore, formatNum } from "@/lib/displayStore";
 import React from "react";
 import ConfigModal from "@/components/ConfigModal";
 import PortsOverlay from "@/components/PortsOverlay";
+import { getSafeDimensions } from "@/lib/componentUtils";
 
 export default function UlaComponent({ component, zoom }: Props) {
   const { id, x, y, w, h, label } = component;
   const removeComponent = useLayoutStore((s) => s.removeComponent);
   const [configOpen, setConfigOpen] = useState(false);
+
+  // Get safe dimensions with fallbacks
+  const { width, height } = getSafeDimensions("UlaComponent", w, h);
 
   // Read values from the data layer
   const revision = useSimulatorStore((s) => s.revision);
@@ -57,8 +61,8 @@ export default function UlaComponent({ component, zoom }: Props) {
         <Image
           src="/images/ula_white.svg"
           alt="ULA"
-          width={w}
-          height={h}
+          width={width}
+          height={height}
           priority
           draggable={false}
           style={{

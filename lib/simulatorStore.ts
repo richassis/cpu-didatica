@@ -12,7 +12,7 @@
  */
 
 import { create } from "zustand";
-import { Register, Gpr, Ula, Adder, Mux, Memory, CPU, Decoder, Bus, isClockable, CpuState, ALL_CPU_STATES } from "@/lib/simulator";
+import { Register, Gpr, Ula, Adder, Mux, Memory, InstructionMemory, CPU, Decoder, Bus, isClockable, CpuState, ALL_CPU_STATES } from "@/lib/simulator";
 import type { Connectable, WireDescriptor } from "@/lib/simulator";
 import type { ComponentState } from "@/lib/store";
 // Lazy import via getter to avoid circular initialisation (store.ts imports simulatorStore).
@@ -20,7 +20,7 @@ const getLayoutStore = () =>
   (require("@/lib/store") as typeof import("@/lib/store")).useLayoutStore;
 
 /** Union of every data-layer object type */
-export type SimulatorObject = Register | Gpr | Ula | Adder | Mux | Memory | CPU | Decoder;
+export type SimulatorObject = Register | Gpr | Ula | Adder | Mux | Memory | InstructionMemory | CPU | Decoder;
 
 /** Type guard to check if an object is Connectable */
 function isConnectable(obj: unknown): obj is Connectable {
@@ -56,6 +56,12 @@ interface SimulatorState {
    */
   removeObject: (id: string) => void;
 
+  /**
+   * Recreate an object with new meta (e.g., when Mux numInputs changes).
+   * This removes the old object and creates a new one with updated config.
+   */
+  recreateObject: (id: string, type: string, label: string, meta?: Record<string, unknown>) => void;
+
   /** Remove all data-layer objects (mirrors clearComponents). */
   clearObjects: () => void;
 
@@ -69,6 +75,7 @@ interface SimulatorState {
   getAdder: (id: string) => Adder | undefined;
   getMux: (id: string) => Mux | undefined;
   getMemory: (id: string) => Memory | undefined;
+  getInstructionMemory: (id: string) => InstructionMemory | undefined;
   getCpu: (id: string) => CPU | undefined;
   getDecoder: (id: string) => Decoder | undefined;
 
@@ -219,8 +226,13 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
         newObj = new Memory(id, label, wordCount, bitWidth);
         break;
       }
-      // Types without a data-layer (LabelWidget, ValueDisplayWidget)
-      // are silently ignored — they have no backing domain object.
+      case "InstructionMemoryComponent": {
+        const wordCount = typeof meta?.wordCount === "number" ? meta.wordCount : 256;
+        const bitWidth  = typeof meta?.bitWidth  === "number" ? meta.bitWidth  : 16;
+        newObj = new InstructionMemory(id, label, wordCount, bitWidth);
+        break;
+      }
+      // Unknown types are silently ignored.
       default:
         break;
     }
@@ -266,6 +278,14 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
     set({ objects: map });
   },
 
+  recreateObject: (id, type, label, meta) => {
+    const { removeObject, createObject } = get();
+    // Remove old object (unregisters from bus and CPU)
+    removeObject(id);
+    // Create new object with updated meta
+    createObject(id, type, label, meta);
+  },
+
   clearObjects: () => {
     const { bus } = get();
     // Clear all wires and components from bus
@@ -303,6 +323,11 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
   getMemory: (id) => {
     const obj = get().objects.get(id);
     return obj instanceof Memory ? obj : undefined;
+  },
+
+  getInstructionMemory: (id) => {
+    const obj = get().objects.get(id);
+    return obj instanceof InstructionMemory ? obj : undefined;
   },
 
   getCpu: (id) => {
@@ -485,8 +510,8 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
       if (obj instanceof Gpr) {
         entry.registers = obj.snapshot().map((r) => r.value);
       }
-      // Memory: also save the cells array
-      if (obj instanceof Memory) {
+      // Memory and InstructionMemory: also save the cells array
+      if (obj instanceof Memory || obj instanceof InstructionMemory) {
         entry.cells = obj.dump();
       }
       result.set(id, entry);
@@ -503,7 +528,7 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
       if (obj instanceof Gpr && state.registers) {
         state.registers.forEach((v, i) => obj.write(i, v));
       }
-      if (obj instanceof Memory && state.cells) {
+      if ((obj instanceof Memory || obj instanceof InstructionMemory) && state.cells) {
         obj.load(state.cells);
       }
       // Restore port values (output ports only — inputs are driven by wires)

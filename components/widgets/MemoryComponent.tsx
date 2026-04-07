@@ -129,7 +129,7 @@ export default function MemoryComponent({ component, zoom }: Props) {
         {/* ── Body ── */}
         {viewMode === "ports" ? (
           /* Port I/O view */
-          <div className="flex flex-col gap-1.5 px-2 py-2 text-[10px] font-mono" style={{ height: h - 28 }}>
+          <div className="flex flex-col gap-1.5 px-2 py-2 text-[10px] font-mono" style={{ height: Math.max(0, (h || 192) - 28) }}>
             {/* RD/WR badges */}
             <div className="flex items-center justify-center gap-2 mb-1">
               <span className={`text-[9px] font-mono px-2 py-0.5 rounded ${
@@ -188,7 +188,7 @@ export default function MemoryComponent({ component, zoom }: Props) {
           /* Edit mode: scrollable table of all cells */
           <div
             className="overflow-y-auto px-2 py-1.5 text-[10px] font-mono"
-            style={{ height: h - 28 }}
+            style={{ height: Math.max(0, (h || 192) - 28) }}
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
           >
@@ -209,7 +209,7 @@ export default function MemoryComponent({ component, zoom }: Props) {
           </div>
         ) : (
           /* Default data view: GPR-like layout showing addresses and values */
-          <div className="flex flex-col overflow-y-auto" style={{ height: h - 28 }}>
+          <div className="flex flex-col overflow-y-auto" style={{ height: Math.max(0, (h || 192) - 28) }}>
             <div className="flex flex-col gap-px px-2 py-1.5">
               {Array.from({ length: wordCount }).map((_, a) => (
                 <MemoryDataRow

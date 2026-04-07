@@ -20,14 +20,6 @@ export interface ComponentState {
   cells?: number[];
 }
 
-/** Plain-JSON snapshot that can be written to / read from a file. */
-export interface ProjectSnapshot {
-  version: 1;
-  zoom: number;
-  components: ComponentInstance[];
-  wires: WireDescriptor[];
-}
-
 export interface ComponentInstance {
   id: string;
   type: string;
@@ -47,9 +39,9 @@ export interface Props {
   zoom: number;
 }
 
-/** Virtual canvas is effectively infinite — much larger than any screen. */
-export const CANVAS_WIDTH  = 20000;
-export const CANVAS_HEIGHT = 20000;
+/** Virtual canvas — smaller reasonable area for better navigation. */
+export const CANVAS_WIDTH  = 4000;
+export const CANVAS_HEIGHT = 3000;
 
 interface LayoutState {
   zoom: number;
@@ -75,14 +67,10 @@ interface LayoutState {
   saveWires: () => void;
   /** Snapshot current runtime values of all data-layer objects into each component's state field. */
   saveState: () => void;
-  /** Serialise the entire project to a JSON blob and trigger a browser download. */
-  saveProject: () => void;
-  /** Replace the entire project with data loaded from a ProjectSnapshot. */
-  loadProject: (snapshot: ProjectSnapshot) => void;
 }
 
-const MIN_ZOOM = 0.2;
-const MAX_ZOOM = 2;
+const MIN_ZOOM = 0.4;
+const MAX_ZOOM = 1.5;
 
 export const useLayoutStore = create<LayoutState>()(
   persist(
@@ -175,52 +163,6 @@ export const useLayoutStore = create<LayoutState>()(
             stateMap.has(c.id) ? { ...c, state: stateMap.get(c.id) } : c
           ),
         }));
-      },
-
-      saveProject: () => {
-        // Capture latest runtime values before serialising
-        const stateMap = useSimulatorStore.getState().serializeObjects();
-        const wires    = useSimulatorStore.getState().getWires();
-        const { zoom, components } = useLayoutStore.getState();
-        const enriched = components.map((c) =>
-          stateMap.has(c.id) ? { ...c, state: stateMap.get(c.id) } : c
-        );
-        const snapshot: ProjectSnapshot = { version: 1, zoom, components: enriched, wires };
-        const json = JSON.stringify(snapshot, null, 2);
-        const blob = new Blob([json], { type: "application/json" });
-        const url  = URL.createObjectURL(blob);
-        const a    = document.createElement("a");
-        a.href     = url;
-        a.download = `cpu-project-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-      },
-
-      loadProject: (snapshot) => {
-        const sim = useSimulatorStore.getState();
-        // Tear down current state
-        sim.clearObjects();
-        // Recreate all components
-        for (const c of snapshot.components) {
-          sim.createObject(c.id, c.type, c.label, c.meta);
-        }
-        // Restore wires
-        if (snapshot.wires.length > 0) {
-          sim.restoreWires(snapshot.wires);
-        }
-        // Restore runtime values (port values, register banks, memory cells)
-        const stateEntries = snapshot.components
-          .filter((c) => c.state)
-          .map((c) => [c.id, c.state!] as const);
-        if (stateEntries.length > 0) {
-          sim.applyObjectStates(new Map(stateEntries));
-        }
-        // Replace layout state (also updates localStorage via persist middleware)
-        set({
-          zoom: snapshot.zoom,
-          components: snapshot.components,
-          wires: snapshot.wires,
-        });
       },
     }),
     {

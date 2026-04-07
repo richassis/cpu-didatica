@@ -8,11 +8,12 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { useLayoutStore, ZOOM_STEP, ZOOM_MIN, ZOOM_MAX, CANVAS_WIDTH, CANVAS_HEIGHT, ProjectSnapshot } from "@/lib/store";
+import { useLayoutStore, ZOOM_STEP, ZOOM_MIN, ZOOM_MAX, CANVAS_WIDTH, CANVAS_HEIGHT } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayStore } from "@/lib/displayStore";
 import { useWireCreationStore } from "@/lib/wireCreationStore";
 import { useEnhancedWireStore } from "@/lib/enhancedWireStore";
+import { useModeStore } from "@/lib/modeStore";
 import { snapToGrid } from "@/lib/wireRouting";
 import WidgetRenderer from "./WidgetRenderer";
 import AddComponentModal from "./AddComponentModal";
@@ -29,10 +30,7 @@ export default function SimulatorCanvas() {
   const clearComponents = useLayoutStore((s) => s.clearComponents);
   const setZoom = useLayoutStore((s) => s.setZoom);
   const setViewport = useLayoutStore((s) => s.setViewport);
-  const saveProject = useLayoutStore((s) => s.saveProject);
-  const loadProject = useLayoutStore((s) => s.loadProject);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // UI state
   const showWiresAndPorts = useDisplayStore((s) => s.showWiresAndPorts);
@@ -43,6 +41,9 @@ export default function SimulatorCanvas() {
   const [confirmClear, setConfirmClear] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+
+  // Mode state - determines what actions are allowed
+  const isEditMode = useModeStore((s) => s.mode === "edit");
 
   // Clock state
   const tickClock = useSimulatorStore((s) => s.tickClock);
@@ -82,12 +83,34 @@ export default function SimulatorCanvas() {
     );
   }, [setViewport]);
 
-  // Scroll to canvas centre on first mount
+  // Scroll to components or canvas centre on first mount
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    el.scrollLeft = (CANVAS_WIDTH  * zoom - el.clientWidth)  / 2;
-    el.scrollTop  = (CANVAS_HEIGHT * zoom - el.clientHeight) / 2;
+    
+    // If there are components, center on them; otherwise center on canvas
+    if (components.length > 0) {
+      // Calculate bounding box of all components
+      let minX = Infinity, minY = Infinity;
+      let maxX = -Infinity, maxY = -Infinity;
+      
+      for (const c of components) {
+        minX = Math.min(minX, c.x);
+        minY = Math.min(minY, c.y);
+        maxX = Math.max(maxX, c.x + c.w);
+        maxY = Math.max(maxY, c.y + c.h);
+      }
+
+      const centerX = (minX + maxX) / 2;
+      const centerY = (minY + maxY) / 2;
+      
+      el.scrollLeft = centerX * zoom - el.clientWidth / 2;
+      el.scrollTop = centerY * zoom - el.clientHeight / 2;
+    } else {
+      // Center on canvas origin area for new projects
+      el.scrollLeft = 0;
+      el.scrollTop = 0;
+    }
     syncViewport();
   // Run once on mount only
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -312,6 +335,9 @@ export default function SimulatorCanvas() {
   );
 
   const handleDragEnd = (event: DragEndEvent) => {
+    // Block component movement in simulation mode
+    if (!isEditMode) return;
+    
     const { active, delta } = event;
     if (delta.x !== 0 || delta.y !== 0) {
       const dx = delta.x / zoom;
@@ -327,26 +353,10 @@ export default function SimulatorCanvas() {
     }
   };
 
-  const handleLoadFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      try {
-        const snapshot = JSON.parse(ev.target?.result as string) as ProjectSnapshot;
-        if (snapshot.version !== 1) throw new Error("Unsupported project version");
-        loadProject(snapshot);
-        setFabOpen(false);
-      } catch (err) {
-        alert(`Failed to load project: ${(err as Error).message}`);
-      }
-    };
-    reader.readAsText(file);
-    // Reset input so the same file can be re-loaded
-    e.target.value = "";
-  };
-
   const handleClear = () => {
+    // Block clear in simulation mode
+    if (!isEditMode) return;
+    
     if (confirmClear) {
       clearComponents();
       setConfirmClear(false);
@@ -355,6 +365,57 @@ export default function SimulatorCanvas() {
       setConfirmClear(true);
     }
   };
+
+  // Find and center viewport on all components
+  const handleFindComponents = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el || components.length === 0) return;
+
+    // Calculate bounding box of all components
+    let minX = Infinity, minY = Infinity;
+    let maxX = -Infinity, maxY = -Infinity;
+    
+    for (const c of components) {
+      minX = Math.min(minX, c.x);
+      minY = Math.min(minY, c.y);
+      maxX = Math.max(maxX, c.x + c.w);
+      maxY = Math.max(maxY, c.y + c.h);
+    }
+
+    // Add some padding
+    const padding = 100;
+    minX -= padding;
+    minY -= padding;
+    maxX += padding;
+    maxY += padding;
+
+    // Calculate the center of the bounding box
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+
+    // Calculate zoom to fit all components with some margin
+    const boundingWidth = maxX - minX;
+    const boundingHeight = maxY - minY;
+    const viewportWidth = el.clientWidth;
+    const viewportHeight = el.clientHeight;
+    
+    const fitZoomX = viewportWidth / boundingWidth;
+    const fitZoomY = viewportHeight / boundingHeight;
+    const fitZoom = Math.min(fitZoomX, fitZoomY, 1); // Don't zoom in more than 100%
+    const clampedZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, fitZoom));
+    
+    setZoom(clampedZoom);
+    
+    // Center viewport on components after zoom is applied
+    requestAnimationFrame(() => {
+      if (scrollRef.current) {
+        const newEl = scrollRef.current;
+        newEl.scrollLeft = centerX * clampedZoom - newEl.clientWidth / 2;
+        newEl.scrollTop = centerY * clampedZoom - newEl.clientHeight / 2;
+        syncViewport();
+      }
+    });
+  }, [components, setZoom, syncViewport]);
 
   return (
     <div 
@@ -391,29 +452,33 @@ export default function SimulatorCanvas() {
         {/* Action items — slide up when open */}
         {fabOpen && (
           <div className="flex flex-col items-end gap-2 mb-1">
-            {/* Add component */}
-            <FabItem
-              label="Add component"
-              icon={
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-              }
-              color="bg-cyan-600 hover:bg-cyan-500"
-              onClick={() => { setShowAddModal(true); setFabOpen(false); }}
-            />
+            {/* Add component - Edit mode only */}
+            {isEditMode && (
+              <FabItem
+                label="Add component"
+                icon={
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                }
+                color="bg-cyan-600 hover:bg-cyan-500"
+                onClick={() => { setShowAddModal(true); setFabOpen(false); }}
+              />
+            )}
 
-            {/* Connect ports */}
-            <FabItem
-              label="Connect ports"
-              icon={
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h8M8 12a4 4 0 100-8 4 4 0 000 8zm8 0a4 4 0 100 8 4 4 0 000-8z" />
-                </svg>
-              }
-              color="bg-purple-600 hover:bg-purple-500"
-              onClick={() => { setShowConnectionModal(true); setFabOpen(false); }}
-            />
+            {/* Connect ports - Edit mode only */}
+            {isEditMode && (
+              <FabItem
+                label="Connect ports"
+                icon={
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h8M8 12a4 4 0 100-8 4 4 0 000 8zm8 0a4 4 0 100 8 4 4 0 000-8z" />
+                  </svg>
+                }
+                color="bg-purple-600 hover:bg-purple-500"
+                onClick={() => { setShowConnectionModal(true); setFabOpen(false); }}
+              />
+            )}
 
             {/* Toggle wires */}
             <FabItem
@@ -427,32 +492,22 @@ export default function SimulatorCanvas() {
               onClick={() => { setShowWiresAndPorts(!showWiresAndPorts); setFabOpen(false); }}
             />
 
-            {/* Save project to file */}
-            <FabItem
-              label="Save project"
-              icon={
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                </svg>
-              }
-              color="bg-emerald-600 hover:bg-emerald-500"
-              onClick={() => { saveProject(); setFabOpen(false); }}
-            />
-
-            {/* Load project from file */}
-            <FabItem
-              label="Load project"
-              icon={
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l4-4m0 0l4 4m-4-4v12" />
-                </svg>
-              }
-              color="bg-sky-600 hover:bg-sky-500"
-              onClick={() => fileInputRef.current?.click()}
-            />
-
-            {/* Clear canvas */}
+            {/* Find components */}
             {components.length > 0 && (
+              <FabItem
+                label="Find components"
+                icon={
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                }
+                color="bg-emerald-600 hover:bg-emerald-500"
+                onClick={() => { handleFindComponents(); setFabOpen(false); }}
+              />
+            )}
+
+            {/* Clear canvas - Edit mode only */}
+            {isEditMode && components.length > 0 && (
               <FabItem
                 label={confirmClear ? `Confirm clear (${components.length})` : "Clear canvas"}
                 icon={
@@ -534,15 +589,6 @@ export default function SimulatorCanvas() {
           title="Reset clock"
         >↺</button>
       </div>
-
-      {/* Hidden file input for project loading */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".json,application/json"
-        className="hidden"
-        onChange={handleLoadFile}
-      />
 
       <AddComponentModal open={showAddModal} onClose={() => setShowAddModal(false)} />
       <ConnectionModal isOpen={showConnectionModal} onClose={() => setShowConnectionModal(false)} />

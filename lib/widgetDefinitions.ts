@@ -36,24 +36,6 @@ export interface WidgetDefinition {
 
 export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
   {
-    type: "LabelWidget",
-    label: "Label",
-    namePrefix: "LBL",
-    icon: "\u{1F3F7}",
-    defaultWidth: 160,  // 10 grid cells
-    defaultHeight: 64,  // 4 grid cells
-    description: "A static text label",
-  },
-  {
-    type: "ValueDisplayWidget",
-    label: "Value Display",
-    namePrefix: "VAL",
-    icon: "\u{1F4CA}",
-    defaultWidth: 192,  // 12 grid cells
-    defaultHeight: 128, // 8 grid cells
-    description: "Displays a numeric or text value with a title",
-  },
-  {
     type: "GprComponent",
     label: "GPR Bank",
     namePrefix: "GPR",
@@ -61,10 +43,15 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     defaultWidth: 160,  // 10 grid cells
     defaultHeight: 256, // 16 grid cells
     description: "General Purpose Registers bank",
-    // Baseline configuration (matches current behavior)
+    // GPR: addresses and data on left, outputs on right, control signals on top
     portConfig: {
       defaultInputSide: "left",
       defaultOutputSide: "right",
+      ports: {
+        "in_writeEnable": { side: "top" },  // Control signal → top
+        // Address and data ports stay on left (default)
+        // Output ports stay on right (default)
+      },
     },
   },
   {
@@ -75,12 +62,32 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     defaultWidth: 160,  // 10 grid cells
     defaultHeight: 192, // 12 grid cells
     description: "Unified memory — addr/data/rdMem/wrMem ports, 256×16b default",
-    // Memory with address bus from top
+    // Memory: addresses on left, data output on right, control signals on top
     portConfig: {
       defaultInputSide: "left",
       defaultOutputSide: "right",
       ports: {
-        "addr": { side: "top" },
+        "addr": { side: "left" },    // Address signal → left
+        "data": { side: "left" },    // Data input → left  
+        "rdMem": { side: "top" },    // Control signal → top
+        "wrMem": { side: "top" },    // Control signal → top
+      },
+    },
+  },
+  {
+    type: "InstructionMemoryComponent",
+    label: "Instruction Memory",
+    namePrefix: "IMEM",
+    icon: "\u{1F4C0}",
+    defaultWidth: 192,  // 12 grid cells (increased from 10)
+    defaultHeight: 240, // 15 grid cells (increased from 12)
+    description: "Read-only instruction memory — addr input, instruction output",
+    // InstructionMemory: address on left, output on right
+    portConfig: {
+      defaultInputSide: "left",
+      defaultOutputSide: "right",
+      ports: {
+        "addr": { side: "left" },    // Address signal → left
       },
     },
   },
@@ -92,16 +99,16 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     defaultWidth: 128,  // 8 grid cells
     defaultHeight: 176, // 11 grid cells
     description: "Arithmetic Logic Unit",
-    // Vertical layout: operands from top, result to bottom, flags on right
+    // ULA: data operands from left, result on right, operation control on top, flags on right
     portConfig: {
       ports: {
-        "a": { side: "top", offset: 33 },
-        "b": { side: "top", offset: 67 },
-        "operation": { side: "left", offset: 50 },
-        "result": { side: "bottom", offset: 50 },
-        "zero": { side: "right", offset: 25 },
-        "carry": { side: "right", offset: 50 },
-        "negative": { side: "right", offset: 75 },
+        "a": { side: "left", offset: 33 },        // Data input → left
+        "b": { side: "left", offset: 67 },        // Data input → left
+        "operation": { side: "top", offset: 50 }, // Control signal → top
+        "result": { side: "right", offset: 25 },  // Data output → right
+        "zero": { side: "right", offset: 50 },    // Status flag → right
+        "carry": { side: "right", offset: 75 },   // Status flag → right
+        "negative": { side: "right", offset: 90 }, // Status flag → right
       },
     },
   },
@@ -113,10 +120,10 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     defaultWidth: 128,  // 8 grid cells
     defaultHeight: 176, // 11 grid cells
     description: "Dedicated adder \u2014 always performs A + B",
-    // Adder with inputs from top, output to bottom
+    // Adder mirrored: inputs from right, output to left
     portConfig: {
-      defaultInputSide: "top",
-      defaultOutputSide: "bottom",
+      defaultInputSide: "right",
+      defaultOutputSide: "left",
     },
   },
   {
@@ -126,13 +133,13 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     icon: "\u2195",
     defaultWidth: 64,   // 4 grid cells
     defaultHeight: 96,  // 6 grid cells
-    description: "Selects one of 2\u20133 inputs based on a select signal",
-    // Mux with data inputs on left, output on right, select at bottom
+    description: "Selects one of 2–3 inputs based on a select signal",
+    // Mux: data inputs on left, output on right, select control signal on top
     portConfig: {
       defaultInputSide: "left",
       defaultOutputSide: "right",
       ports: {
-        "select": { side: "bottom", offset: 50 },
+        "sel": { side: "top", offset: 50 },  // Control signal → top
       },
     },
   },
@@ -144,12 +151,12 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     defaultWidth: 144,  // 9 grid cells
     defaultHeight: 48,  // 3 grid cells
     description: "A single register showing its label and value on hover",
-    // Register with clock signal at bottom
+    // Register: data on left, output on right, control signals on top
     portConfig: {
       defaultInputSide: "left",
       defaultOutputSide: "right",
       ports: {
-        "clk": { side: "bottom", offset: 50 },
+        "writeEnable": { side: "top", offset: 50 },  // Control signal → top
       },
     },
   },
@@ -175,10 +182,23 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     defaultWidth: 176,  // 11 grid cells
     defaultHeight: 304, // 19 grid cells
     description: "CPU control unit — FSM state and control signals",
-    // CPU with standard left/right layout (can be refined based on testing)
+    // CPU: input ports (opcode/flags) on left, all control signal outputs on top
     portConfig: {
       defaultInputSide: "left",
       defaultOutputSide: "right",
+      ports: {
+        // All CPU outputs are control signals → go to top
+        "out_wrReg": { side: "bottom" },
+        "out_muxAReg": { side: "bottom" },
+        "out_muxDReg": { side: "bottom" },
+        "out_wrPC": { side: "bottom" },
+        "out_muxPC": { side: "bottom" },
+        "out_rdMem": { side: "bottom" },
+        "out_wrMem": { side: "bottom" },
+        "out_muxAMem": { side: "bottom" },
+        "out_wrIR": { side: "bottom" },
+        "out_opULA": { side: "bottom" },
+      },
     },
   },
 ];

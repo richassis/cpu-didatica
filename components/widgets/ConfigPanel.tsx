@@ -66,19 +66,34 @@ function BitWidthField({ config, onChange }: PanelProps) {
 
 // ── Per-type panels ────────────────────────────────────────────────────────
 
-export function LabelWidgetConfigPanel(props: PanelProps) {
-  return <NameField {...props} />;
-}
-
-export function ValueDisplayWidgetConfigPanel(props: PanelProps) {
-  return <NameField {...props} />;
-}
-
 export function GprComponentConfigPanel(props: PanelProps) {
   return <NameField {...props} />;
 }
 
 export function MemoryComponentConfigPanel(props: PanelProps) {
+  return (
+    <div className="flex flex-col gap-3">
+      <NameField {...props} />
+      <BitWidthField {...props} />
+      <div className="flex flex-col gap-1">
+        <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider">
+          Word Count
+        </label>
+        <select
+          value={props.config.wordCount ?? 256}
+          onChange={(e) => props.onChange({ wordCount: Number(e.target.value) })}
+          className="bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors"
+        >
+          {[64, 128, 256, 512, 1024, 2048, 4096].map((n) => (
+            <option key={n} value={n}>{n} words</option>
+          ))}
+        </select>
+      </div>
+    </div>
+  );
+}
+
+export function InstructionMemoryComponentConfigPanel(props: PanelProps) {
   return (
     <div className="flex flex-col gap-3">
       <NameField {...props} />
@@ -143,14 +158,12 @@ export function ConfigPanelForType({
   ...props
 }: PanelProps & { type: string }) {
   switch (type) {
-    case "LabelWidget":
-      return <LabelWidgetConfigPanel {...props} />;
-    case "ValueDisplayWidget":
-      return <ValueDisplayWidgetConfigPanel {...props} />;
     case "GprComponent":
       return <GprComponentConfigPanel {...props} />;
     case "MemoryComponent":
       return <MemoryComponentConfigPanel {...props} />;
+    case "InstructionMemoryComponent":
+      return <InstructionMemoryComponentConfigPanel {...props} />;
     case "UlaComponent":
       return <UlaComponentConfigPanel {...props} />;
     case "Register":

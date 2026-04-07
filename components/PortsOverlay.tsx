@@ -5,6 +5,7 @@ import { useLayoutStore } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useWireCreationStore } from "@/lib/wireCreationStore";
 import { useDisplayStore } from "@/lib/displayStore";
+import { useModeStore } from "@/lib/modeStore";
 import { getWidgetDefinition } from "@/lib/widgetDefinitions";
 import { findPortPosition, getPortPlacement } from "@/lib/portPositioning";
 import PortIndicator from "./PortIndicator";
@@ -29,6 +30,7 @@ export default function PortsOverlay({ componentId }: Props) {
   const startWireCreation = useWireCreationStore((s) => s.startWireCreation);
   const isCreating = useWireCreationStore((s) => s.isCreating);
   const showWiresAndPorts = useDisplayStore((s) => s.showWiresAndPorts);
+  const isEditMode = useModeStore((s) => s.mode === "edit");
 
   const [ports, setPorts] = useState<PortInfo[]>([]);
 
@@ -59,6 +61,8 @@ export default function PortsOverlay({ componentId }: Props) {
   ) => {
     if (event.button !== 0) return;
     if (isCreating) return;
+    // Block wire creation in simulation mode
+    if (!isEditMode) return;
 
     const sourceComp = components.find((component) => component.id === compId);
     const sourceObj = objects.get(compId);

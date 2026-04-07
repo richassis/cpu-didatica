@@ -9,6 +9,7 @@ import { findPortPosition } from "@/lib/portPositioning";
 import { getWidgetDefinition } from "@/lib/widgetDefinitions";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { pointsToSVGPath, snapToGrid } from "@/lib/wireRouting";
+import { CPU } from "@/lib/simulator";
 
 const GRID_SIZE = 16;
 /** Invisible stroke width for easier hit detection */
@@ -176,13 +177,28 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
     
     for (const { wire, value } of wireRenderData) {
       const prevValue = prevWireValues.current.get(wire.id);
-      if (prevValue !== undefined && prevValue !== value) {
+      
+      // Determine if this wire is a CPU control signal
+      const outputEndpoint = wire.start.direction === "output" ? wire.start : wire.end?.direction === "output" ? wire.end : null;
+      const sourceComponent = outputEndpoint ? components.find(c => c.id === outputEndpoint.componentId) : null;
+      const isCpuControlSignal = sourceComponent?.type === "CpuComponent" && outputEndpoint?.direction === "output";
+      
+      // Trigger animation on:
+      // 1. CPU control signals - ALWAYS animate on every tick/state change (new behavior)
+      // 2. Other component outputs - only animate when values change (original behavior)
+      if (isCpuControlSignal) {
+        // CPU control signals always animate regardless of value changes
+        newAnimating.add(wire.id);
+      } else if (prevValue !== undefined && prevValue !== value) {
+        // Other components only animate on value changes
         newAnimating.add(wire.id);
       }
+      
       prevWireValues.current.set(wire.id, value);
     }
     
     if (newAnimating.size > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setAnimatingWires((prev) => new Set([...prev, ...newAnimating]));
       
       // Animate progress from 0 to 1
@@ -222,7 +238,7 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
       
       requestAnimationFrame(animate);
     }
-  }, [wireRenderData]);
+  }, [wireRenderData, revision, components]); // Added revision and components to dependencies
 
   // Calculate a point along a path at a given progress (0-1)
   const getPointAlongPath = useCallback((path: Array<{ x: number; y: number }>, progress: number) => {
