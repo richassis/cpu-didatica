@@ -2,6 +2,8 @@
 
 // export type { WidgetDefinition } from "@/lib/widgetDefinition";
 
+import type { ComponentPortConfig } from "@/lib/portPositioning";
+
 /** Shared type — imported by both widget files and widgetDefinitions.ts */
 export interface WidgetDefinition {
   /** Unique string key matching ComponentInstance.type */
@@ -18,6 +20,8 @@ export interface WidgetDefinition {
   defaultHeight: number;
   /** Short description shown in the picker */
   description: string;
+  /** Optional port positioning configuration (hardcoded per component type) */
+  portConfig?: ComponentPortConfig;
 }
 
 
@@ -57,6 +61,11 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     defaultWidth: 160,  // 10 grid cells
     defaultHeight: 256, // 16 grid cells
     description: "General Purpose Registers bank",
+    // Baseline configuration (matches current behavior)
+    portConfig: {
+      defaultInputSide: "left",
+      defaultOutputSide: "right",
+    },
   },
   {
     type: "MemoryComponent",
@@ -66,6 +75,14 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     defaultWidth: 160,  // 10 grid cells
     defaultHeight: 192, // 12 grid cells
     description: "Unified memory — addr/data/rdMem/wrMem ports, 256×16b default",
+    // Memory with address bus from top
+    portConfig: {
+      defaultInputSide: "left",
+      defaultOutputSide: "right",
+      ports: {
+        "addr": { side: "top" },
+      },
+    },
   },
   {
     type: "UlaComponent",
@@ -75,6 +92,18 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     defaultWidth: 128,  // 8 grid cells
     defaultHeight: 176, // 11 grid cells
     description: "Arithmetic Logic Unit",
+    // Vertical layout: operands from top, result to bottom, flags on right
+    portConfig: {
+      ports: {
+        "a": { side: "top", offset: 33 },
+        "b": { side: "top", offset: 67 },
+        "operation": { side: "left", offset: 50 },
+        "result": { side: "bottom", offset: 50 },
+        "zero": { side: "right", offset: 25 },
+        "carry": { side: "right", offset: 50 },
+        "negative": { side: "right", offset: 75 },
+      },
+    },
   },
   {
     type: "AdderComponent",
@@ -84,6 +113,11 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     defaultWidth: 128,  // 8 grid cells
     defaultHeight: 176, // 11 grid cells
     description: "Dedicated adder \u2014 always performs A + B",
+    // Adder with inputs from top, output to bottom
+    portConfig: {
+      defaultInputSide: "top",
+      defaultOutputSide: "bottom",
+    },
   },
   {
     type: "MuxComponent",
@@ -93,6 +127,14 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     defaultWidth: 64,   // 4 grid cells
     defaultHeight: 96,  // 6 grid cells
     description: "Selects one of 2\u20133 inputs based on a select signal",
+    // Mux with data inputs on left, output on right, select at bottom
+    portConfig: {
+      defaultInputSide: "left",
+      defaultOutputSide: "right",
+      ports: {
+        "select": { side: "bottom", offset: 50 },
+      },
+    },
   },
   {
     type: "Register",
@@ -102,6 +144,14 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     defaultWidth: 144,  // 9 grid cells
     defaultHeight: 48,  // 3 grid cells
     description: "A single register showing its label and value on hover",
+    // Register with clock signal at bottom
+    portConfig: {
+      defaultInputSide: "left",
+      defaultOutputSide: "right",
+      ports: {
+        "clk": { side: "bottom", offset: 50 },
+      },
+    },
   },
   {
     type: "DecoderComponent",
@@ -111,6 +161,11 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     defaultWidth: 144,  // 9 grid cells
     defaultHeight: 192, // 12 grid cells
     description: "Instruction decoder — shows opcode, fields, and format",
+    // Decoder with standard left/right layout
+    portConfig: {
+      defaultInputSide: "left",
+      defaultOutputSide: "right",
+    },
   },
   {
     type: "CpuComponent",
@@ -120,6 +175,11 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     defaultWidth: 176,  // 11 grid cells
     defaultHeight: 304, // 19 grid cells
     description: "CPU control unit — FSM state and control signals",
+    // CPU with standard left/right layout (can be refined based on testing)
+    portConfig: {
+      defaultInputSide: "left",
+      defaultOutputSide: "right",
+    },
   },
 ];
 

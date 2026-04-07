@@ -6,6 +6,7 @@ import { useDisplayStore, formatNum } from "@/lib/displayStore";
 import { useWireCreationStore } from "@/lib/wireCreationStore";
 import { useEnhancedWireStore, type EnhancedWire, type WireEndpoint } from "@/lib/enhancedWireStore";
 import { findPortPosition } from "@/lib/portPositioning";
+import { getWidgetDefinition } from "@/lib/widgetDefinitions";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { pointsToSVGPath, snapToGrid } from "@/lib/wireRouting";
 
@@ -67,7 +68,11 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
         direction: port.direction as "input" | "output",
       }));
 
-      return findPortPosition(endpointComp, endpoint.portName, endpoint.direction, endpointPorts);
+      // Get widget definition and port config
+      const widgetDef = getWidgetDefinition(endpointComp.type);
+      const portConfig = widgetDef?.portConfig;
+
+      return findPortPosition(endpointComp, endpoint.portName, endpoint.direction, endpointPorts, portConfig);
     };
 
     const resolveWireValue = (wire: EnhancedWire): string => {

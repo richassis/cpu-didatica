@@ -6,6 +6,8 @@ import { useDisplayStore, formatNum } from "@/lib/displayStore";
 import { useWireCreationStore } from "@/lib/wireCreationStore";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { calculateOrthogonalPath, pointsToSVGPath, getPointOnOrthogonalPath } from "@/lib/wireRouting";
+import { getWidgetDefinition } from "@/lib/widgetDefinitions";
+import { findPortPosition } from "@/lib/portPositioning";
 
 interface WireAnimation {
   wireId: string;
@@ -55,27 +57,65 @@ export default function BusOverlay({ visible }: { visible: boolean }) {
         return null;
       }
 
-      // Get the value from the source port
+      // Get simulator objects
       const sourceObj = objects.get(wire.sourceComponentId);
+      const targetObj = objects.get(wire.targetComponentId);
+      if (!sourceObj || !targetObj) {
+        return null;
+      }
+      if (!("getPorts" in sourceObj) || !("getPorts" in targetObj)) {
+        return null;
+      }
+
+      // Get the value from the source port
       let value = "?";
-      if (sourceObj && "getPorts" in sourceObj) {
-        const ports = (sourceObj as { getPorts: () => Record<string, { value: unknown; bitWidth: number | null }> }).getPorts();
-        const port = ports[wire.sourcePortName];
-        if (port) {
-          const raw = port.value;
-          if (typeof raw === "number") {
-            value = formatNum(raw, base, port.bitWidth ?? 16);
-          } else {
-            value = String(raw);
-          }
+      const ports = (sourceObj as { getPorts: () => Record<string, { value: unknown; bitWidth: number | null }> }).getPorts();
+      const port = ports[wire.sourcePortName];
+      if (port) {
+        const raw = port.value;
+        if (typeof raw === "number") {
+          value = formatNum(raw, base, port.bitWidth ?? 16);
+        } else {
+          value = String(raw);
         }
       }
 
-      // Calculate positions (center of components, offset for ports)
-      const sourceX = sourceComp.x + sourceComp.w;
-      const sourceY = sourceComp.y + sourceComp.h / 2;
-      const targetX = targetComp.x;
-      const targetY = targetComp.y + targetComp.h / 2;
+      // Get port lists
+      const sourcePorts = Object.entries((sourceObj as { getPorts: () => Record<string, { direction: string }> }).getPorts()).map(([name, port]) => ({
+        name,
+        direction: port.direction as "input" | "output"
+      }));
+      const targetPorts = Object.entries((targetObj as { getPorts: () => Record<string, { direction: string }> }).getPorts()).map(([name, port]) => ({
+        name,
+        direction: port.direction as "input" | "output"
+      }));
+
+      // Get port configs
+      const sourceWidgetDef = getWidgetDefinition(sourceComp.type);
+      const targetWidgetDef = getWidgetDefinition(targetComp.type);
+
+      // Calculate positions using findPortPosition
+      const sourcePos = findPortPosition(
+        sourceComp,
+        wire.sourcePortName,
+        "output",
+        sourcePorts,
+        sourceWidgetDef?.portConfig
+      );
+      const targetPos = findPortPosition(
+        targetComp,
+        wire.targetPortName,
+        "input",
+        targetPorts,
+        targetWidgetDef?.portConfig
+      );
+
+      if (!sourcePos || !targetPos) {
+        return null;
+      }
+
+      const { x: sourceX, y: sourceY } = sourcePos;
+      const { x: targetX, y: targetY } = targetPos;
 
       return {
         wireId: wire.id,
@@ -134,12 +174,27 @@ export default function BusOverlay({ visible }: { visible: boolean }) {
   if (isCreating && sourceComponentId && sourcePortName && mousePosition) {
     const sourceComp = components.find((c) => c.id === sourceComponentId);
     if (sourceComp) {
-      const sourceX = sourceComp.x + sourceComp.w;
-      const sourceY = sourceComp.y + sourceComp.h / 2;
-      tempWirePreview = calculateOrthogonalPath(
-        { x: sourceX, y: sourceY },
-        mousePosition
-      );
+      const sourceObj = objects.get(sourceComponentId);
+      if (sourceObj && "getPorts" in sourceObj) {
+        const sourcePorts = Object.entries((sourceObj as { getPorts: () => Record<string, { direction: string }> }).getPorts()).map(([name, port]) => ({
+          name,
+          direction: port.direction as "input" | "output"
+        }));
+        const sourceWidgetDef = getWidgetDefinition(sourceComp.type);
+        const sourcePos = findPortPosition(
+          sourceComp,
+          sourcePortName,
+          "output",
+          sourcePorts,
+          sourceWidgetDef?.portConfig
+        );
+        if (sourcePos) {
+          tempWirePreview = calculateOrthogonalPath(
+            sourcePos,
+            mousePosition
+          );
+        }
+      }
     }
   }
 
