@@ -57,7 +57,7 @@ export const ULA_DST_MASK    = ((1 << GPR_ADDR_BITS) - 1) << ULA_DST_SHIFT;   //
  * reserved for future extensions.
  */
 export enum Opcode {
-  LDA  = 0b00000, // Load register from memory address
+  LDA  = 0b00001, // Load register from memory address
   LDAI = 0b00010, // Load register with immediate value
   STA  = 0b00011, // Store register to memory address
   ADD  = 0b00100, // GPR[dst] = GPR[dst] + mem[addr]

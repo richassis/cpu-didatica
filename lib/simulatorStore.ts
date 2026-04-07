@@ -75,7 +75,7 @@ interface SimulatorState {
   /** Toggle or set the paused state of a CPU instance. */
   pauseCpu: (id: string, paused: boolean) => void;
 
-  /** Reset a specific CPU to IDLE state. */
+  /** Reset a specific CPU to RESET state. */
   resetCpu: (id: string) => void;
 
   /**

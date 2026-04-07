@@ -6,10 +6,11 @@
 
 /**
  * FSM states for instruction execution.
- * IDLE is the default state before FETCH, used for demonstration purposes.
+ * RESET is the initial state that clears all control signals.
+ * It is entered on initialization, after HALT, and after invalid instructions.
  */
 export enum CpuState {
-  IDLE = -1,      // Default demonstrative state before FETCH
+  RESET = -1,     // Reset state - clears all control signals, transitions to FETCH
   FETCH = 0,
   DECODE = 1,
   EXECUTE = 2,
@@ -27,7 +28,7 @@ export enum CpuState {
  * Human-readable labels for each CPU state.
  */
 export const CPU_STATE_LABELS: Record<CpuState, string> = {
-  [CpuState.IDLE]: "IDLE",
+  [CpuState.RESET]: "RESET",
   [CpuState.FETCH]: "FETCH",
   [CpuState.DECODE]: "DECODE",
   [CpuState.EXECUTE]: "EXECUTE",
@@ -43,7 +44,7 @@ export const CPU_STATE_LABELS: Record<CpuState, string> = {
 
 /**
  * All available CPU states as an array for UI iteration.
- * Note: IDLE is excluded as it's only for reset/initial state, not tick configuration.
+ * Note: RESET is excluded as it's only for reset/initial state, not tick configuration.
  */
 export const ALL_CPU_STATES: CpuState[] = [
   CpuState.FETCH,

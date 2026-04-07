@@ -1,0 +1,8 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^powershell -Command \"npm run lint 2>&1 \\| Select-Object -First 50\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

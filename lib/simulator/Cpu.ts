@@ -55,6 +55,161 @@ export const OPCODE_SEQUENCES: Readonly<Partial<Record<Opcode, CpuState[]>>> = {
 };
 
 /**
+ * Control signal configuration for each CPU state.
+ * Defines which control signals are active and their values for each state.
+ * 
+ * Signal values:
+ * - wrReg: 0=no write, 1=write to GPR
+ * - muxAReg: 0=use GPR address from IR, 1=other source
+ * - muxDReg: 0=immediate operand, 1=memory data, 2=ULA result
+ * - wrPC: 0=no write, 1=write to PC
+ * - muxPC: 0=PC+1 (adder), 1=operand (jump target)
+ * - rdMem: 0=no read, 1=read from memory
+ * - wrMem: 0=no write, 1=write to memory
+ * - muxAMem: 0=operand as address, 1=PC as address
+ * - wrIR: 0=no write, 1=write to IR
+ * - opULA: ULA operation code (see UlaOperation enum)
+ */
+export interface ControlSignals {
+  wrReg?: number;
+  muxAReg?: number;
+  muxDReg?: number;
+  wrPC?: number;
+  muxPC?: number;
+  rdMem?: number;
+  wrMem?: number;
+  muxAMem?: number;
+  wrIR?: number;
+  opULA?: number;
+}
+
+/**
+ * Default control signal values (inactive/reset state).
+ * These values define the RESET state configuration.
+ * Note: Mux signals have non-zero defaults to select appropriate data paths.
+ */
+export const DEFAULT_CONTROL_SIGNALS: Readonly<ControlSignals> = {
+  wrReg: 0,
+  muxAReg: 1,              // Default mux selection
+  muxDReg: 2,              // Default mux selection
+  wrPC: 0,
+  muxPC: 1,                // Default mux selection
+  rdMem: 0,
+  wrMem: 0,
+  muxAMem: 1,              // Default mux selection
+  wrIR: 0,
+  opULA: UlaOperation.ADD, // Default ULA operation
+};
+
+/**
+ * Control signal configurations for each CPU state.
+ * Only non-zero signals need to be specified; undefined signals default to 0.
+ * 
+ * Complete CPU State Machine Control Signal Map:
+ * ┌──────────────┬─────┬─────┬─────┬─────┬─────┬─────┬─────┬───────┬─────┬─────┐
+ * │ State        │wrReg│muxAR│muxDR│wrPC │muxPC│rdMem│wrMem│muxAMem│wrIR │opULA│
+ * ├──────────────┼─────┼─────┼─────┼─────┼─────┼─────┼─────┼───────┼─────┼─────┤
+ * │ RESET        │  0  │  1  │  2  │  0  │  1  │  0  │  0  │   1   │  0  │ ADD │
+ * │ FETCH        │  -  │  1  │  2  │  1  │  1  │  1  │  0  │   -   │  1  │  -  │
+ * │ DECODE       │  -  │  -  │  -  │  0  │  -  │  -  │  -  │   -   │  0  │  -  │
+ * │ READMEM      │  -  │  0  │  1  │  -  │  -  │  1  │  -  │   0   │  -  │  -  │
+ * │ WRITEREG1    │  1  │  -  │  -  │  -  │  -  │  0  │  -  │   -   │  -  │  -  │
+ * │ WRITEREG2    │  1  │  0  │  0  │  -  │  -  │  -  │  -  │   -   │  -  │  -  │
+ * │ READREG1     │  -  │  -  │  -  │  -  │  -  │  -  │  -  │   0   │  -  │  -  │
+ * │ WRITEMEM     │  -  │  -  │  -  │  -  │  -  │  -  │  1  │   -   │  -  │  -  │
+ * │ READREG2     │  -  │  -  │  -  │  -  │  -  │  -  │  -  │   -   │  -  │  -  │
+ * │ EXECUTE      │  -  │  -  │  -  │  -  │  -  │  -  │  -  │   -   │  -  │ dyn │
+ * │ WRITEREG3    │  1  │  -  │  -  │  -  │  -  │  -  │  -  │   -   │  -  │ ADD │
+ * │ WRITEPC      │  -  │  -  │  -  │cond │cond │  -  │  -  │   -   │  -  │  -  │
+ * └──────────────┴─────┴─────┴─────┴─────┴─────┴─────┴─────┴───────┴─────┴─────┘
+ * Legend: - = not set (defaults to 0), dyn = dynamic (opcode-dependent), 
+ *         cond = conditional (flag-dependent), ADD = UlaOperation.ADD
+ * 
+ * Special cases:
+ * - RESET: Uses DEFAULT_CONTROL_SIGNALS for inactive state
+ *          Mux signals are set to their default positions, not zero
+ * - FETCH: Handled by doFetch(), reads instruction from memory into IR
+ * - DECODE: Handled by doDecode(), determines next state based on opcode
+ * - EXECUTE: opULA value set dynamically based on instruction opcode
+ * - WRITEPC: wrPC and muxPC set conditionally based on opcode and flags
+ */
+export const STATE_CONTROL_SIGNALS: Readonly<Partial<Record<CpuState, ControlSignals>>> = {
+  // RESET state - all signals inactive (cleared)
+  [CpuState.RESET]: DEFAULT_CONTROL_SIGNALS,
+
+  // FETCH state - read instruction from memory[PC] into IR
+  [CpuState.FETCH]: {
+    wrPC: 1,      // Enable PC write (PC will increment)
+    wrIR: 1,      // Enable IR write (latch instruction)
+    wrMem: 0,     // Disable memory write
+    muxPC: 1,     // Select PC as source (for next instruction)
+    muxAReg: 1,   // Select address for register
+    muxDReg: 2,   // Select data for register
+    rdMem: 1,     // Enable memory read (implicit from setting rdMem port)
+  },
+
+  // DECODE state - instruction latched, PC incremented
+  [CpuState.DECODE]: {
+    wrPC: 0,      // Disable PC write
+    wrIR: 0,      // Disable IR write
+  },
+  
+  // READMEM state - read from memory (used by LDA)
+  [CpuState.READMEM]: {
+    rdMem: 1,
+    muxAMem: 0,   // operand as memory address
+    muxAReg: 0,   // select GPR address for later write
+    muxDReg: 1,   // select memory data for later write
+  },
+
+  // WRITEREG1 state - write memory data to GPR (used by LDA)
+  [CpuState.WRITEREG1]: {
+    wrReg: 1,
+    rdMem: 0,
+  },
+
+  // WRITEREG2 state - write immediate operand to GPR (used by LDAI)
+  [CpuState.WRITEREG2]: {
+    wrReg: 1,
+    muxAReg: 0,   // select GPR address
+    muxDReg: 0,   // immediate operand
+  },
+
+  // READREG1 state - read from GPR (used by STA)
+  [CpuState.READREG1]: {
+    muxAMem: 0,   // operand as memory address
+  },
+
+  // WRITEMEM state - write GPR data to memory (used by STA)
+  [CpuState.WRITEMEM]: {
+    wrMem: 1,
+  },
+
+  // READREG2 state - read second source operand (used by ULA ops)
+  [CpuState.READREG2]: {
+    // No signals need to be set - just a wait state for data propagation
+  },
+
+  // EXECUTE state - perform ULA operation
+  // Note: opULA value is set dynamically based on opcode
+  [CpuState.EXECUTE]: {
+    // opULA is set in emitSignals based on the instruction
+  },
+
+  // WRITEREG3 state - write ULA result to destination register
+  [CpuState.WRITEREG3]: {
+    wrReg: 1,
+    opULA: UlaOperation.ADD, // default to ADD for non-ULA ops
+  },
+
+  // WRITEPC state - update PC for jumps
+  // Note: wrPC and muxPC are set conditionally based on opcode and flags
+  [CpuState.WRITEPC]: {
+    // Signals set conditionally in emitSignals
+  },
+};
+
+/**
  * Component registry entry for step-based ticking.
  */
 export interface RegisteredComponent {
@@ -86,8 +241,8 @@ export class CPU implements Clockable, Connectable {
   readonly id: string;
   name: string;
 
-  // FSM state - starts in IDLE
-  private _state: CpuState = CpuState.IDLE;
+  // FSM state - starts in RESET
+  private _state: CpuState = CpuState.RESET;
   private _FSMindex: number = 0;
   private _halted: boolean = false;
   private _paused: boolean = false;
@@ -146,7 +301,7 @@ export class CPU implements Clockable, Connectable {
     this.out_muxAMem = new OutputPort<number>("out_muxAMem", "number", 1, 0);
     this.out_wrIR = new OutputPort<number>("out_wrIR", "number", 1, 0);
     this.out_opULA = new OutputPort<number>("out_opULA", "number", 3, UlaOperation.ADD);
-    this.out_state = new OutputPort<number>("out_state", "number", 4, CpuState.IDLE);
+    this.out_state = new OutputPort<number>("out_state", "number", 4, CpuState.RESET);
     this.out_halted = new OutputPort<boolean>("out_halted", "boolean", 1, false);
 
     // Initialize previous signal values
@@ -288,15 +443,16 @@ export class CPU implements Clockable, Connectable {
     }
   }
 
-  /** Reset the CPU to initial IDLE state. */
+  /** Reset the CPU to initial RESET state. */
   reset(): void {
-    this._state = CpuState.IDLE;
+    this._state = CpuState.RESET;
     this._FSMindex = 0;
     this._halted = false;
     this._totalTicks = 0;
-    this.clearAllSignals();
     this.initPrevSignals();
-    this.out_state.set(CpuState.IDLE);
+    // Apply RESET state control signals
+    this.emitSignals(CpuState.RESET, Opcode.HLT);
+    this.out_state.set(CpuState.RESET);
     this.out_halted.set(false);
   }
 
@@ -312,20 +468,6 @@ export class CPU implements Clockable, Connectable {
     this._prevSignals.set("muxAMem", 1);
     this._prevSignals.set("wrIR", 0);
     this._prevSignals.set("opULA", UlaOperation.ADD);
-  }
-
-  /** Clear all control signals to 0. */
-  private clearAllSignals(): void {
-    this.out_wrReg.set(0);
-    this.out_muxAReg.set(1);
-    this.out_muxDReg.set(2);
-    this.out_wrPC.set(0);
-    this.out_muxPC.set(1);
-    this.out_rdMem.set(0);
-    this.out_wrMem.set(0);
-    this.out_muxAMem.set(1);
-    this.out_wrIR.set(0);
-    this.out_opULA.set(UlaOperation.ADD);
   }
 
   /**
@@ -396,20 +538,20 @@ export class CPU implements Clockable, Connectable {
    * Called by the global clock on each tick.
    *
    * The pipeline is:
-   *   IDLE → FETCH → DECODE → (opcode-specific states driven by _FSMindex) → back to FETCH
+   *   RESET → FETCH → DECODE → (opcode-specific states driven by _FSMindex) → back to FETCH
    *
-   * IDLE is the initial demonstrative state. On first tick, transitions to FETCH.
+   * RESET is the initial state that clears all control signals. On first tick, transitions to FETCH.
    * FETCH and DECODE are two fixed ticks.
    * After DECODE the opcode is known; subsequent ticks walk _FSMindex through
    * the per-opcode step array until it is exhausted, then return to FETCH.
-   * If no opcode (or NOP-equivalent), returns to FETCH and loops.
+   * After HALT or invalid instructions, CPU returns to RESET.
    */
   onTick(): void {
     if (this._halted || this._paused) return;
 
     switch (this._state) {
-      case CpuState.IDLE:
-        this.doIdle();
+      case CpuState.RESET:
+        this.doReset();
         break;
 
       case CpuState.FETCH:
@@ -431,19 +573,18 @@ export class CPU implements Clockable, Connectable {
 
   // ── Fixed phases ─────────────────────────────────────────────
 
-  /** IDLE state - initial demonstrative state. Transitions to FETCH on tick. */
-  private doIdle(): void {
-    // Clear all signals in IDLE state
-    this.clearAllSignals();
+  /** RESET state - clears all control signals. Transitions to FETCH on tick. */
+  private doReset(): void {
+    // Emit RESET state signals (clears all signals)
+    this.emitSignals(CpuState.RESET, this.getActiveOpcode());
     // Transition to FETCH on next tick
     this._state = CpuState.FETCH;
   }
 
   /** Tick 1 – read instruction from memory[PC] into IR. */
   private doFetch(): void {
-    this.setSignalIfChanged(this.out_wrPC, "wrPC", 1);
-    this.setSignalIfChanged(this.out_wrIR, "wrIR", 1);
-    this.setSignalIfChanged(this.out_rdMem, "rdMem", 1);
+    // Emit FETCH state signals
+    this.emitSignals(CpuState.FETCH, this.getActiveOpcode());
     this._state = CpuState.DECODE;
   }
 
@@ -453,24 +594,15 @@ export class CPU implements Clockable, Connectable {
    * Then decide which first execution state to enter.
    */
   private doDecode(): void {
-    this.setSignalIfChanged(this.out_wrPC, "wrPC", 0);
-    this.setSignalIfChanged(this.out_wrIR, "wrIR", 0);
-    this.setSignalIfChanged(this.out_rdMem, "rdMem", 0);
-
+    // Emit DECODE state signals
     const opcode = this.getActiveOpcode();
-
-    // Only HALT if HLT opcode is explicitly sent
-    if (opcode === Opcode.HLT) {
-      this._halted = true;
-      this._state = CpuState.FETCH;
-      return;
-    }
+    this.emitSignals(CpuState.DECODE, opcode);
 
     const sequence = OPCODE_SEQUENCES[opcode];
-
-    if (!sequence || sequence.length === 0) {
-      // Unknown or no-op opcode → return to FETCH (no halt)
-      this._state = CpuState.FETCH;
+    
+    if (opcode === Opcode.HLT || !sequence || sequence.length === 0) {
+      this._halted = true;
+      this._state = CpuState.RESET;
       return;
     }
 
@@ -509,61 +641,57 @@ export class CPU implements Clockable, Connectable {
   /**
    * Given the current CpuState and the active opcode, drive the appropriate
    * control signals for this clock tick.
+   * 
+   * Uses STATE_CONTROL_SIGNALS configuration for most states, with special
+   * handling for EXECUTE (opcode-dependent ULA operation) and WRITEPC (conditional jumps).
    */
   private emitSignals(state: CpuState, opcode: Opcode): void {
+    // Get base configuration for this state
+    const config = STATE_CONTROL_SIGNALS[state];
+    
+    if (!config) {
+      // No configuration for this state - no signals to emit
+      return;
+    }
+
+    // Apply all configured signals
+    if (config.wrReg !== undefined) {
+      this.setSignalIfChanged(this.out_wrReg, "wrReg", config.wrReg);
+    }
+    if (config.muxAReg !== undefined) {
+      this.setSignalIfChanged(this.out_muxAReg, "muxAReg", config.muxAReg);
+    }
+    if (config.muxDReg !== undefined) {
+      this.setSignalIfChanged(this.out_muxDReg, "muxDReg", config.muxDReg);
+    }
+    if (config.wrPC !== undefined) {
+      this.setSignalIfChanged(this.out_wrPC, "wrPC", config.wrPC);
+    }
+    if (config.muxPC !== undefined) {
+      this.setSignalIfChanged(this.out_muxPC, "muxPC", config.muxPC);
+    }
+    if (config.rdMem !== undefined) {
+      this.setSignalIfChanged(this.out_rdMem, "rdMem", config.rdMem);
+    }
+    if (config.wrMem !== undefined) {
+      this.setSignalIfChanged(this.out_wrMem, "wrMem", config.wrMem);
+    }
+    if (config.muxAMem !== undefined) {
+      this.setSignalIfChanged(this.out_muxAMem, "muxAMem", config.muxAMem);
+    }
+    if (config.wrIR !== undefined) {
+      this.setSignalIfChanged(this.out_wrIR, "wrIR", config.wrIR);
+    }
+
+    // Special handling for state-specific logic
     switch (state) {
-
-      // ── LDA: mem[operand] → GPR ─────────────────────────────
-      case CpuState.READMEM:
-        this.setSignalIfChanged(this.out_rdMem, "rdMem", 1);
-        this.setSignalIfChanged(this.out_muxAMem, "muxAMem", 0); // operand as memory address
-        this.setSignalIfChanged(this.out_muxAReg, "muxAReg", 0); // select GPR address for later write
-        this.setSignalIfChanged(this.out_muxDReg, "muxDReg", 1); // select memory data for later write
-        break;
-
-      case CpuState.WRITEREG1:
-        // Used by LDA: write memory data into GPR
-        this.setSignalIfChanged(this.out_wrReg, "wrReg", 1);
-        this.setSignalIfChanged(this.out_rdMem, "rdMem", 0);
-        break;
-
-      // ── LDAI: immediate → GPR ───────────────────────────────
-      case CpuState.WRITEREG2:
-        // Used by LDAI: write immediate operand into GPR
-        this.setSignalIfChanged(this.out_wrReg, "wrReg", 1);
-        this.setSignalIfChanged(this.out_muxAReg, "muxAReg", 0); // select GPR address for later write
-        this.setSignalIfChanged(this.out_muxDReg, "muxDReg", 0); // immediate operand
-        break;
-
-      // ── STA: GPR → mem[operand] ─────────────────────────────
-      case CpuState.READREG1:
-        // Used by STA: assert GPR value on bus (muxAReg selects GPR address)
-        this.setSignalIfChanged(this.out_muxAMem, "muxAMem", 0);
-        break;
-
-      case CpuState.WRITEMEM:
-        // Used by STA: write GPR data to memory[operand]
-        this.setSignalIfChanged(this.out_wrMem, "wrMem", 1);
-        break;
-
-      // ── ULA ops: read operands, execute, write result ────────
-      case CpuState.READREG2:
-        // Read second source operand into ULA input B
-        break;
-
       case CpuState.EXECUTE:
-        // Perform the ULA operation
+        // EXECUTE: set ULA operation based on opcode
         this.setSignalIfChanged(this.out_opULA, "opULA", this.opcodeToUlaOp(opcode));
         break;
 
-      case CpuState.WRITEREG3:
-        // Write ULA result into destination register
-        this.setSignalIfChanged(this.out_wrReg, "wrReg", 1);
-        this.setSignalIfChanged(this.out_opULA, "opULA", UlaOperation.ADD); // default to ADD for non-ULA ops
-        break;
-
-      // ── Jumps ────────────────────────────────────────────────
       case CpuState.WRITEPC: {
+        // WRITEPC: conditionally update PC based on opcode and flags
         const taken =
           opcode === Opcode.JMP ||
           (opcode === Opcode.JZ && this.in_flagZero.get()) ||
@@ -578,6 +706,10 @@ export class CPU implements Clockable, Connectable {
       }
 
       default:
+        // For other states, apply opULA if configured
+        if (config.opULA !== undefined) {
+          this.setSignalIfChanged(this.out_opULA, "opULA", config.opULA);
+        }
         break;
     }
   }
