@@ -14,9 +14,9 @@ const GRID_SIZE = 16;
 /** Invisible stroke width for easier hit detection */
 const HIT_AREA_WIDTH = 16;
 /** Duration of the CPU control signal animation in ms */
-const CPU_ANIMATION_DURATION = 1500;
+const CPU_ANIMATION_DURATION = 8000;
 /** Duration of the component data animation in ms */
-const COMPONENT_ANIMATION_DURATION = 2000;
+const COMPONENT_ANIMATION_DURATION = 6000;
 /** Total animation duration */
 const TOTAL_ANIMATION_DURATION = CPU_ANIMATION_DURATION + COMPONENT_ANIMATION_DURATION;
 
@@ -35,6 +35,8 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
   const revision = useSimulatorStore((s) => s.revision);
   const getPrimaryCpu = useSimulatorStore((s) => s.getPrimaryCpu);
   const base = useDisplayStore((s) => s.numericBase);
+  const showCpuSignalWires = useDisplayStore((s) => s.showCpuSignalWires);
+  const showDataSignalWires = useDisplayStore((s) => s.showDataSignalWires);
   
   // Enhanced wire state
   const wires = useEnhancedWireStore((s) => s.wires);
@@ -229,47 +231,50 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
     
     if (allWires.size === 0) return;
     
-    // Start animation
-    setAnimatingWires(allWires);
-    
-    const startTime = Date.now();
-    
-    const animate = () => {
-      const elapsed = Date.now() - startTime;
+    // Use setTimeout to avoid setState in effect
+    setTimeout(() => {
+      // Start animation
+      setAnimatingWires(allWires);
       
-      if (elapsed >= TOTAL_ANIMATION_DURATION) {
-        // Animation complete - clear everything
-        setAnimatingWires(new Set());
-        setAnimationProgress(new Map());
-        animationRef.current = null;
-        return;
-      }
+      const startTime = Date.now();
       
-      // Update progress with sequencing
-      const newProgress = new Map<string, number>();
-      
-      // CPU control signals: animate from 0 to CPU_ANIMATION_DURATION
-      for (const id of cpuControlWiresRef.current) {
-        const progress = Math.min(1, elapsed / CPU_ANIMATION_DURATION);
-        newProgress.set(id, progress);
-      }
-      
-      // Component wires: start after CPU signals complete
-      for (const id of componentWiresRef.current) {
-        if (elapsed > CPU_ANIMATION_DURATION) {
-          const componentElapsed = elapsed - CPU_ANIMATION_DURATION;
-          const progress = Math.min(1, componentElapsed / COMPONENT_ANIMATION_DURATION);
-          newProgress.set(id, progress);
-        } else {
-          newProgress.set(id, 0); // Not started yet - dot stays at start
+      const animate = () => {
+        const elapsed = Date.now() - startTime;
+        
+        if (elapsed >= TOTAL_ANIMATION_DURATION) {
+          // Animation complete - clear everything
+          setAnimatingWires(new Set());
+          setAnimationProgress(new Map());
+          animationRef.current = null;
+          return;
         }
-      }
+        
+        // Update progress with sequencing
+        const newProgress = new Map<string, number>();
+        
+        // CPU control signals: animate from 0 to CPU_ANIMATION_DURATION
+        for (const id of cpuControlWiresRef.current) {
+          const progress = Math.min(1, elapsed / CPU_ANIMATION_DURATION);
+          newProgress.set(id, progress);
+        }
+        
+        // Component wires: start after CPU signals complete
+        for (const id of componentWiresRef.current) {
+          if (elapsed > CPU_ANIMATION_DURATION) {
+            const componentElapsed = elapsed - CPU_ANIMATION_DURATION;
+            const progress = Math.min(1, componentElapsed / COMPONENT_ANIMATION_DURATION);
+            newProgress.set(id, progress);
+          } else {
+            newProgress.set(id, 0); // Not started yet - dot stays at start
+          }
+        }
+        
+        setAnimationProgress(newProgress);
+        animationRef.current = requestAnimationFrame(animate);
+      };
       
-      setAnimationProgress(newProgress);
       animationRef.current = requestAnimationFrame(animate);
-    };
-    
-    animationRef.current = requestAnimationFrame(animate);
+    }, 0);
     
     // Cleanup on unmount or new tick
     return () => {
@@ -418,7 +423,7 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
     >
       <defs>
         {/* Arrowhead marker for wire endpoints - data signals */}
-        <marker
+        {/* <marker
           id="arrowhead"
           markerWidth="10"
           markerHeight="10"
@@ -428,10 +433,10 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
           markerUnits="strokeWidth"
         >
           <polygon points="0 0, 6 3, 0 6" fill="#a855f7" />
-        </marker>
+        </marker> */}
         
         {/* Pulsing arrowhead for animated data wires */}
-        <marker
+        {/* <marker
           id="arrowheadPulse"
           markerWidth="10"
           markerHeight="10"
@@ -442,9 +447,9 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
         >
           <polygon points="0 0, 6 3, 0 6" fill="#fbbf24" />
         </marker>
-        
+         */}
         {/* Arrowhead for control signal wires */}
-        <marker
+        {/* <marker
           id="arrowheadControl"
           markerWidth="10"
           markerHeight="10"
@@ -454,7 +459,7 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
           markerUnits="strokeWidth"
         >
           <polygon points="0 0, 6 3, 0 6" fill="#3b82f6" />
-        </marker>
+        </marker> */}
         
         {/* Pulsing arrowhead for animated control wires */}
         <marker
@@ -469,10 +474,10 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
           <polygon points="0 0, 6 3, 0 6" fill="#60a5fa" />
         </marker>
         
-        {/* Static gradient for normal data wires */}
+        {/* Static gradient for normal data wires - more yellow-ish */}
         <linearGradient id="wireGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#22d3ee" stopOpacity="0.8" />
-          <stop offset="100%" stopColor="#a855f7" stopOpacity="0.8" />
+          <stop offset="0%" stopColor="#fbbf24" stopOpacity="0.8" />
+          <stop offset="100%" stopColor="#f59e0b" stopOpacity="0.8" />
         </linearGradient>
         
         {/* Static gradient for control signal wires */}
@@ -541,12 +546,28 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
       </defs>
 
       {/* Render wires */}
-      {wireRenderData.map(({ wire, path, startPos, hasAttachedEnd, value }) => {
+      {wireRenderData
+        .filter(({ wire }) => {
+          // Filter wires based on visibility settings
+          if (!visible) return false;
+          
+          // Determine if this wire is a CPU control signal
+          const outputEndpoint = wire.start.direction === "output" ? wire.start : wire.end?.direction === "output" ? wire.end : null;
+          const sourceComponent = outputEndpoint ? components.find(c => c.id === outputEndpoint.componentId) : null;
+          const isCpuControlSignal = sourceComponent?.type === "CpuComponent" && outputEndpoint?.direction === "output";
+          
+          // Apply visibility filters
+          if (isCpuControlSignal && !showCpuSignalWires) return false;
+          if (!isCpuControlSignal && !showDataSignalWires) return false;
+          
+          return true;
+        })
+        .map(({ wire, path, hasAttachedEnd, value }) => {
         const isSelected = wire.id === selectedWireId;
         const isAnimating = animatingWires.has(wire.id);
         const pathD = pointsToSVGPath(path);
         
-        // Determine if this wire is a CPU control signal
+        // Determine if this wire is a CPU control signal (reuse from filter)
         const outputEndpoint = wire.start.direction === "output" ? wire.start : wire.end?.direction === "output" ? wire.end : null;
         const sourceComponent = outputEndpoint ? components.find(c => c.id === outputEndpoint.componentId) : null;
         const isCpuControlSignal = sourceComponent?.type === "CpuComponent" && outputEndpoint?.direction === "output";

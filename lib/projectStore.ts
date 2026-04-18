@@ -271,18 +271,29 @@ export const useProjectStore = create<ProjectState>()(
         }));
 
         // If this is a v2+ project with component configurations, restore them
-        if (data.componentConfigs && Array.isArray(data.componentConfigs) && data.version && data.version >= 2) {
+        if (data.version && data.version >= 2) {
           // Delay the restoration to allow components to be created first
           setTimeout(() => {
             const simStore = useSimulatorStore.getState();
             const cpu = simStore.getPrimaryCpu();
             
-            if (cpu && data.componentConfigs) {
-              for (const config of data.componentConfigs) {
-                if (config.tickSteps) {
-                  cpu.setComponentTickSteps(config.id, config.tickSteps);
+            if (cpu) {
+              // First try to restore from component instances (newer format)
+              for (const component of data.components) {
+                if (component.tickSteps) {
+                  cpu.setComponentTickSteps(component.id, component.tickSteps);
                 }
               }
+              
+              // Then try componentConfigs array (fallback for older v2 format)
+              if (data.componentConfigs && Array.isArray(data.componentConfigs)) {
+                for (const config of data.componentConfigs) {
+                  if (config.tickSteps && !data.components.find(c => c.id === config.id)?.tickSteps) {
+                    cpu.setComponentTickSteps(config.id, config.tickSteps);
+                  }
+                }
+              }
+              
               // Force update to reflect changes
               simStore.touch();
             }
@@ -301,7 +312,13 @@ export const useProjectStore = create<ProjectState>()(
         const simStore = useSimulatorStore.getState();
         const cpu = simStore.getPrimaryCpu();
         
-        // Collect component configurations including tick steps
+        // Enhance components with current tick step configurations
+        const enhancedComponents = basicProject.components.map(component => {
+          const tickSteps = cpu?.getComponentTickSteps(component.id);
+          return tickSteps ? { ...component, tickSteps } : component;
+        });
+        
+        // Collect component configurations including tick steps (for backwards compatibility)
         const componentConfigs: ComponentConfig[] = [];
         
         if (cpu) {
@@ -321,6 +338,7 @@ export const useProjectStore = create<ProjectState>()(
         // Return enhanced project data
         return {
           ...basicProject,
+          components: enhancedComponents,
           componentConfigs,
           version: 2,
         };

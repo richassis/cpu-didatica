@@ -32,6 +32,8 @@ export interface ComponentInstance {
   meta?: Record<string, unknown>;
   /** Persisted runtime state — port values, register bank, memory cells. */
   state?: ComponentState;
+  /** CPU states this component should tick on (overrides defaults) */
+  tickSteps?: number[];
 }
 
 export interface Props {
@@ -193,6 +195,16 @@ export const useLayoutStore = create<LayoutState>()(
           .map((c) => [c.id, c.state!] as const);
         if (stateEntries.length > 0) {
           sim.applyObjectStates(new Map(stateEntries));
+        }
+        
+        // Restore tick step configurations
+        const cpu = sim.getPrimaryCpu();
+        if (cpu) {
+          for (const c of state.components) {
+            if (c.tickSteps) {
+              cpu.setComponentTickSteps(c.id, c.tickSteps);
+            }
+          }
         }
       },
     }

@@ -17,6 +17,14 @@ interface DisplayState {
   /** Whether wires and ports are visible */
   showWiresAndPorts: boolean;
   setShowWiresAndPorts: (show: boolean) => void;
+  
+  /** Whether CPU control signal wires are visible */
+  showCpuSignalWires: boolean;
+  setShowCpuSignalWires: (show: boolean) => void;
+  
+  /** Whether data signal wires are visible */
+  showDataSignalWires: boolean;
+  setShowDataSignalWires: (show: boolean) => void;
 }
 
 export const useDisplayStore = create<DisplayState>()(
@@ -27,6 +35,12 @@ export const useDisplayStore = create<DisplayState>()(
       
       showWiresAndPorts: true,
       setShowWiresAndPorts: (show) => set({ showWiresAndPorts: show }),
+      
+      showCpuSignalWires: true,
+      setShowCpuSignalWires: (show) => set({ showCpuSignalWires: show }),
+      
+      showDataSignalWires: true,
+      setShowDataSignalWires: (show) => set({ showDataSignalWires: show }),
     }),
     { name: "simulator-display" }
   )

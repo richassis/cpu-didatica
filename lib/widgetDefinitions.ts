@@ -105,10 +105,10 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
         "a": { side: "left", offset: 33 },        // Data input → left
         "b": { side: "left", offset: 67 },        // Data input → left
         "operation": { side: "top", offset: 50 }, // Control signal → top
-        "result": { side: "right", offset: 25 },  // Data output → right
-        "zero": { side: "right", offset: 50 },    // Status flag → right
-        "carry": { side: "right", offset: 75 },   // Status flag → right
-        "negative": { side: "right", offset: 90 }, // Status flag → right
+        "result": { side: "right", offset: 52 },  // Data output → right
+        "zero": { side: "bottom", offset: 25 },    // Status flag → right
+        "carry": { side: "bottom", offset: 50 },   // Status flag → right
+        "negative": { side: "bottom", offset: 75 }, // Status flag → right
       },
     },
   },
