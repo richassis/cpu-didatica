@@ -19,7 +19,10 @@ Useful targeted checks while editing:
 
 ## High-level architecture
 
-This is a Next.js App Router app with two main pages:
+This is a Vite + React SPA with two routed pages:
+
+- `src/main.tsx`: Vite bootstrap entry
+- `src/App.tsx`: app shell with route mapping
 
 - `app/page.tsx`: main simulator workspace
 - `app/config/page.tsx`: lightweight configuration/help screen

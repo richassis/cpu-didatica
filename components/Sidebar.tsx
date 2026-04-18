@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { Link, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
 
 const NAV_ITEMS = [
@@ -10,7 +9,7 @@ const NAV_ITEMS = [
 ];
 
 export default function Sidebar() {
-  const pathname = usePathname();
+  const { pathname } = useLocation();
 
   // On desktop, open by default; on mobile, closed by default
   const [isOpen, setIsOpen] = useState(false);
@@ -89,7 +88,7 @@ export default function Sidebar() {
             return (
               <Link
                 key={item.href}
-                href={item.href}
+                to={item.href}
                 onClick={() => isMobile && setIsOpen(false)}
                 className={`
                   flex items-center gap-3 px-3 py-2 rounded-lg text-base whitespace-nowrap transition-colors

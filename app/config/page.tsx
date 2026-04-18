@@ -1,5 +1,3 @@
-"use client";
-
 export default function ConfigPage() {
   return (
     <div className="flex-1 overflow-auto p-8 bg-gray-950 text-gray-100">
@@ -9,8 +7,8 @@ export default function ConfigPage() {
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
           <h2 className="text-lg font-semibold mb-2">Canvas</h2>
           <p className="text-sm text-gray-400">
-            The simulator canvas is infinite (10 000 × 10 000 virtual pixels).
-            Use Ctrl + Scroll to zoom and scroll to pan.
+            The simulator canvas is infinite (10,000 x 10,000 virtual pixels).
+            Use Ctrl + Scroll to zoom and scroll to pan.
           </p>
         </div>
       </div>

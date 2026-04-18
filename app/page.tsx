@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useState } from "react";
 import SimulatorCanvas from "@/components/SimulatorCanvas";
 import TopBar from "@/components/TopBar";
@@ -15,9 +13,7 @@ export default function Home() {
   const loadDefaultProject = useProjectStore((s) => s.loadDefaultProject);
   
   const layoutComponents = useLayoutStore((s) => s.components);
-  const layoutWires = useLayoutStore((s) => s.wires);
   const setComponents = useLayoutStore.setState;
-  const clearComponents = useLayoutStore((s) => s.clearComponents);
   
   const restoreWires = useSimulatorStore((s) => s.restoreWires);
   const clearObjects = useSimulatorStore((s) => s.clearObjects);

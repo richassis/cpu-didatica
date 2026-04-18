@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useState } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
@@ -58,12 +57,12 @@ export default function UlaComponent({ component, zoom }: Props) {
         onDoubleClick={(e) => { e.stopPropagation(); setConfigOpen(true); }}
       >
         {/* ── SVG fills full widget bounds ── */}
-        <Image
+        <img
           src="/images/ula_white.svg"
           alt="ULA"
           width={width}
           height={height}
-          priority
+          loading="eager"
           draggable={false}
           style={{
             filter: isDragging
