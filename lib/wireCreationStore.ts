@@ -1,43 +1,9 @@
 import { create } from "zustand";
-import { snapToGrid } from "@/lib/wireRouting";
+import { enforceOrthogonal, snapToGrid, type Point } from "@/lib/wireRouting";
 
 const GRID_SIZE = 16;
 
 type Direction = "input" | "output";
-
-type Point = { x: number; y: number };
-
-/**
- * Calculates a simple orthogonal path with at most one corner (90-degree turn).
- * The path goes: start -> corner -> end
- * The corner direction is determined by comparing distances.
- */
-function calculateSingleCornerPath(start: Point, end: Point): Point[] {
-  // If start and end are the same, return just the point
-  if (start.x === end.x && start.y === end.y) {
-    return [start];
-  }
-
-  // If already aligned horizontally or vertically, return direct line
-  if (start.x === end.x || start.y === end.y) {
-    return [start, end];
-  }
-
-  // Determine corner position based on which axis has larger delta
-  const dx = Math.abs(end.x - start.x);
-  const dy = Math.abs(end.y - start.y);
-
-  // Go horizontal first, then vertical (or vice versa based on distances)
-  if (dx >= dy) {
-    // Horizontal first, then vertical
-    const corner = { x: end.x, y: start.y };
-    return [start, corner, end];
-  } else {
-    // Vertical first, then horizontal
-    const corner = { x: start.x, y: end.y };
-    return [start, corner, end];
-  }
-}
 
 interface WireCreationState {
   isCreating: boolean;
@@ -47,7 +13,9 @@ interface WireCreationState {
   mousePosition: { x: number; y: number } | null;
   /** Start position of the wire (snapped to grid) */
   startPosition: Point | null;
-  /** Current path points: [start, corner?, end] */
+  /** Committed waypoints (does not include start point) */
+  waypoints: Point[];
+  /** Current preview path points: [start, waypoints..., previewEnd] */
   pathPoints: Point[];
 
   startWireCreation: (
@@ -56,24 +24,29 @@ interface WireCreationState {
     direction: Direction,
     startPosition: Point,
   ) => void;
+  addWaypoint: (x: number, y: number) => void;
   updateMousePosition: (x: number, y: number) => void;
   completeWireCreation: (
     targetComponentId: string,
     targetPortName: string,
     targetDirection: Direction,
   ) => boolean;
-  finishWireCreation: () => void;
   cancelWireCreation: () => void;
 }
 
-export const useWireCreationStore = create<WireCreationState>((set, get) => ({
+const resetCreationState = {
   isCreating: false,
   sourceComponentId: null,
   sourcePortName: null,
   sourceDirection: null,
   mousePosition: null,
   startPosition: null,
+  waypoints: [],
   pathPoints: [],
+};
+
+export const useWireCreationStore = create<WireCreationState>((set, get) => ({
+  ...resetCreationState,
 
   startWireCreation: (componentId, portName, direction, startPos) => {
     const snappedStart = {
@@ -88,7 +61,30 @@ export const useWireCreationStore = create<WireCreationState>((set, get) => ({
       sourceDirection: direction,
       mousePosition: snappedStart,
       startPosition: snappedStart,
+      waypoints: [],
       pathPoints: [snappedStart],
+    });
+  },
+
+  addWaypoint: (x, y) => {
+    const state = get();
+    if (!state.isCreating || !state.startPosition) return;
+
+    const snappedPoint = {
+      x: snapToGrid(x, GRID_SIZE),
+      y: snapToGrid(y, GRID_SIZE),
+    };
+
+    const committedPath = enforceOrthogonal([
+      state.startPosition,
+      ...state.waypoints,
+      snappedPoint,
+    ]);
+
+    set({
+      mousePosition: snappedPoint,
+      waypoints: committedPath.slice(1),
+      pathPoints: committedPath,
     });
   },
 
@@ -101,8 +97,11 @@ export const useWireCreationStore = create<WireCreationState>((set, get) => ({
       y: snapToGrid(y, GRID_SIZE),
     };
 
-    // Calculate path with single corner from start to current mouse position
-    const pathPoints = calculateSingleCornerPath(state.startPosition, snappedMouse);
+    const pathPoints = enforceOrthogonal([
+      state.startPosition,
+      ...state.waypoints,
+      snappedMouse,
+    ]);
 
     set({
       mousePosition: snappedMouse,
@@ -132,40 +131,12 @@ export const useWireCreationStore = create<WireCreationState>((set, get) => ({
       return false;
     }
 
-    set({
-      isCreating: false,
-      sourceComponentId: null,
-      sourcePortName: null,
-      sourceDirection: null,
-      mousePosition: null,
-      startPosition: null,
-      pathPoints: [],
-    });
+    set(resetCreationState);
 
     return true;
   },
 
-  finishWireCreation: () => {
-    set({
-      isCreating: false,
-      sourceComponentId: null,
-      sourcePortName: null,
-      sourceDirection: null,
-      mousePosition: null,
-      startPosition: null,
-      pathPoints: [],
-    });
-  },
-
   cancelWireCreation: () => {
-    set({
-      isCreating: false,
-      sourceComponentId: null,
-      sourcePortName: null,
-      sourceDirection: null,
-      mousePosition: null,
-      startPosition: null,
-      pathPoints: [],
-    });
+    set(resetCreationState);
   },
 }));

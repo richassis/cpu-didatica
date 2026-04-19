@@ -4,368 +4,392 @@ import { useLayoutStore, CANVAS_WIDTH, CANVAS_HEIGHT } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayStore, formatNum } from "@/lib/displayStore";
 import { useWireCreationStore } from "@/lib/wireCreationStore";
-import { useEnhancedWireStore, type EnhancedWire, type WireEndpoint } from "@/lib/enhancedWireStore";
-import { findPortPosition } from "@/lib/portPositioning";
+import { useProjectStore } from "@/lib/projectStore";
+import { calculatePortPosition, getPortPlacement, type PortSide } from "@/lib/portPositioning";
 import { getWidgetDefinition } from "@/lib/widgetDefinitions";
+import {
+  enforceOrthogonal,
+  escapePort,
+  pointsToSVGPath,
+  simplifyOrthogonalPath,
+  snapToGrid,
+  type Point,
+} from "@/lib/wireRouting";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { pointsToSVGPath, snapToGrid } from "@/lib/wireRouting";
+import type { WireDescriptor } from "@/lib/simulator";
 
 const GRID_SIZE = 16;
-/** Invisible stroke width for easier hit detection */
-const HIT_AREA_WIDTH = 16;
+const HIT_AREA_WIDTH = 14;
+
+type SegmentOrientation = "horizontal" | "vertical";
 
 interface WireRenderData {
-  wire: EnhancedWire;
-  path: Array<{ x: number; y: number }>;
-  startPos: { x: number; y: number };
-  hasAttachedEnd: boolean;
+  wire: WireDescriptor;
+  path: Point[];
+  sourceEscape: Point;
+  targetEscape: Point;
   value: string;
+  isCpuControlSignal: boolean;
 }
 
-export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
+interface DragNodeState {
+  wireId: string;
+  nodeIndex: number;
+}
+
+interface DragSegmentState {
+  wireId: string;
+  segmentIndex: number;
+  orientation: SegmentOrientation;
+  startAxisValue: number;
+  initialNodes: Point[];
+}
+
+function normalizeNodes(nodes: Array<{ x: number; y: number }>): Point[] {
+  const snapped = nodes.map((node) => ({
+    x: snapToGrid(node.x, GRID_SIZE),
+    y: snapToGrid(node.y, GRID_SIZE),
+  }));
+
+  return simplifyOrthogonalPath(enforceOrthogonal(snapped));
+}
+
+export default function EnhancedBusOverlay({
+  visible,
+  previewRejected = false,
+}: {
+  visible: boolean;
+  previewRejected?: boolean;
+}) {
   const components = useLayoutStore((s) => s.components);
   const zoom = useLayoutStore((s) => s.zoom);
   const objects = useSimulatorStore((s) => s.objects);
   const revision = useSimulatorStore((s) => s.revision);
-  const getPrimaryCpu = useSimulatorStore((s) => s.getPrimaryCpu);
   const base = useDisplayStore((s) => s.numericBase);
   const showCpuSignalWires = useDisplayStore((s) => s.showCpuSignalWires);
   const showDataSignalWires = useDisplayStore((s) => s.showDataSignalWires);
   const cpuAnimationDuration = useDisplayStore((s) => s.cpuAnimationDuration);
   const componentAnimationDuration = useDisplayStore((s) => s.componentAnimationDuration);
-  
-  // Enhanced wire state
-  const wires = useEnhancedWireStore((s) => s.wires);
-  const selectedWireId = useEnhancedWireStore((s) => s.selectedWireId);
-  const selectedNodeId = useEnhancedWireStore((s) => s.selectedNodeId);
-  const selectWire = useEnhancedWireStore((s) => s.selectWire);
-  const selectNode = useEnhancedWireStore((s) => s.selectNode);
-  const updateWireNode = useEnhancedWireStore((s) => s.updateWireNode);
-  const addWireNode = useEnhancedWireStore((s) => s.addWireNode);
-  const removeEnhancedWire = useEnhancedWireStore((s) => s.removeWire);
-  
-  // Simulator wire removal
+
   const removeSimulatorWire = useSimulatorStore((s) => s.removeWire);
-  const bus = useSimulatorStore((s) => s.bus);
-  
-  // Wire creation state  
+
+  const activeTabId = useProjectStore((s) => s.activeTabId);
+  const projectData = useProjectStore((s) => s.projectData);
+  const updateWireNodes = useProjectStore((s) => s.updateWireNodes);
+  const removeWireFromProject = useProjectStore((s) => s.removeWireFromProject);
+
   const isCreating = useWireCreationStore((s) => s.isCreating);
   const pathPoints = useWireCreationStore((s) => s.pathPoints);
-  
-  const [dragState, setDragState] = useState<{ wireId: string; nodeId: string } | null>(null);
-  
-  // Animation state - triggered on every tick, not just value changes
+
+  const [selectedWireId, setSelectedWireId] = useState<string | null>(null);
+  const [selectedNodeIndex, setSelectedNodeIndex] = useState<number | null>(null);
+  const [dragNodeState, setDragNodeState] = useState<DragNodeState | null>(null);
+  const [dragSegmentState, setDragSegmentState] = useState<DragSegmentState | null>(null);
+
   const [animatingWires, setAnimatingWires] = useState<Set<string>>(new Set());
   const [animationProgress, setAnimationProgress] = useState<Map<string, number>>(new Map());
   const animationRef = useRef<number | null>(null);
-  
-  // Track wire classification for sequencing
-  const cpuControlWiresRef = useRef<Set<string>>(new Set());
-  const componentWiresRef = useRef<Set<string>>(new Set());
+  const wireDataByIdRef = useRef<Map<string, WireRenderData>>(new Map());
+  const lastAnimatedRevisionRef = useRef<number | null>(null);
 
-  // Calculate wire render data
+  const projectWires = useMemo(
+    () => (activeTabId ? projectData[activeTabId]?.wires ?? [] : []),
+    [activeTabId, projectData]
+  );
+
   const wireRenderData = useMemo((): WireRenderData[] => {
-    const resolveEndpointPosition = (endpoint: WireEndpoint): { x: number; y: number } | null => {
-      const endpointComp = components.find((component) => component.id === endpoint.componentId);
-      const endpointObj = objects.get(endpoint.componentId);
-      if (!endpointComp || !endpointObj || !("getPorts" in endpointObj)) return null;
+    const resolveEndpoint = (
+      componentId: string,
+      portName: string,
+      direction: "input" | "output"
+    ): { pos: Point; side: PortSide } | null => {
+      const component = components.find((c) => c.id === componentId);
+      const obj = objects.get(componentId);
+      if (!component || !obj || !("getPorts" in obj)) return null;
 
-      const endpointPortMap = (endpointObj as { getPorts: () => Record<string, { direction: string }> }).getPorts();
-      const endpointPorts = Object.entries(endpointPortMap).map(([name, port]) => ({
+      const portMap = (obj as { getPorts: () => Record<string, { direction: string }> }).getPorts();
+      const allPorts = Object.entries(portMap).map(([name, port]) => ({
         name,
         direction: port.direction as "input" | "output",
       }));
 
-      // Get widget definition and port config
-      const widgetDef = getWidgetDefinition(endpointComp.type);
-      const portConfig = widgetDef?.portConfig;
+      const widgetDef = getWidgetDefinition(component.type);
+      const placement = getPortPlacement(portName, direction, allPorts, widgetDef?.portConfig);
+      const pos = calculatePortPosition(component, placement.side, placement.offset);
 
-      return findPortPosition(endpointComp, endpoint.portName, endpoint.direction, endpointPorts, portConfig);
+      return { pos, side: placement.side };
     };
 
-    const resolveWireValue = (wire: EnhancedWire): string => {
-      const outputEndpoint = wire.start.direction === "output" ? wire.start : wire.end?.direction === "output" ? wire.end : null;
-      if (!outputEndpoint) return "?";
+    const resolveWireValue = (wire: WireDescriptor): string => {
+      const sourceObj = objects.get(wire.sourceComponentId);
+      if (!sourceObj || !("getPorts" in sourceObj)) return "?";
 
-      const outputObj = objects.get(outputEndpoint.componentId);
-      if (!outputObj || !("getPorts" in outputObj)) return "?";
-
-      const ports = (outputObj as { getPorts: () => Record<string, { value: unknown; bitWidth: number | null }> }).getPorts();
-      const port = ports[outputEndpoint.portName];
+      const ports = (sourceObj as { getPorts: () => Record<string, { value: unknown; bitWidth: number | null }> }).getPorts();
+      const port = ports[wire.sourcePortName];
       if (!port) return "?";
 
       const raw = port.value;
       if (typeof raw === "number") {
         return formatNum(raw, base, port.bitWidth ?? 16);
       }
+
       return String(raw);
     };
 
-    /**
-     * Expand path to include orthogonal segments between consecutive points.
-     * For each pair of points, if they're not aligned, add a corner point.
-     */
-    const expandOrthogonalPath = (points: Array<{ x: number; y: number }>): Array<{ x: number; y: number }> => {
-      if (points.length < 2) return points;
+    const data: WireRenderData[] = [];
 
-      const expanded: Array<{ x: number; y: number }> = [points[0]];
-      for (let index = 0; index < points.length - 1; index++) {
-        const current = points[index];
-        const next = points[index + 1];
-        
-        // If not aligned, add a corner
-        if (current.x !== next.x && current.y !== next.y) {
-          // Prefer horizontal-then-vertical routing
-          expanded.push({ x: next.x, y: current.y });
-        }
-        expanded.push(next);
-      }
-      return expanded;
-    };
+    for (const wire of projectWires) {
+      const source = resolveEndpoint(wire.sourceComponentId, wire.sourcePortName, "output");
+      const target = resolveEndpoint(wire.targetComponentId, wire.targetPortName, "input");
+      if (!source || !target) continue;
 
-    const results: WireRenderData[] = [];
+      const sourceEscape = escapePort(source.pos, source.side)[1] ?? source.pos;
+      const targetEscape = escapePort(target.pos, target.side)[1] ?? target.pos;
+      const nodes = normalizeNodes(wire.nodes ?? []);
 
-    for (const wire of wires) {
-      const isAttached = Boolean(wire.end);
+      const rawPath = [source.pos, sourceEscape, ...nodes, targetEscape, target.pos];
+      const path = simplifyOrthogonalPath(enforceOrthogonal(rawPath));
 
-      const outputEndpoint = wire.start.direction === "output"
-        ? wire.start
-        : wire.end?.direction === "output"
-          ? wire.end
-          : null;
+      const sourceComponent = components.find((c) => c.id === wire.sourceComponentId);
+      const isCpuControlSignal = sourceComponent?.type === "CpuComponent";
 
-      const inputEndpoint = wire.start.direction === "input"
-        ? wire.start
-        : wire.end?.direction === "input"
-          ? wire.end
-          : null;
-
-      const shouldRenderOutputToInput = isAttached && Boolean(outputEndpoint && inputEndpoint);
-
-      const startEndpoint = shouldRenderOutputToInput ? outputEndpoint! : wire.start;
-      const endEndpoint = shouldRenderOutputToInput ? inputEndpoint! : wire.end;
-
-      const startPos = resolveEndpointPosition(startEndpoint);
-      if (!startPos) continue;
-
-      const endPos = endEndpoint ? resolveEndpointPosition(endEndpoint) : wire.floatingEnd;
-      if (!endPos) continue;
-
-      const orderedNodes = shouldRenderOutputToInput && wire.start.direction === "input"
-        ? [...wire.nodes].reverse()
-        : wire.nodes;
-
-      const basePath = [
-        startPos,
-        ...orderedNodes.map((node) => ({ x: node.x, y: node.y })),
-        endPos,
-      ];
-
-      const expandedPath = expandOrthogonalPath(basePath);
-
-      results.push({
+      data.push({
         wire,
-        path: expandedPath,
-        startPos,
-        hasAttachedEnd: Boolean(wire.end),
+        path,
+        sourceEscape,
+        targetEscape,
         value: resolveWireValue(wire),
+        isCpuControlSignal,
       });
     }
 
-    return results;
-  }, [wires, components, objects, base]);
+    return data;
+  }, [projectWires, components, objects, base]);
 
-  // Trigger animations on every tick (revision change)
-  // CPU control signals always animate, component wires only if their source is subscribed to current state
+  const wireDataById = useMemo(() => {
+    const map = new Map<string, WireRenderData>();
+    for (const wireData of wireRenderData) {
+      map.set(wireData.wire.id, wireData);
+    }
+    return map;
+  }, [wireRenderData]);
+
   useEffect(() => {
-    // Cancel any existing animation
+    wireDataByIdRef.current = wireDataById;
+  }, [wireDataById]);
+
+  useEffect(() => {
+    // Only animate once per simulator tick revision.
+    if (lastAnimatedRevisionRef.current === null) {
+      lastAnimatedRevisionRef.current = revision;
+      return;
+    }
+
+    if (lastAnimatedRevisionRef.current === revision) {
+      return;
+    }
+
+    lastAnimatedRevisionRef.current = revision;
+
     if (animationRef.current) {
       cancelAnimationFrame(animationRef.current);
       animationRef.current = null;
     }
-    
-    // Get CPU to check component tick subscriptions
-    const cpu = getPrimaryCpu();
-    // Use the last executed CPU state, not the next scheduled state.
-    // This prevents RESET from being interpreted as FETCH for animation gating.
-    const currentState = cpu?.previousState ?? cpu?.state;
-    const halted = cpu?.halted ?? false;
-    
-    // Classify wires based on source component
-    const cpuControlWires: string[] = [];
-    const componentWires: string[] = [];
-    
-    for (const { wire } of wireRenderData) {
-      if (!wire.end) continue; // Skip incomplete wires
-      
-      // Find source component (the one with output port)
-      const sourceEndpoint = wire.start.direction === "output" ? wire.start : wire.end;
-      const sourceComponent = sourceEndpoint ? components.find(c => c.id === sourceEndpoint.componentId) : null;
-      
-      if (!sourceComponent) continue;
-      
-      if (sourceComponent.type === "CpuComponent") {
-        // CPU control signals always animate
-        cpuControlWires.push(wire.id);
-      } else {
-        // Check if source component is subscribed to tick on the executed CPU state
-        const tickSteps = cpu?.getComponentTickSteps?.(sourceComponent.id);
 
-        if (!halted && tickSteps !== undefined && currentState !== undefined && tickSteps.includes(currentState)) {
-          // Component is registered and should tick on this state
-          componentWires.push(wire.id);
-        }
-        // Otherwise: component is registered but not subscribed to this state - don't animate
-      }
-    }
-    
-    // Store classification for sequencing
-    cpuControlWiresRef.current = new Set(cpuControlWires);
-    componentWiresRef.current = new Set(componentWires);
-    
-    const allWires = new Set([...cpuControlWires, ...componentWires]);
-    
-    if (allWires.size === 0) return;
-    
-    // Use setTimeout to avoid setState in effect
-    setTimeout(() => {
-      // Start animation
-      setAnimatingWires(allWires);
-      
-      const startTime = Date.now();
-      
-      const animate = () => {
-        const elapsed = Date.now() - startTime;
-        
-        if (elapsed >= cpuAnimationDuration + componentAnimationDuration) {
-          // Animation complete - clear everything
-          setAnimatingWires(new Set());
-          setAnimationProgress(new Map());
-          animationRef.current = null;
-          return;
-        }
-        
-        // Update progress with sequencing
-        const newProgress = new Map<string, number>();
-        
-        // CPU control signals: animate from 0 to CPU_ANIMATION_DURATION
-        for (const id of cpuControlWiresRef.current) {
-          const progress = Math.min(1, elapsed / cpuAnimationDuration);
-          newProgress.set(id, progress);
-        }
-        
-        // Component wires: start after CPU signals complete
-        for (const id of componentWiresRef.current) {
-          if (elapsed > cpuAnimationDuration) {
-            const componentElapsed = elapsed - cpuAnimationDuration;
-            const progress = Math.min(1, componentElapsed / componentAnimationDuration);
-            newProgress.set(id, progress);
-          } else {
-            newProgress.set(id, 0); // Not started yet - dot stays at start
-          }
-        }
-        
-        setAnimationProgress(newProgress);
-        animationRef.current = requestAnimationFrame(animate);
-      };
-      
-      animationRef.current = requestAnimationFrame(animate);
+    const currentWireData = Array.from(wireDataByIdRef.current.values());
+
+    const visibleWireIds = currentWireData
+      .filter((wireData) => {
+        if (wireData.isCpuControlSignal && !showCpuSignalWires) return false;
+        if (!wireData.isCpuControlSignal && !showDataSignalWires) return false;
+        return true;
+      })
+      .map((wireData) => wireData.wire.id);
+
+    if (visibleWireIds.length === 0) return;
+
+    const cpuIds = visibleWireIds.filter((id) => wireDataByIdRef.current.get(id)?.isCpuControlSignal);
+    const nonCpuIds = visibleWireIds.filter((id) => !wireDataByIdRef.current.get(id)?.isCpuControlSignal);
+
+    const startTime = Date.now();
+
+    const kickoff = window.setTimeout(() => {
+      setAnimatingWires(new Set(visibleWireIds));
     }, 0);
-    
-    // Cleanup on unmount or new tick
+
+    const animate = () => {
+      const elapsed = Date.now() - startTime;
+      if (elapsed >= cpuAnimationDuration + componentAnimationDuration) {
+        setAnimatingWires(new Set());
+        setAnimationProgress(new Map());
+        animationRef.current = null;
+        return;
+      }
+
+      const progress = new Map<string, number>();
+
+      for (const id of cpuIds) {
+        progress.set(id, Math.min(1, elapsed / cpuAnimationDuration));
+      }
+
+      for (const id of nonCpuIds) {
+        if (elapsed <= cpuAnimationDuration) {
+          progress.set(id, 0);
+          continue;
+        }
+
+        progress.set(id, Math.min(1, (elapsed - cpuAnimationDuration) / componentAnimationDuration));
+      }
+
+      setAnimationProgress(progress);
+      animationRef.current = requestAnimationFrame(animate);
+    };
+
+    animationRef.current = requestAnimationFrame(animate);
+
     return () => {
+      window.clearTimeout(kickoff);
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
         animationRef.current = null;
       }
     };
-  }, [revision, wireRenderData, components, getPrimaryCpu, cpuAnimationDuration, componentAnimationDuration]); // Trigger on tick with proper dependencies
+  }, [
+    revision,
+    showCpuSignalWires,
+    showDataSignalWires,
+    cpuAnimationDuration,
+    componentAnimationDuration,
+  ]);
 
-  // Calculate a point along a path at a given progress (0-1)
-  const getPointAlongPath = useCallback((path: Array<{ x: number; y: number }>, progress: number) => {
-    if (path.length < 2) return path[0] || { x: 0, y: 0 };
-    
-    // Calculate total path length
+  const getPointAlongPath = useCallback((path: Point[], progress: number): Point => {
+    if (path.length < 2) return path[0] ?? { x: 0, y: 0 };
+
+    const segments: Array<{ start: Point; end: Point; length: number }> = [];
     let totalLength = 0;
-    const segments: { start: { x: number; y: number }; end: { x: number; y: number }; length: number }[] = [];
-    
+
     for (let i = 0; i < path.length - 1; i++) {
-      const dx = path[i + 1].x - path[i].x;
-      const dy = path[i + 1].y - path[i].y;
-      const length = Math.sqrt(dx * dx + dy * dy);
-      segments.push({ start: path[i], end: path[i + 1], length });
+      const start = path[i];
+      const end = path[i + 1];
+      const length = Math.hypot(end.x - start.x, end.y - start.y);
+      segments.push({ start, end, length });
       totalLength += length;
     }
-    
-    // Find point at progress
+
     const targetLength = totalLength * progress;
-    let accLength = 0;
-    
-    for (const seg of segments) {
-      if (accLength + seg.length >= targetLength) {
-        const segProgress = (targetLength - accLength) / seg.length;
+    let consumed = 0;
+
+    for (const segment of segments) {
+      if (consumed + segment.length >= targetLength) {
+        const localT = segment.length === 0 ? 0 : (targetLength - consumed) / segment.length;
         return {
-          x: seg.start.x + (seg.end.x - seg.start.x) * segProgress,
-          y: seg.start.y + (seg.end.y - seg.start.y) * segProgress,
+          x: segment.start.x + (segment.end.x - segment.start.x) * localT,
+          y: segment.start.y + (segment.end.y - segment.start.y) * localT,
         };
       }
-      accLength += seg.length;
+      consumed += segment.length;
     }
-    
+
     return path[path.length - 1];
   }, []);
 
-  // Delete selected wire handler
-  const handleDeleteSelectedWire = useCallback(() => {
-    if (!selectedWireId) return;
-    
-    // Find the enhanced wire to get its connection info
-    const enhancedWire = wires.find(w => w.id === selectedWireId);
-    if (enhancedWire && enhancedWire.end) {
-      // Find corresponding simulator wire by matching endpoints
-      const simWires = bus.wires;
-      const matchingWire = simWires.find(w => {
-        const srcMatch = (w.sourceComponentId === enhancedWire.start.componentId && 
-                         w.sourcePortName === enhancedWire.start.portName) ||
-                        (enhancedWire.end && w.sourceComponentId === enhancedWire.end.componentId && 
-                         w.sourcePortName === enhancedWire.end.portName);
-        const tgtMatch = (enhancedWire.end && w.targetComponentId === enhancedWire.end.componentId && 
-                         w.targetPortName === enhancedWire.end.portName) ||
-                        (w.targetComponentId === enhancedWire.start.componentId && 
-                         w.targetPortName === enhancedWire.start.portName);
-        return srcMatch && tgtMatch;
-      });
-      
-      if (matchingWire) {
-        removeSimulatorWire(matchingWire.id);
-      }
-    }
-    
-    // Remove from enhanced wire store
-    removeEnhancedWire(selectedWireId);
-    selectWire(null);
-  }, [selectedWireId, wires, bus, removeSimulatorWire, removeEnhancedWire, selectWire]);
+  const commitWireNodes = useCallback(
+    (wireId: string, nodes: Point[]) => {
+      updateWireNodes(wireId, normalizeNodes(nodes));
+    },
+    [updateWireNodes]
+  );
 
-  // Handle node dragging
   useEffect(() => {
-    if (!dragState) return;
+    if (!dragNodeState && !dragSegmentState) return;
 
     const handleMouseMove = (e: MouseEvent) => {
-      const canvas = document.querySelector('[data-canvas]') as HTMLElement;
+      const canvas = document.querySelector("[data-canvas]") as HTMLElement | null;
       if (!canvas) return;
-      
+
       const rect = canvas.getBoundingClientRect();
-      const scrollLeft = canvas.scrollLeft || 0;
-      const scrollTop = canvas.scrollTop || 0;
+      const canvasX = snapToGrid((e.clientX - rect.left + canvas.scrollLeft) / zoom, GRID_SIZE);
+      const canvasY = snapToGrid((e.clientY - rect.top + canvas.scrollTop) / zoom, GRID_SIZE);
 
-      const canvasX = snapToGrid((e.clientX - rect.left + scrollLeft) / zoom, GRID_SIZE);
-      const canvasY = snapToGrid((e.clientY - rect.top + scrollTop) / zoom, GRID_SIZE);
+      if (dragNodeState) {
+        const wireData = wireDataById.get(dragNodeState.wireId);
+        if (!wireData) return;
 
-      updateWireNode(dragState.wireId, dragState.nodeId, canvasX, canvasY);
+        const nodes = [...(wireData.wire.nodes ?? [])];
+        const current = nodes[dragNodeState.nodeIndex];
+        if (!current) return;
+
+        const prev = dragNodeState.nodeIndex === 0
+          ? wireData.sourceEscape
+          : nodes[dragNodeState.nodeIndex - 1];
+        const next = dragNodeState.nodeIndex === nodes.length - 1
+          ? wireData.targetEscape
+          : nodes[dragNodeState.nodeIndex + 1];
+
+        const fixedX = prev.x === current.x || next.x === current.x;
+        const fixedY = prev.y === current.y || next.y === current.y;
+
+        nodes[dragNodeState.nodeIndex] = {
+          x: fixedX && !fixedY ? current.x : canvasX,
+          y: fixedY && !fixedX ? current.y : canvasY,
+        };
+
+        commitWireNodes(dragNodeState.wireId, nodes);
+      }
+
+      if (dragSegmentState) {
+        const axisValue = dragSegmentState.orientation === "horizontal" ? canvasY : canvasX;
+        const delta = axisValue - dragSegmentState.startAxisValue;
+
+        const nodes = dragSegmentState.initialNodes.map((node) => ({ ...node }));
+
+        if (nodes.length === 0) {
+          const wireData = wireDataById.get(dragSegmentState.wireId);
+          if (!wireData) return;
+
+          const synthetic = [
+            { ...wireData.sourceEscape },
+            { ...wireData.targetEscape },
+          ];
+
+          if (dragSegmentState.orientation === "horizontal") {
+            synthetic[0].y += delta;
+            synthetic[1].y += delta;
+          } else {
+            synthetic[0].x += delta;
+            synthetic[1].x += delta;
+          }
+
+          commitWireNodes(dragSegmentState.wireId, synthetic);
+          return;
+        }
+
+        const leftNodeIndex = dragSegmentState.segmentIndex - 1;
+        const rightNodeIndex = dragSegmentState.segmentIndex;
+
+        const affectedIndices = new Set<number>();
+        if (leftNodeIndex >= 0 && leftNodeIndex < nodes.length) {
+          affectedIndices.add(leftNodeIndex);
+        }
+        if (rightNodeIndex >= 0 && rightNodeIndex < nodes.length) {
+          affectedIndices.add(rightNodeIndex);
+        }
+
+        for (const index of affectedIndices) {
+          if (dragSegmentState.orientation === "horizontal") {
+            nodes[index].y += delta;
+          } else {
+            nodes[index].x += delta;
+          }
+        }
+
+        commitWireNodes(dragSegmentState.wireId, nodes);
+      }
     };
 
     const handleMouseUp = () => {
-      setDragState(null);
+      setDragNodeState(null);
+      setDragSegmentState(null);
     };
 
     window.addEventListener("mousemove", handleMouseMove);
@@ -375,37 +399,50 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [dragState, zoom, updateWireNode]);
+  }, [dragNodeState, dragSegmentState, zoom, wireDataById, commitWireNodes]);
 
-  // Handle wire/node deselection and deletion
+  const handleDeleteSelection = useCallback(() => {
+    if (!selectedWireId) return;
+
+    const wireData = wireDataById.get(selectedWireId);
+    if (!wireData) return;
+
+    if (selectedNodeIndex !== null) {
+      const nodes = [...(wireData.wire.nodes ?? [])];
+      if (selectedNodeIndex >= 0 && selectedNodeIndex < nodes.length) {
+        nodes.splice(selectedNodeIndex, 1);
+        commitWireNodes(selectedWireId, nodes);
+      }
+      setSelectedNodeIndex(null);
+      return;
+    }
+
+    removeSimulatorWire(selectedWireId);
+    removeWireFromProject(selectedWireId);
+    setSelectedWireId(null);
+  }, [
+    selectedWireId,
+    selectedNodeIndex,
+    wireDataById,
+    commitWireNodes,
+    removeSimulatorWire,
+    removeWireFromProject,
+  ]);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        selectWire(null);
-        selectNode(null);
+        setSelectedWireId(null);
+        setSelectedNodeIndex(null);
       } else if ((e.key === "Delete" || e.key === "Backspace") && selectedWireId) {
         e.preventDefault();
-        handleDeleteSelectedWire();
-      }
-    };
-
-    const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      // Deselect if clicking on canvas background or SVG background
-      if (target.tagName === "svg" || target.closest('[data-canvas]') === target) {
-        selectWire(null);
-        selectNode(null);
+        handleDeleteSelection();
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("click", handleClickOutside);
-
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("click", handleClickOutside);
-    };
-  }, [selectWire, selectNode, selectedWireId, handleDeleteSelectedWire]);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedWireId, handleDeleteSelection]);
 
   if (!visible) return null;
 
@@ -418,110 +455,6 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
       }}
     >
       <defs>
-        {/* Arrowhead marker for wire endpoints - data signals */}
-        {/* <marker
-          id="arrowhead"
-          markerWidth="10"
-          markerHeight="10"
-          refX="9"
-          refY="3"
-          orient="auto"
-          markerUnits="strokeWidth"
-        >
-          <polygon points="0 0, 6 3, 0 6" fill="#a855f7" />
-        </marker> */}
-        
-        {/* Pulsing arrowhead for animated data wires */}
-        {/* <marker
-          id="arrowheadPulse"
-          markerWidth="10"
-          markerHeight="10"
-          refX="9"
-          refY="3"
-          orient="auto"
-          markerUnits="strokeWidth"
-        >
-          <polygon points="0 0, 6 3, 0 6" fill="#fbbf24" />
-        </marker>
-         */}
-        {/* Arrowhead for control signal wires */}
-        {/* <marker
-          id="arrowheadControl"
-          markerWidth="10"
-          markerHeight="10"
-          refX="9"
-          refY="3"
-          orient="auto"
-          markerUnits="strokeWidth"
-        >
-          <polygon points="0 0, 6 3, 0 6" fill="#3b82f6" />
-        </marker> */}
-        
-        {/* Pulsing arrowhead for animated control wires */}
-        <marker
-          id="arrowheadControlPulse"
-          markerWidth="10"
-          markerHeight="10"
-          refX="9"
-          refY="3"
-          orient="auto"
-          markerUnits="strokeWidth"
-        >
-          <polygon points="0 0, 6 3, 0 6" fill="#60a5fa" />
-        </marker>
-        
-        {/* Static gradient for normal data wires - more yellow-ish */}
-        <linearGradient id="wireGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#fbbf24" stopOpacity="0.8" />
-          <stop offset="100%" stopColor="#f59e0b" stopOpacity="0.8" />
-        </linearGradient>
-        
-        {/* Static gradient for control signal wires */}
-        <linearGradient id="wireGradientControl" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.8" />
-          <stop offset="100%" stopColor="#60a5fa" stopOpacity="0.8" />
-        </linearGradient>
-        
-        {/* Animated gradient for data pulse */}
-        <linearGradient id="pulseGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#22d3ee" stopOpacity="1">
-            <animate
-              attributeName="stop-color"
-              values="#22d3ee;#fbbf24;#22d3ee"
-              dur="0.6s"
-              repeatCount="1"
-            />
-          </stop>
-          <stop offset="100%" stopColor="#a855f7" stopOpacity="1">
-            <animate
-              attributeName="stop-color"
-              values="#a855f7;#f97316;#a855f7"
-              dur="0.6s"
-              repeatCount="1"
-            />
-          </stop>
-        </linearGradient>
-        
-        {/* Animated gradient for control signal pulse */}
-        <linearGradient id="pulseGradientControl" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#3b82f6" stopOpacity="1">
-            <animate
-              attributeName="stop-color"
-              values="#3b82f6;#60a5fa;#3b82f6"
-              dur="0.6s"
-              repeatCount="1"
-            />
-          </stop>
-          <stop offset="100%" stopColor="#60a5fa" stopOpacity="1">
-            <animate
-              attributeName="stop-color"
-              values="#60a5fa;#93c5fd;#60a5fa"
-              dur="0.6s"
-              repeatCount="1"
-            />
-          </stop>
-        </linearGradient>
-        
         <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
           <feGaussianBlur stdDeviation="3" result="coloredBlur" />
           <feMerge>
@@ -529,8 +462,7 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
             <feMergeNode in="SourceGraphic" />
           </feMerge>
         </filter>
-        
-        {/* Stronger glow for animated wires */}
+
         <filter id="pulseGlow" x="-50%" y="-50%" width="200%" height="200%">
           <feGaussianBlur stdDeviation="5" result="coloredBlur" />
           <feMerge>
@@ -539,175 +471,200 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
           </feMerge>
         </filter>
 
+        <linearGradient id="wireGradientData" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="#fbbf24" stopOpacity="0.85" />
+          <stop offset="100%" stopColor="#f59e0b" stopOpacity="0.85" />
+        </linearGradient>
+
+        <linearGradient id="wireGradientControl" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.85" />
+          <stop offset="100%" stopColor="#60a5fa" stopOpacity="0.85" />
+        </linearGradient>
       </defs>
 
-      {/* Render wires */}
       {wireRenderData
-        .filter(({ wire }) => {
-          // Filter wires based on visibility settings
-          if (!visible) return false;
-          
-          // Determine if this wire is a CPU control signal
-          const outputEndpoint = wire.start.direction === "output" ? wire.start : wire.end?.direction === "output" ? wire.end : null;
-          const sourceComponent = outputEndpoint ? components.find(c => c.id === outputEndpoint.componentId) : null;
-          const isCpuControlSignal = sourceComponent?.type === "CpuComponent" && outputEndpoint?.direction === "output";
-          
-          // Apply visibility filters
-          if (isCpuControlSignal && !showCpuSignalWires) return false;
-          if (!isCpuControlSignal && !showDataSignalWires) return false;
-          
+        .filter((wireData) => {
+          if (wireData.isCpuControlSignal && !showCpuSignalWires) return false;
+          if (!wireData.isCpuControlSignal && !showDataSignalWires) return false;
           return true;
         })
-        .map(({ wire, path, hasAttachedEnd, value }) => {
-        const isSelected = wire.id === selectedWireId;
-        const isAnimating = animatingWires.has(wire.id);
-        const pathD = pointsToSVGPath(path);
-        
-        // Determine if this wire is a CPU control signal (reuse from filter)
-        const outputEndpoint = wire.start.direction === "output" ? wire.start : wire.end?.direction === "output" ? wire.end : null;
-        const sourceComponent = outputEndpoint ? components.find(c => c.id === outputEndpoint.componentId) : null;
-        const isCpuControlSignal = sourceComponent?.type === "CpuComponent" && outputEndpoint?.direction === "output";
+        .map((wireData) => {
+          const { wire, path, value, isCpuControlSignal } = wireData;
+          const pathD = pointsToSVGPath(path);
+          const isSelected = wire.id === selectedWireId;
+          const isAnimating = animatingWires.has(wire.id);
 
-        // Colors based on wire type
-        const wireColor = isCpuControlSignal ? "url(#wireGradientControl)" : "url(#wireGradient)";
-        const pulseColor = isCpuControlSignal ? "#60a5fa" : "#fbbf24";
-        const valueColor = isCpuControlSignal ? "fill-blue-300" : "fill-amber-300";
-        const arrowMarker = isCpuControlSignal 
-          ? (isAnimating ? "url(#arrowheadControlPulse)" : "url(#arrowheadControl)")
-          : (isAnimating ? "url(#arrowheadPulse)" : "url(#arrowhead)");
+          const baseColor = isCpuControlSignal ? "url(#wireGradientControl)" : "url(#wireGradientData)";
+          const pulseColor = isCpuControlSignal ? "#60a5fa" : "#fbbf24";
 
-        return (
-          <g key={wire.id}>
-            {/* Invisible wider path for easier selection */}
-            <path
-              d={pathD}
-              fill="none"
-              stroke="transparent"
-              strokeWidth={HIT_AREA_WIDTH}
-              strokeLinecap="round"
-              className="pointer-events-auto cursor-pointer"
-              onClick={(e) => {
-                e.stopPropagation();
-                selectWire(wire.id);
-              }}
-              onDoubleClick={(e) => {
-                e.stopPropagation();
-                const svg = e.currentTarget.ownerSVGElement;
-                if (svg) {
-                  const point = svg.createSVGPoint();
-                  point.x = e.clientX;
-                  point.y = e.clientY;
-                  const svgPoint = point.matrixTransform(svg.getScreenCTM()?.inverse());
-                  addWireNode(wire.id, svgPoint.x, svgPoint.y);
-                }
-              }}
-            />
-            {/* Animated flowing dot when data changes */}
-            {isAnimating && (
-              <>
-                {/* Glow path effect */}
-                <path
-                  d={pathD}
-                  fill="none"
-                  stroke={pulseColor}
-                  strokeWidth={6}
-                  strokeLinecap="round"
-                  filter="url(#pulseGlow)"
-                  opacity={0.5}
-                  className="pointer-events-none"
-                />
-                {/* Flowing data indicator */}
-                {(() => {
+          const editableChain = [wireData.sourceEscape, ...(wire.nodes ?? []), wireData.targetEscape];
+
+          return (
+            <g key={wire.id}>
+              {editableChain.slice(0, -1).map((point, index) => {
+                const next = editableChain[index + 1];
+                const orientation: SegmentOrientation = point.y === next.y ? "horizontal" : "vertical";
+                const insertIndex = index;
+
+                return (
+                  <path
+                    key={`${wire.id}-segment-${index}`}
+                    d={`M ${point.x} ${point.y} L ${next.x} ${next.y}`}
+                    fill="none"
+                    stroke="transparent"
+                    strokeWidth={HIT_AREA_WIDTH}
+                    className="pointer-events-auto cursor-pointer"
+                    onMouseDown={(e) => {
+                      e.stopPropagation();
+                      const canvas = document.querySelector("[data-canvas]") as HTMLElement | null;
+                      if (!canvas) return;
+
+                      const rect = canvas.getBoundingClientRect();
+                      const canvasX = snapToGrid((e.clientX - rect.left + canvas.scrollLeft) / zoom, GRID_SIZE);
+                      const canvasY = snapToGrid((e.clientY - rect.top + canvas.scrollTop) / zoom, GRID_SIZE);
+
+                      setSelectedWireId(wire.id);
+                      setSelectedNodeIndex(null);
+                      setDragSegmentState({
+                        wireId: wire.id,
+                        segmentIndex: index,
+                        orientation,
+                        startAxisValue: orientation === "horizontal" ? canvasY : canvasX,
+                        initialNodes: (wire.nodes ?? []).map((node) => ({ ...node })),
+                      });
+                    }}
+                    onDoubleClick={(e) => {
+                      e.stopPropagation();
+                      const svg = e.currentTarget.ownerSVGElement;
+                      if (!svg) return;
+
+                      const pointRef = svg.createSVGPoint();
+                      pointRef.x = e.clientX;
+                      pointRef.y = e.clientY;
+                      const transformed = pointRef.matrixTransform(svg.getScreenCTM()?.inverse());
+
+                      const nodes = [...(wire.nodes ?? [])];
+                      nodes.splice(insertIndex, 0, {
+                        x: snapToGrid(transformed.x, GRID_SIZE),
+                        y: snapToGrid(transformed.y, GRID_SIZE),
+                      });
+
+                      commitWireNodes(wire.id, nodes);
+                      setSelectedWireId(wire.id);
+                    }}
+                  />
+                );
+              })}
+
+              <path
+                d={pathD}
+                fill="none"
+                stroke={isSelected ? pulseColor : baseColor}
+                strokeWidth={isSelected ? 4 : 3}
+                strokeLinecap="round"
+                filter="url(#glow)"
+                opacity={isAnimating ? 0.95 : 0.78}
+                className="pointer-events-none"
+              />
+
+              <path
+                d={pathD}
+                fill="none"
+                stroke="transparent"
+                strokeWidth={HIT_AREA_WIDTH}
+                className="pointer-events-auto cursor-pointer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedWireId(wire.id);
+                  setSelectedNodeIndex(null);
+                }}
+              />
+
+              {(wire.nodes ?? []).map((node, index) => {
+                const isNodeSelected = isSelected && selectedNodeIndex === index;
+
+                return (
+                  <g key={`${wire.id}-node-${index}`}>
+                    <rect
+                      x={node.x - 6}
+                      y={node.y - 6}
+                      width={12}
+                      height={12}
+                      fill="transparent"
+                      className="pointer-events-auto cursor-move"
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        setSelectedWireId(wire.id);
+                        setSelectedNodeIndex(index);
+                        setDragNodeState({ wireId: wire.id, nodeIndex: index });
+                      }}
+                    />
+                    <rect
+                      x={node.x - 2}
+                      y={node.y - 2}
+                      width={4}
+                      height={4}
+                      rx={0.5}
+                      fill={isNodeSelected ? "#22d3ee" : "#9ca3af"}
+                      stroke={isNodeSelected ? "#67e8f9" : "#e5e7eb"}
+                      strokeWidth={1}
+                      className="pointer-events-none"
+                    />
+                  </g>
+                );
+              })}
+
+              {isAnimating && (
+                (() => {
                   const progress = animationProgress.get(wire.id) ?? 0;
                   const point = getPointAlongPath(path, progress);
+
                   return (
-                    <g transform={`translate(${point.x}, ${point.y})`}>
-                      {/* Glowing circle */}
-                      <circle
-                        r="8"
-                        fill={pulseColor}
-                        filter="url(#pulseGlow)"
-                        opacity="0.9"
-                      />
-                      {/* Value badge */}
-                      <g transform="translate(0, -18)">
-                        <rect
-                          x="-20"
-                          y="-8"
-                          width="40"
-                          height="16"
-                          rx="4"
-                          fill="#1f2937"
-                          stroke={pulseColor}
-                          strokeWidth="1.5"
-                        />
+                    <g transform={`translate(${point.x}, ${point.y})`} className="pointer-events-none">
+                      <circle r="6" fill={pulseColor} filter="url(#pulseGlow)" opacity="0.9" />
+                      <g transform="translate(0, -16)">
+                        <rect x="-18" y="-8" width="36" height="16" rx="4" fill="#111827" stroke={pulseColor} strokeWidth="1.4" />
                         <text
                           textAnchor="middle"
                           dominantBaseline="middle"
-                          className={`font-mono ${valueColor}`}
-                          style={{ fontSize: "9px", fontWeight: "bold" }}
+                          className="font-mono"
+                          style={{ fontSize: "9px", fill: "#f3f4f6" }}
                         >
                           {value}
                         </text>
                       </g>
                     </g>
                   );
-                })()}
-              </>
-            )}
-            {/* Visible wire path */}
-            <path
-              d={pathD}
-              fill="none"
-              stroke={isSelected ? pulseColor : isAnimating ? pulseColor : wireColor}
-              strokeWidth={isSelected ? 4 : isAnimating ? 4 : 3}
-              strokeLinecap="round"
-              markerEnd={arrowMarker}
-              filter="url(#glow)"
-              opacity={hasAttachedEnd ? (isAnimating ? 0.9 : 0.75) : 0.55}
-              className="pointer-events-none"
-            />
+                })()
+              )}
+            </g>
+          );
+        })}
 
-            {/* Render wire nodes */}
-            {wire.nodes.map((node) => (
-              <circle
-                key={node.id}
-                cx={node.x}
-                cy={node.y}
-                r={selectedNodeId === node.id ? 6 : 4}
-                fill={selectedNodeId === node.id ? "#fbbf24" : isCpuControlSignal ? "#3b82f6" : "#22d3ee"}
-                stroke="#fff"
-                strokeWidth="2"
-                className="pointer-events-auto cursor-move"
-                onMouseDown={(e) => {
-                  e.stopPropagation();
-                  setDragState({ wireId: wire.id, nodeId: node.id });
-                  selectNode(node.id);
-                }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  selectNode(node.id);
-                }}
-              />
-            ))}
-          </g>
-        );
-      })}
-
-      {/* Temporary wire preview during creation */}
       {isCreating && pathPoints.length > 1 && (
-        <path
-          d={pointsToSVGPath(pathPoints)}
-          fill="none"
-          stroke="#22d3ee"
-          strokeWidth="3"
-          strokeLinecap="round"
-          strokeDasharray="5,5"
-          opacity="0.6"
-        />
+        <g>
+          <path
+            d={pointsToSVGPath(pathPoints)}
+            fill="none"
+            stroke={previewRejected ? "#ef4444" : "#22d3ee"}
+            strokeWidth="3"
+            strokeLinecap="round"
+            strokeDasharray="6,4"
+            opacity="0.75"
+          />
+          {pathPoints.length > 2 && (
+            <path
+              d={`M ${pathPoints[pathPoints.length - 2].x} ${pathPoints[pathPoints.length - 2].y} L ${pathPoints[pathPoints.length - 1].x} ${pathPoints[pathPoints.length - 1].y}`}
+              fill="none"
+              stroke={previewRejected ? "#f87171" : "#67e8f9"}
+              strokeWidth="4"
+              strokeLinecap="round"
+              opacity="0.95"
+            />
+          )}
+        </g>
       )}
 
-      {/* Show "No connections" if empty */}
       {wireRenderData.length === 0 && !isCreating && (
         <text
           x="50%"

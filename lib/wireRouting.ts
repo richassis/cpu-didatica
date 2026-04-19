@@ -1,3 +1,10 @@
+import type { PortSide } from "@/lib/portPositioning";
+
+export interface Point {
+  x: number;
+  y: number;
+}
+
 /**
  * Calculates orthogonal (Manhattan) routing path between two points.
  * Returns an array of points forming 90-degree angles.
@@ -6,10 +13,10 @@
  * it snaps to zero to make straight lines easier to draw.
  */
 export function calculateOrthogonalPath(
-  start: { x: number; y: number },
-  end: { x: number; y: number }
-): { x: number; y: number }[] {
-  const points: { x: number; y: number }[] = [start];
+  start: Point,
+  end: Point
+): Point[] {
+  const points: Point[] = [start];
 
   let dx = end.x - start.x;
   let dy = end.y - start.y;
@@ -61,9 +68,9 @@ export function pointsToSVGPath(points: { x: number; y: number }[]): string {
  * Gets a point along an orthogonal path at parameter t (0-1).
  */
 export function getPointOnOrthogonalPath(
-  points: { x: number; y: number }[],
+  points: Point[],
   t: number
-): { x: number; y: number } {
+): Point {
   if (points.length === 0) return { x: 0, y: 0 };
   if (t <= 0) return points[0];
   if (t >= 1) return points[points.length - 1];
@@ -106,4 +113,95 @@ export function getPointOnOrthogonalPath(
  */
 export function snapToGrid(value: number, gridSize: number): number {
   return Math.round(value / gridSize) * gridSize;
+}
+
+/**
+ * Ensures all segments are orthogonal by inserting corner points when needed.
+ */
+export function enforceOrthogonal(points: Point[]): Point[] {
+  if (points.length <= 1) return points;
+
+  const normalized: Point[] = [points[0]];
+
+  for (let i = 1; i < points.length; i++) {
+    const prev = normalized[normalized.length - 1];
+    const next = points[i];
+
+    if (prev.x === next.x && prev.y === next.y) {
+      continue;
+    }
+
+    if (prev.x !== next.x && prev.y !== next.y) {
+      const beforePrev = normalized.length > 1 ? normalized[normalized.length - 2] : null;
+
+      // Keep continuity with the previous segment orientation when possible.
+      const corner =
+        beforePrev && beforePrev.y === prev.y
+          ? { x: next.x, y: prev.y }
+          : beforePrev && beforePrev.x === prev.x
+            ? { x: prev.x, y: next.y }
+            : { x: next.x, y: prev.y };
+
+      if (corner.x !== prev.x || corner.y !== prev.y) {
+        normalized.push(corner);
+      }
+    }
+
+    normalized.push(next);
+  }
+
+  return simplifyOrthogonalPath(normalized);
+}
+
+/**
+ * Builds a short segment away from the component before routing across canvas.
+ */
+export function escapePort(portPos: Point, portSide: PortSide, escapeDistance = 32): Point[] {
+  switch (portSide) {
+    case "left":
+      return [portPos, { x: portPos.x - escapeDistance, y: portPos.y }];
+    case "right":
+      return [portPos, { x: portPos.x + escapeDistance, y: portPos.y }];
+    case "top":
+      return [portPos, { x: portPos.x, y: portPos.y - escapeDistance }];
+    case "bottom":
+      return [portPos, { x: portPos.x, y: portPos.y + escapeDistance }];
+    default:
+      return [portPos];
+  }
+}
+
+/**
+ * Removes duplicate points, zero-length segments and redundant collinear corners.
+ */
+export function simplifyOrthogonalPath(points: Point[]): Point[] {
+  if (points.length <= 2) return points;
+
+  const deduped: Point[] = [];
+  for (const point of points) {
+    const last = deduped[deduped.length - 1];
+    if (!last || last.x !== point.x || last.y !== point.y) {
+      deduped.push(point);
+    }
+  }
+
+  if (deduped.length <= 2) return deduped;
+
+  const simplified: Point[] = [deduped[0]];
+
+  for (let i = 1; i < deduped.length - 1; i++) {
+    const prev = simplified[simplified.length - 1];
+    const curr = deduped[i];
+    const next = deduped[i + 1];
+
+    const collinearVertical = prev.x === curr.x && curr.x === next.x;
+    const collinearHorizontal = prev.y === curr.y && curr.y === next.y;
+
+    if (!collinearVertical && !collinearHorizontal) {
+      simplified.push(curr);
+    }
+  }
+
+  simplified.push(deduped[deduped.length - 1]);
+  return simplified;
 }

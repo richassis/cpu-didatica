@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useLayoutStore } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
+import { useProjectStore } from "@/lib/projectStore";
 
 interface PortOption {
   name: string;
@@ -30,6 +31,7 @@ export default function ConnectionModal({ isOpen, onClose }: Props) {
   const bus = useSimulatorStore((s) => s.bus);
   const createWire = useSimulatorStore((s) => s.createWire);
   const getWires = useSimulatorStore((s) => s.getWires);
+  const addWireToProject = useProjectStore((s) => s.addWireToProject);
   const revision = useSimulatorStore((s) => s.revision);
   const wires = useMemo(() => getWires(), [getWires, revision]);
 
@@ -114,6 +116,16 @@ export default function ConnectionModal({ isOpen, onClose }: Props) {
     try {
       const wireId = createWire(sourceComponentId, sourcePortName, targetComponentId, targetPortName);
       if (wireId) {
+        addWireToProject({
+          id: wireId,
+          sourceComponentId,
+          sourcePortName,
+          targetComponentId,
+          targetPortName,
+          label: "",
+          visible: true,
+          nodes: [],
+        });
         onClose();
       } else {
         setError("Failed to create connection");

@@ -87,6 +87,18 @@ interface ProjectState {
   
   /** Update project data (for saving) */
   updateProjectData: (tabId: string, data: Partial<ProjectData>) => void;
+
+  /** Add a wire descriptor to the active project. */
+  addWireToProject: (wire: WireDescriptor) => void;
+
+  /** Remove a wire descriptor from the active project. */
+  removeWireFromProject: (wireId: string) => void;
+
+  /** Update visual nodes for a wire in the active project. */
+  updateWireNodes: (wireId: string, nodes: Array<{ x: number; y: number }>) => void;
+
+  /** Replace active project wire list in one operation. */
+  replaceProjectWires: (wires: WireDescriptor[]) => void;
   
   /** Get current project data */
   getCurrentProjectData: () => ProjectData | null;
@@ -229,6 +241,104 @@ export const useProjectStore = create<ProjectState>()(
         });
       },
 
+      addWireToProject: (wire) => {
+        set((state) => {
+          const tabId = state.activeTabId;
+          if (!tabId) return state;
+
+          const existing = state.projectData[tabId];
+          if (!existing) return state;
+
+          return {
+            projectData: {
+              ...state.projectData,
+              [tabId]: {
+                ...existing,
+                wires: [...existing.wires, wire],
+                updatedAt: new Date().toISOString(),
+              },
+            },
+            tabs: state.tabs.map((t) =>
+              t.id === tabId ? { ...t, isDirty: true } : t
+            ),
+          };
+        });
+      },
+
+      removeWireFromProject: (wireId) => {
+        set((state) => {
+          const tabId = state.activeTabId;
+          if (!tabId) return state;
+
+          const existing = state.projectData[tabId];
+          if (!existing) return state;
+
+          return {
+            projectData: {
+              ...state.projectData,
+              [tabId]: {
+                ...existing,
+                wires: existing.wires.filter((wire) => wire.id !== wireId),
+                updatedAt: new Date().toISOString(),
+              },
+            },
+            tabs: state.tabs.map((t) =>
+              t.id === tabId ? { ...t, isDirty: true } : t
+            ),
+          };
+        });
+      },
+
+      updateWireNodes: (wireId, nodes) => {
+        set((state) => {
+          const tabId = state.activeTabId;
+          if (!tabId) return state;
+
+          const existing = state.projectData[tabId];
+          if (!existing) return state;
+
+          return {
+            projectData: {
+              ...state.projectData,
+              [tabId]: {
+                ...existing,
+                wires: existing.wires.map((wire) =>
+                  wire.id === wireId ? { ...wire, nodes } : wire
+                ),
+                updatedAt: new Date().toISOString(),
+              },
+            },
+            tabs: state.tabs.map((t) =>
+              t.id === tabId ? { ...t, isDirty: true } : t
+            ),
+          };
+        });
+      },
+
+      replaceProjectWires: (wires) => {
+        set((state) => {
+          const tabId = state.activeTabId;
+          if (!tabId) return state;
+
+          const existing = state.projectData[tabId];
+          if (!existing) return state;
+
+          return {
+            projectData: {
+              ...state.projectData,
+              [tabId]: {
+                ...existing,
+                wires,
+                updatedAt: new Date().toISOString(),
+              },
+            },
+            tabs: state.tabs.map((t) =>
+              t.id === tabId ? { ...t, isDirty: true } : t
+            ),
+          };
+        });
+      },
+
       getCurrentProjectData: () => {
         const { activeTabId, projectData } = get();
         if (!activeTabId) return null;
@@ -254,6 +364,7 @@ export const useProjectStore = create<ProjectState>()(
           id,
           updatedAt: now,
           version: data.version || 1, // Ensure version is set
+          wires: Array.isArray(data.wires) ? data.wires : [],
         };
 
         const newTab: ProjectTab = {
@@ -459,6 +570,10 @@ export async function loadProjectFromFile(file: File): Promise<ProjectData> {
         // Set default version for older files
         if (!data.version) {
           data.version = 1;
+        }
+
+        if (!Array.isArray(data.wires)) {
+          data.wires = [];
         }
         
         resolve(data);

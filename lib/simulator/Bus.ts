@@ -95,7 +95,13 @@ export class Bus {
     sourcePortName: string,
     targetComponentId: string,
     targetPortName: string,
-    options?: { label?: string; visible?: boolean; id?: string },
+    options?: {
+      label?: string;
+      visible?: boolean;
+      id?: string;
+      nodes?: Array<{ x: number; y: number }>;
+      color?: string;
+    },
   ): Wire {
     // Resolve components
     const sourceComponent = this._components.get(sourceComponentId);
@@ -162,6 +168,8 @@ export class Bus {
       targetPortName,
       label: options?.label,
       visible: options?.visible,
+      nodes: options?.nodes,
+      color: options?.color,
     });
 
     // Connect the ports
@@ -293,7 +301,13 @@ export class Bus {
           desc.sourcePortName,
           desc.targetComponentId,
           desc.targetPortName,
-          { id: desc.id, label: desc.label, visible: desc.visible }
+          {
+            id: desc.id,
+            label: desc.label,
+            visible: desc.visible,
+            nodes: desc.nodes,
+            color: desc.color,
+          }
         );
       } catch (e) {
         if (!skipInvalid) throw e;

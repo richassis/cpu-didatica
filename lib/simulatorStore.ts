@@ -140,7 +140,14 @@ interface SimulatorState {
     sourceId: string,
     sourcePort: string,
     targetId: string,
-    targetPort: string
+    targetPort: string,
+    options?: {
+      id?: string;
+      label?: string;
+      visible?: boolean;
+      nodes?: Array<{ x: number; y: number }>;
+      color?: string;
+    }
   ) => string | null;
 
   /**
@@ -451,9 +458,9 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
 
   // ── Wire Management ────────────────────────────────────────────
 
-  createWire: (sourceId, sourcePort, targetId, targetPort) => {
+  createWire: (sourceId, sourcePort, targetId, targetPort, options) => {
     const { bus } = get();
-    const wire = bus.createWire(sourceId, sourcePort, targetId, targetPort);
+    const wire = bus.createWire(sourceId, sourcePort, targetId, targetPort, options);
     if (wire) {
       set((s) => ({ revision: s.revision + 1 }));
       // Persist wire list alongside components in the layout store.

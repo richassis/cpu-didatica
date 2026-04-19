@@ -29,6 +29,12 @@ export interface WireDescriptor {
 
   /** Whether to render this wire visually (as a BusWidget). */
   visible?: boolean;
+
+  /** Intermediate orthogonal waypoints used by the visual editor. */
+  nodes?: Array<{ x: number; y: number }>;
+
+  /** Optional UI color override. */
+  color?: string;
 }
 
 // ── Wire class ───────────────────────────────────────────────────────────────
@@ -41,6 +47,8 @@ export class Wire {
   readonly targetPortName: string;
   label: string;
   visible: boolean;
+  nodes: Array<{ x: number; y: number }>;
+  color?: string;
 
   constructor(descriptor: Omit<WireDescriptor, "id"> & { id?: string }) {
     this.id                = descriptor.id ?? uuid();
@@ -50,6 +58,8 @@ export class Wire {
     this.targetPortName    = descriptor.targetPortName;
     this.label             = descriptor.label ?? "";
     this.visible           = descriptor.visible ?? true;
+    this.nodes             = descriptor.nodes ?? [];
+    this.color             = descriptor.color;
   }
 
   /** Serialize to a plain object for persistence. */
@@ -62,6 +72,8 @@ export class Wire {
       targetPortName: this.targetPortName,
       label: this.label,
       visible: this.visible,
+      nodes: this.nodes,
+      color: this.color,
     };
   }
 

@@ -10,9 +10,9 @@ import {
 } from "@dnd-kit/core";
 import { useLayoutStore, ZOOM_STEP, ZOOM_MIN, ZOOM_MAX, CANVAS_WIDTH, CANVAS_HEIGHT } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
-import { useDisplayStore, type AnimationSpeedPreset } from "@/lib/displayStore";
+import { useDisplayStore } from "@/lib/displayStore";
 import { useWireCreationStore } from "@/lib/wireCreationStore";
-import { useEnhancedWireStore } from "@/lib/enhancedWireStore";
+import { useProjectStore } from "@/lib/projectStore";
 import { useModeStore } from "@/lib/modeStore";
 import { snapToGrid } from "@/lib/wireRouting";
 import WidgetRenderer from "./WidgetRenderer";
@@ -59,6 +59,7 @@ export default function SimulatorCanvas() {
   const applyObjectStates = useSimulatorStore((s) => s.applyObjectStates);
   const getPrimaryCpu = useSimulatorStore((s) => s.getPrimaryCpu);
   const createSimulatorWire = useSimulatorStore((s) => s.createWire);
+  const addWireToProject = useProjectStore((s) => s.addWireToProject);
   const revision = useSimulatorStore((s) => s.revision);
   void revision;
   
@@ -78,12 +79,16 @@ export default function SimulatorCanvas() {
   const sourceComponentId = useWireCreationStore((s) => s.sourceComponentId);
   const sourcePortName = useWireCreationStore((s) => s.sourcePortName);
   const sourceDirection = useWireCreationStore((s) => s.sourceDirection);
-  const pathPoints = useWireCreationStore((s) => s.pathPoints);
+  const waypoints = useWireCreationStore((s) => s.waypoints);
+  const addWaypoint = useWireCreationStore((s) => s.addWaypoint);
   const updateMousePosition = useWireCreationStore((s) => s.updateMousePosition);
-  const finishWireCreation = useWireCreationStore((s) => s.finishWireCreation);
   const cancelWireCreation = useWireCreationStore((s) => s.cancelWireCreation);
+  const [wirePreviewRejected, setWirePreviewRejected] = useState(false);
 
-  const createEnhancedWire = useEnhancedWireStore((s) => s.createWire);
+  const flashRejectedPreview = useCallback(() => {
+    setWirePreviewRejected(true);
+    window.setTimeout(() => setWirePreviewRejected(false), 180);
+  }, []);
 
   // Sync viewport state into the store whenever scroll or size changes
   const syncViewport = useCallback(() => {
@@ -187,6 +192,7 @@ export default function SimulatorCanvas() {
     if (!el) return;
 
     const onMouseDown = (e: MouseEvent) => {
+      if (isCreatingWire) return;
       // Only pan on primary button and not on interactive elements
       if (e.button !== 0) return;
       const target = e.target as HTMLElement;
@@ -217,9 +223,9 @@ export default function SimulatorCanvas() {
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", onMouseUp);
     };
-  }, [isPanning, panStart]);
+  }, [isPanning, panStart, isCreatingWire]);
 
-  // Track mouse position for wire creation preview
+  // Track mouse position and click-driven wire creation flow.
   useEffect(() => {
     if (!isCreatingWire) return;
 
@@ -236,96 +242,101 @@ export default function SimulatorCanvas() {
 
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        setWirePreviewRejected(false);
         cancelWireCreation();
       }
     };
 
-    const handleMouseUp = (e: MouseEvent) => {
-      if (!sourceComponentId || !sourcePortName || !sourceDirection || pathPoints.length < 2) {
-        finishWireCreation();
+    const handleClick = (e: MouseEvent) => {
+      if (!sourceComponentId || !sourcePortName || !sourceDirection) {
+        cancelWireCreation();
         return;
       }
 
       const targetElement = (e.target as HTMLElement).closest("[data-port-indicator]") as HTMLElement | null;
 
-      let endEndpoint: { componentId: string; portName: string; direction: "input" | "output" } | null = null;
       if (targetElement) {
         const targetComponentId = targetElement.dataset.portComponentId;
         const targetPortName = targetElement.dataset.portName;
         const targetDirection = targetElement.dataset.portDirection as "input" | "output" | undefined;
 
-        if (
-          targetComponentId &&
-          targetPortName &&
-          targetDirection &&
-          targetDirection !== sourceDirection &&
-          !(targetComponentId === sourceComponentId && targetPortName === sourcePortName)
-        ) {
-          endEndpoint = {
-            componentId: targetComponentId,
-            portName: targetPortName,
-            direction: targetDirection,
-          };
+        // Ignore the click that started creation (same source endpoint).
+        if (targetComponentId === sourceComponentId && targetPortName === sourcePortName) {
+          return;
         }
-      }
 
-      const nodes = pathPoints.slice(1, -1);
-      const floatingEnd = pathPoints[pathPoints.length - 1];
+        if (
+          !targetComponentId ||
+          !targetPortName ||
+          !targetDirection ||
+          targetDirection === sourceDirection
+        ) {
+          flashRejectedPreview();
+          return;
+        }
 
-      const isConnectedWire = Boolean(endEndpoint);
-      const shouldNormalizeDirection =
-        isConnectedWire && sourceDirection === "input" && endEndpoint?.direction === "output";
+        const shouldNormalizeDirection = sourceDirection === "input" && targetDirection === "output";
+        const sourceId = shouldNormalizeDirection ? targetComponentId : sourceComponentId;
+        const sourcePort = shouldNormalizeDirection ? targetPortName : sourcePortName;
+        const targetId = shouldNormalizeDirection ? sourceComponentId : targetComponentId;
+        const targetPort = shouldNormalizeDirection ? sourcePortName : targetPortName;
+        const nodes = shouldNormalizeDirection ? [...waypoints].reverse() : waypoints;
 
-      const enhancedStart = shouldNormalizeDirection
-        ? {
-            componentId: endEndpoint!.componentId,
-            portName: endEndpoint!.portName,
-            direction: "output" as const,
-          }
-        : {
-            componentId: sourceComponentId,
-            portName: sourcePortName,
-            direction: sourceDirection,
-          };
-
-      const enhancedEnd = shouldNormalizeDirection
-        ? {
-            componentId: sourceComponentId,
-            portName: sourcePortName,
-            direction: "input" as const,
-          }
-        : endEndpoint;
-
-      createEnhancedWire({
-        start: enhancedStart,
-        end: enhancedEnd,
-        floatingEnd: endEndpoint ? null : floatingEnd,
-        nodes: shouldNormalizeDirection ? [...nodes].reverse() : nodes,
-      });
-
-      if (endEndpoint) {
         try {
-          if (sourceDirection === "output" && endEndpoint.direction === "input") {
-            createSimulatorWire(sourceComponentId, sourcePortName, endEndpoint.componentId, endEndpoint.portName);
-          } else if (sourceDirection === "input" && endEndpoint.direction === "output") {
-            createSimulatorWire(endEndpoint.componentId, endEndpoint.portName, sourceComponentId, sourcePortName);
+          const wireId = createSimulatorWire(sourceId, sourcePort, targetId, targetPort, {
+            nodes,
+            visible: true,
+          });
+
+          if (!wireId) {
+            flashRejectedPreview();
+            cancelWireCreation();
+            return;
           }
+
+          addWireToProject({
+            id: wireId,
+            sourceComponentId: sourceId,
+            sourcePortName: sourcePort,
+            targetComponentId: targetId,
+            targetPortName: targetPort,
+            label: "",
+            visible: true,
+            nodes,
+          });
+
+          setWirePreviewRejected(false);
+          cancelWireCreation();
+          return;
         } catch (error) {
           console.error("Failed to connect simulator wire:", error);
+          flashRejectedPreview();
+          cancelWireCreation();
+          return;
         }
       }
 
-      finishWireCreation();
+      // Canvas click adds a new waypoint for point-by-point drawing.
+      const canvasElement = (e.target as HTMLElement).closest("[data-canvas]") as HTMLElement | null;
+      const el = scrollRef.current;
+      if (!canvasElement || !el) {
+        return;
+      }
+
+      const rect = el.getBoundingClientRect();
+      const canvasX = (e.clientX - rect.left + el.scrollLeft) / zoom;
+      const canvasY = (e.clientY - rect.top + el.scrollTop) / zoom;
+      addWaypoint(canvasX, canvasY);
     };
 
     window.addEventListener("mousemove", handleMouseMove);
     window.addEventListener("keydown", handleEscape);
-    window.addEventListener("mouseup", handleMouseUp);
+    window.addEventListener("click", handleClick);
 
     return () => {
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("keydown", handleEscape);
-      window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("click", handleClick);
     };
   }, [
     isCreatingWire,
@@ -333,12 +344,13 @@ export default function SimulatorCanvas() {
     sourceComponentId,
     sourcePortName,
     sourceDirection,
-    pathPoints,
+    waypoints,
+    addWaypoint,
     updateMousePosition,
-    finishWireCreation,
     cancelWireCreation,
-    createEnhancedWire,
     createSimulatorWire,
+    addWireToProject,
+    flashRejectedPreview,
   ]);
 
   const sensors = useSensors(
@@ -466,7 +478,7 @@ export default function SimulatorCanvas() {
               backgroundSize: `${GRID_SIZE}px ${GRID_SIZE}px`,
             }}
           >
-            <EnhancedBusOverlay visible={showWiresAndPorts} />
+            <EnhancedBusOverlay visible={showWiresAndPorts} previewRejected={wirePreviewRejected} />
             {components.map((c) => (
               <WidgetRenderer key={c.id} component={c} zoom={zoom} />
             ))}
