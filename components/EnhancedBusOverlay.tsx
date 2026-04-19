@@ -13,12 +13,6 @@ import { pointsToSVGPath, snapToGrid } from "@/lib/wireRouting";
 const GRID_SIZE = 16;
 /** Invisible stroke width for easier hit detection */
 const HIT_AREA_WIDTH = 16;
-/** Duration of the CPU control signal animation in ms */
-const CPU_ANIMATION_DURATION = 8000;
-/** Duration of the component data animation in ms */
-const COMPONENT_ANIMATION_DURATION = 6000;
-/** Total animation duration */
-const TOTAL_ANIMATION_DURATION = CPU_ANIMATION_DURATION + COMPONENT_ANIMATION_DURATION;
 
 interface WireRenderData {
   wire: EnhancedWire;
@@ -37,6 +31,8 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
   const base = useDisplayStore((s) => s.numericBase);
   const showCpuSignalWires = useDisplayStore((s) => s.showCpuSignalWires);
   const showDataSignalWires = useDisplayStore((s) => s.showDataSignalWires);
+  const cpuAnimationDuration = useDisplayStore((s) => s.cpuAnimationDuration);
+  const componentAnimationDuration = useDisplayStore((s) => s.componentAnimationDuration);
   
   // Enhanced wire state
   const wires = useEnhancedWireStore((s) => s.wires);
@@ -241,7 +237,7 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
       const animate = () => {
         const elapsed = Date.now() - startTime;
         
-        if (elapsed >= TOTAL_ANIMATION_DURATION) {
+        if (elapsed >= cpuAnimationDuration + componentAnimationDuration) {
           // Animation complete - clear everything
           setAnimatingWires(new Set());
           setAnimationProgress(new Map());
@@ -254,15 +250,15 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
         
         // CPU control signals: animate from 0 to CPU_ANIMATION_DURATION
         for (const id of cpuControlWiresRef.current) {
-          const progress = Math.min(1, elapsed / CPU_ANIMATION_DURATION);
+          const progress = Math.min(1, elapsed / cpuAnimationDuration);
           newProgress.set(id, progress);
         }
         
         // Component wires: start after CPU signals complete
         for (const id of componentWiresRef.current) {
-          if (elapsed > CPU_ANIMATION_DURATION) {
-            const componentElapsed = elapsed - CPU_ANIMATION_DURATION;
-            const progress = Math.min(1, componentElapsed / COMPONENT_ANIMATION_DURATION);
+          if (elapsed > cpuAnimationDuration) {
+            const componentElapsed = elapsed - cpuAnimationDuration;
+            const progress = Math.min(1, componentElapsed / componentAnimationDuration);
             newProgress.set(id, progress);
           } else {
             newProgress.set(id, 0); // Not started yet - dot stays at start
@@ -283,7 +279,7 @@ export default function EnhancedBusOverlay({ visible }: { visible: boolean }) {
         animationRef.current = null;
       }
     };
-  }, [revision, wireRenderData, components, getPrimaryCpu]); // Trigger on tick with proper dependencies
+  }, [revision, wireRenderData, components, getPrimaryCpu, cpuAnimationDuration, componentAnimationDuration]); // Trigger on tick with proper dependencies
 
   // Calculate a point along a path at a given progress (0-1)
   const getPointAlongPath = useCallback((path: Array<{ x: number; y: number }>, progress: number) => {

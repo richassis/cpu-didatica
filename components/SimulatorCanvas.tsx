@@ -10,7 +10,7 @@ import {
 } from "@dnd-kit/core";
 import { useLayoutStore, ZOOM_STEP, ZOOM_MIN, ZOOM_MAX, CANVAS_WIDTH, CANVAS_HEIGHT } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
-import { useDisplayStore } from "@/lib/displayStore";
+import { useDisplayStore, type AnimationSpeedPreset } from "@/lib/displayStore";
 import { useWireCreationStore } from "@/lib/wireCreationStore";
 import { useEnhancedWireStore } from "@/lib/enhancedWireStore";
 import { useModeStore } from "@/lib/modeStore";
@@ -43,15 +43,20 @@ export default function SimulatorCanvas() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [fabOpen, setFabOpen] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [showDisplaySettings, setShowDisplaySettings] = useState(false);
+  const [zoomExpanded, setZoomExpanded] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
 
   // Mode state - determines what actions are allowed
-  const isEditMode = useModeStore((s) => s.mode === "edit");
+  const mode = useModeStore((s) => s.mode);
+  const isEditMode = mode === "edit";
+  const getSnapshot = useModeStore((s) => s.getSnapshot);
 
   // Clock state
   const tickClock = useSimulatorStore((s) => s.tickClock);
   const resetClock = useSimulatorStore((s) => s.resetClock);
+  const applyObjectStates = useSimulatorStore((s) => s.applyObjectStates);
   const getPrimaryCpu = useSimulatorStore((s) => s.getPrimaryCpu);
   const createSimulatorWire = useSimulatorStore((s) => s.createWire);
   const revision = useSimulatorStore((s) => s.revision);
@@ -60,10 +65,13 @@ export default function SimulatorCanvas() {
   // Get total ticks from the primary CPU
   const cpu = getPrimaryCpu();
   const totalTicks = cpu?.totalTicks ?? 0;
+  const isHalted = cpu?.halted ?? false;
 
-  // Numeric base setting
+  // Display settings
   const numericBase = useDisplayStore((s) => s.numericBase);
   const setNumericBase = useDisplayStore((s) => s.setNumericBase);
+  const animationSpeed = useDisplayStore((s) => s.animationSpeed);
+  const setAnimationSpeed = useDisplayStore((s) => s.setAnimationSpeed);
 
   // Wire creation state
   const isCreatingWire = useWireCreationStore((s) => s.isCreating);
@@ -165,13 +173,13 @@ export default function SimulatorCanvas() {
     return () => el.removeEventListener("wheel", onWheel);
   }, [zoom, setZoom]);
 
-  // Close FAB when clicking outside
+  // Close FAB / display settings / zoom when clicking outside
   useEffect(() => {
-    if (!fabOpen) return;
-    const handler = () => setFabOpen(false);
+    if (!fabOpen && !showDisplaySettings && !zoomExpanded) return;
+    const handler = () => { setFabOpen(false); setShowDisplaySettings(false); setZoomExpanded(false); };
     window.addEventListener("mousedown", handler);
     return () => window.removeEventListener("mousedown", handler);
-  }, [fabOpen]);
+  }, [fabOpen, showDisplaySettings, zoomExpanded]);
 
   // Click and drag to pan (Google Maps style)
   useEffect(() => {
@@ -357,6 +365,24 @@ export default function SimulatorCanvas() {
     }
   };
 
+  /**
+   * Handle reset based on current mode:
+   * - Edit mode: Full reset (clear all state)
+   * - Simulation mode: Reset to captured snapshot
+   */
+  const handleReset = () => {
+    if (mode === "simulation") {
+      const snapshot = getSnapshot();
+      if (snapshot) {
+        const stateMap = new Map(Object.entries(snapshot.objectStates));
+        applyObjectStates(stateMap);
+        resetClock();
+      }
+    } else {
+      resetClock();
+    }
+  };
+
   const handleClear = () => {
     // Block clear in simulation mode
     if (!isEditMode) return;
@@ -524,6 +550,19 @@ export default function SimulatorCanvas() {
               />
             )}
 
+            {/* Display settings */}
+            <FabItem
+              label="Display settings"
+              icon={
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.573-1.066z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              }
+              color="bg-gray-700 hover:bg-gray-600"
+              onClick={() => { setShowDisplaySettings(true); setFabOpen(false); }}
+            />
+
             {/* Find components */}
             {components.length > 0 && (
               <FabItem
@@ -554,9 +593,93 @@ export default function SimulatorCanvas() {
           </div>
         )}
 
+        {/* Display Settings Panel — shown when triggered from FAB */}
+        {showDisplaySettings && (
+          <div
+            className="bg-gray-900/95 border border-gray-700 rounded-2xl shadow-2xl backdrop-blur-sm p-4 w-64 mb-2"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            {/* Numeric Base */}
+            <div className="mb-4">
+              <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Numeric Base</div>
+              <div className="flex items-center gap-1">
+                {(["hex", "dec", "bin", "oct"] as const).map((b) => (
+                  <button
+                    key={b}
+                    onClick={() => setNumericBase(b)}
+                    className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-mono font-semibold transition-colors ${
+                      numericBase === b
+                        ? "bg-cyan-600 text-white"
+                        : "bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700"
+                    }`}
+                  >
+                    {b.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Animation Speed */}
+            <div>
+              <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Animation Speed</div>
+              <div className="flex items-center gap-1">
+                {(["fast", "normal", "slow"] as const).map((preset) => (
+                  <button
+                    key={preset}
+                    onClick={() => setAnimationSpeed(preset)}
+                    className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-colors capitalize ${
+                      animationSpeed === preset
+                        ? "bg-indigo-600 text-white"
+                        : "bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700"
+                    }`}
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Collapsible Zoom Indicator — above FAB */}
+        <div
+          className="flex items-center gap-1 bg-gray-900/90 border border-gray-700 rounded-full shadow-xl backdrop-blur-sm overflow-hidden transition-all"
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          {zoomExpanded ? (
+            <>
+              <button
+                onClick={() => setZoom(zoom - ZOOM_STEP)}
+                disabled={zoom <= ZOOM_MIN}
+                className="w-8 h-8 flex items-center justify-center rounded-full text-gray-300 hover:bg-gray-700 disabled:opacity-30 transition-colors text-lg leading-none"
+                aria-label="Zoom out"
+              >−</button>
+              <button
+                onClick={() => setZoom(1)}
+                className="min-w-[3rem] text-center text-sm font-mono text-gray-300 hover:text-white transition-colors"
+                aria-label="Reset zoom"
+              >{Math.round(zoom * 100)}%</button>
+              <button
+                onClick={() => setZoom(zoom + ZOOM_STEP)}
+                disabled={zoom >= ZOOM_MAX}
+                className="w-8 h-8 flex items-center justify-center rounded-full text-gray-300 hover:bg-gray-700 disabled:opacity-30 transition-colors text-lg leading-none"
+                aria-label="Zoom in"
+              >＋</button>
+            </>
+          ) : (
+            <button
+              onClick={() => setZoomExpanded(true)}
+              className="px-3 py-1.5 text-sm font-mono text-gray-300 hover:text-white transition-colors"
+              title="Click to show zoom controls"
+            >
+              {Math.round(zoom * 100)}%
+            </button>
+          )}
+        </div>
+
         {/* Main FAB button */}
         <button
-          onClick={() => { setFabOpen((v) => !v); setConfirmClear(false); }}
+          onClick={() => { setFabOpen((v) => !v); setConfirmClear(false); setShowDisplaySettings(false); }}
           className={`w-12 h-12 rounded-full shadow-xl flex items-center justify-center text-white text-xl font-bold transition-all ${
             fabOpen ? "bg-gray-600 rotate-45" : "bg-gray-800 hover:bg-gray-700 border border-gray-600"
           }`}
@@ -566,60 +689,29 @@ export default function SimulatorCanvas() {
         </button>
       </div>
 
-      {/* ── Zoom toolbar (bottom-centre) ──────────────────── */}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3">
-        {/* Numeric base selector */}
-        <div className="flex items-center gap-0.5 bg-gray-900/90 border border-gray-700 rounded-full px-2 py-1.5 shadow-xl backdrop-blur-sm">
-          {(["hex", "dec", "bin", "oct"] as const).map((b) => (
-            <button
-              key={b}
-              onClick={() => setNumericBase(b)}
-              className={`px-2 py-0.5 rounded-full text-xs font-mono font-semibold transition-colors ${
-                numericBase === b
-                  ? "bg-cyan-600 text-white"
-                  : "text-gray-400 hover:text-white"
-              }`}
-            >
-              {b.toUpperCase()}
-            </button>
-          ))}
-        </div>
-
-        {/* Zoom controls */}
-        <div className="flex items-center gap-1 bg-gray-900/90 border border-gray-700 rounded-full px-3 py-1.5 shadow-xl backdrop-blur-sm">
-          <button
-            onClick={() => setZoom(zoom - ZOOM_STEP)}
-            disabled={zoom <= ZOOM_MIN}
-            className="w-7 h-7 flex items-center justify-center rounded-full text-gray-300 hover:bg-gray-700 disabled:opacity-30 transition-colors text-lg leading-none"
-            aria-label="Zoom out"
-          >−</button>
-          <button
-            onClick={() => setZoom(1)}
-            className="min-w-[3.5rem] text-center text-sm font-mono text-gray-300 hover:text-white transition-colors"
-            aria-label="Reset zoom"
-          >{Math.round(zoom * 100)}%</button>
-          <button
-            onClick={() => setZoom(zoom + ZOOM_STEP)}
-            disabled={zoom >= ZOOM_MAX}
-            className="w-7 h-7 flex items-center justify-center rounded-full text-gray-300 hover:bg-gray-700 disabled:opacity-30 transition-colors text-lg leading-none"
-            aria-label="Zoom in"
-          >＋</button>
-        </div>
-      </div>
-
       {/* ── Clock toolbar (bottom-left) ───────────────────── */}
-      <div className="fixed bottom-6 left-6 z-40 flex items-center gap-2 bg-gray-900/90 border border-gray-700 rounded-full px-3 py-1.5 shadow-xl backdrop-blur-sm">
+      <div
+        className="fixed bottom-6 left-6 z-40 flex items-center gap-2 bg-gray-900/90 border border-gray-700 rounded-full px-3 py-1.5 shadow-xl backdrop-blur-sm"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <span className="text-xs font-mono text-gray-400 min-w-[4rem] text-center">T{totalTicks}</span>
         <button
           onClick={tickClock}
-          className="px-2.5 py-1 rounded-full text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition-colors"
+          disabled={isHalted}
+          className="px-2.5 py-1 rounded-full text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           title="Advance clock by one tick"
         >Tick</button>
         <button
-          onClick={resetClock}
+          onClick={handleReset}
           className="w-7 h-7 flex items-center justify-center rounded-full text-gray-400 hover:bg-gray-700 hover:text-white transition-colors"
-          title="Reset clock"
+          title={mode === "simulation" ? "Reset to initial state" : "Reset clock"}
         >↺</button>
+        {isHalted && (
+          <span className="flex items-center gap-1 text-xs text-red-400 font-semibold">
+            <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+            Halted
+          </span>
+        )}
       </div>
 
       <AddComponentModal open={showAddModal} onClose={() => setShowAddModal(false)} />
@@ -647,5 +739,3 @@ function FabItem({
     </button>
   );
 }
-
-

@@ -1,14 +1,23 @@
 /**
  * displayStore.ts
  *
- * Persisted global UI preferences — currently just the numeric base used to
- * display port/register values everywhere on the canvas.
+ * Persisted global UI preferences — numeric base, wire visibility,
+ * and animation speed settings used across the canvas.
  */
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 export type NumericBase = "hex" | "dec" | "bin" | "oct";
+
+export type AnimationSpeedPreset = "fast" | "normal" | "slow";
+
+/** Preset durations in ms: [cpuAnimationDuration, componentAnimationDuration] */
+export const ANIMATION_PRESETS: Record<AnimationSpeedPreset, { cpu: number; component: number }> = {
+  fast:   { cpu: 2000,  component: 1500 },
+  normal: { cpu: 8000,  component: 6000 },
+  slow:   { cpu: 15000, component: 10000 },
+};
 
 interface DisplayState {
   numericBase: NumericBase;
@@ -25,6 +34,14 @@ interface DisplayState {
   /** Whether data signal wires are visible */
   showDataSignalWires: boolean;
   setShowDataSignalWires: (show: boolean) => void;
+  
+  /** Animation speed preset */
+  animationSpeed: AnimationSpeedPreset;
+  setAnimationSpeed: (preset: AnimationSpeedPreset) => void;
+  
+  /** Derived animation durations (in ms) based on preset */
+  cpuAnimationDuration: number;
+  componentAnimationDuration: number;
 }
 
 export const useDisplayStore = create<DisplayState>()(
@@ -41,6 +58,15 @@ export const useDisplayStore = create<DisplayState>()(
       
       showDataSignalWires: true,
       setShowDataSignalWires: (show) => set({ showDataSignalWires: show }),
+      
+      animationSpeed: "normal",
+      cpuAnimationDuration: ANIMATION_PRESETS.normal.cpu,
+      componentAnimationDuration: ANIMATION_PRESETS.normal.component,
+      setAnimationSpeed: (preset) => set({
+        animationSpeed: preset,
+        cpuAnimationDuration: ANIMATION_PRESETS[preset].cpu,
+        componentAnimationDuration: ANIMATION_PRESETS[preset].component,
+      }),
     }),
     { name: "simulator-display" }
   )

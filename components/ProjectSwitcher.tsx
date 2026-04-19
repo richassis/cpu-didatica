@@ -10,6 +10,7 @@ import {
   Plus, 
   Upload, 
   Download, 
+  Save,
   Trash2,
   Check,
 } from "lucide-react";
@@ -219,6 +220,15 @@ export default function ProjectSwitcher() {
 
             {/* Actions */}
             <div className="p-1">
+              <button
+                onClick={handleExport}
+                disabled={!activeTabId}
+                className="w-full flex items-center gap-2 px-3 py-2 text-left text-white hover:bg-gray-700 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Save className="w-4 h-4" />
+                <span>Save Project</span>
+              </button>
+
               <button
                 onClick={handleCreateNew}
                 className="w-full flex items-center gap-2 px-3 py-2 text-left text-white hover:bg-gray-700 rounded transition-colors"
