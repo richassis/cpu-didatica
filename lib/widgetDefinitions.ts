@@ -69,8 +69,8 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
       ports: {
         "addr": { side: "left" },    // Address signal → left
         "data": { side: "left" },    // Data input → left  
-        "rdMem": { side: "top" },    // Control signal → top
-        "wrMem": { side: "top" },    // Control signal → top
+        "rdMem": { side: "top" , offset: 45},    // Control signal → top
+        "wrMem": { side: "top" , offset: 55},    // Control signal → top
       },
     },
   },
@@ -188,6 +188,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
       defaultOutputSide: "right",
       ports: {
         // All CPU outputs are control signals → go to top
+        "out_wrIR": { side: "bottom" },
         "out_wrReg": { side: "bottom" },
         "out_muxAReg": { side: "bottom" },
         "out_muxDReg": { side: "bottom" },
@@ -196,7 +197,6 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
         "out_rdMem": { side: "bottom" },
         "out_wrMem": { side: "bottom" },
         "out_muxAMem": { side: "bottom" },
-        "out_wrIR": { side: "bottom" },
         "out_opULA": { side: "bottom" },
       },
     },

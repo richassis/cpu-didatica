@@ -37,7 +37,7 @@ export class Register implements Clockable, Connectable {
       "Data input to be latched"
     );
     this.in_writeEnable = new InputPort<number>(
-      "writeEnable", "number", 1, 0,
+      "writeEnable", "number", 1, 1,
       "Write-enable signal (1 = latch, 0 = hold)"
     );
 
@@ -89,6 +89,13 @@ export class Register implements Clockable, Connectable {
    * If write-enable is high, latch the data input.
    */
   onTick(): void {
+    this.commit();
+  }
+
+  /**
+   * Sequential phase: latch data when write-enable is high.
+   */
+  commit(): void {
     if (this.in_writeEnable.value !== 0) {
       this.out_value.set(this.clamp(this.in_data.value));
     }

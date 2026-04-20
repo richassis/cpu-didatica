@@ -143,10 +143,10 @@ export class Ula implements Clockable, Connectable {
   // ── Core ─────────────────────────────────────────────────────
 
   /**
-   * Execute the current operation on a and b, storing the result
+   * Combinational phase: execute the current operation on a and b, storing the result
    * and updating status flags. Returns the numeric result.
    */
-  execute(): number {
+  evaluate(): number {
     const a = this.in_a.value;
     const b = this.in_b.value;
     const op = this.in_operation.value as UlaOperation;
@@ -193,7 +193,7 @@ export class Ula implements Clockable, Connectable {
     this.a = a;
     this.b = b;
     this.operation = op;
-    return this.execute();
+    return this.evaluate();
   }
 
   /** Reset to default state. */
@@ -214,8 +214,7 @@ export class Ula implements Clockable, Connectable {
    * Executes the ULA operation with current inputs.
    */
   onTick(): void {
-    // Execute is typically triggered by the CPU, but we can auto-execute here
-    // if desired. For now, keep it as a stub.
+    this.evaluate();
   }
 
   // ── Helpers ──────────────────────────────────────────────────

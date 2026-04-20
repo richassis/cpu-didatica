@@ -10,11 +10,16 @@
 /**
  * Interface for simulator components that react to clock ticks.
  *
- * The Clock calls `onTick()` on every registered component each time
- * it advances. Components should perform their edge-triggered logic here.
+ * The simulator supports phased execution:
+ * - evaluate(): combinational phase
+ * - commit(): sequential phase
+ *
+ * `onTick()` is kept for backwards compatibility and manual ticking.
  */
 export interface Clockable {
   onTick(): void;
+  evaluate?: () => void;
+  commit?: () => void;
 }
 
 /**

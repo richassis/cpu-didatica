@@ -33,6 +33,19 @@ function isConnectable(obj: unknown): obj is Connectable {
   );
 }
 
+function inferComponentType(obj: SimulatorObject): string {
+  if (obj instanceof Register) return "Register";
+  if (obj instanceof Gpr) return "GprComponent";
+  if (obj instanceof Ula) return "UlaComponent";
+  if (obj instanceof Adder) return "AdderComponent";
+  if (obj instanceof Mux) return "MuxComponent";
+  if (obj instanceof Memory) return "MemoryComponent";
+  if (obj instanceof InstructionMemory) return "InstructionMemoryComponent";
+  if (obj instanceof Decoder) return "DecoderComponent";
+  if (obj instanceof CPU) return "CpuComponent";
+  return "Unknown";
+}
+
 interface SimulatorState {
   /** Map from ComponentInstance.id → data-layer object */
   objects: Map<string, SimulatorObject>;
@@ -250,8 +263,22 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
       if (isConnectable(newObj)) {
         bus.registerComponent(newObj);
       }
+
+      if (newObj instanceof CPU) {
+        // If CPU is created after other components, register existing clockables now.
+        const layoutById = new Map(getLayoutStore().getState().components.map((c) => [c.id, c]));
+
+        for (const [existingId, existingObj] of map.entries()) {
+          if (existingObj instanceof CPU) continue;
+          if (!isClockable(existingObj)) continue;
+
+          const inferredType = inferComponentType(existingObj);
+          const customSteps = layoutById.get(existingId)?.tickSteps as CpuState[] | undefined;
+          newObj.registerComponent(existingId, inferredType, existingObj, customSteps);
+        }
+      }
       
-      // Register with CPU for step-based ticking (if not the CPU itself)
+      // Register with CPU runtime and animation mask metadata (if not the CPU itself)
       if (isClockable(newObj) && type !== "CpuComponent") {
         // Find the primary CPU and register this component
         for (const obj of map.values()) {

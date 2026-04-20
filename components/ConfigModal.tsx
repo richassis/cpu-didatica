@@ -18,7 +18,7 @@ interface Props {
 }
 
 /**
- * Config modal: label editing, manual port value overrides, tick step config, and wire management.
+ * Config modal: label editing, manual port value overrides, animation step config, and wire management.
  */
 export default function ConfigModal({ component, onClose }: Props) {
   const updateLabel = useLayoutStore((s) => s.updateLabel);
@@ -59,7 +59,7 @@ export default function ConfigModal({ component, onClose }: Props) {
   const isInstructionMemory = component.type === "InstructionMemory";
   const imem = isInstructionMemory ? useSimulatorStore.getState().getInstructionMemory(component.id) : undefined;
   
-  // Tick steps configuration
+  // Animation step configuration (kept in tickSteps for backward compatibility)
   const currentTickSteps = useMemo(() => getComponentTickSteps(component.id) ?? [], [component.id, getComponentTickSteps, revision]);
   const [tickSteps, setTickSteps] = useState<CpuState[]>(currentTickSteps);
   
@@ -155,7 +155,7 @@ export default function ConfigModal({ component, onClose }: Props) {
       touch();
     }
     
-    // Save tick steps if they changed
+    // Save animation step mask if it changed
     if (isClockableObj && JSON.stringify(tickSteps) !== JSON.stringify(currentTickSteps)) {
       setComponentTickSteps(component.id, tickSteps);
     }
@@ -389,11 +389,11 @@ export default function ConfigModal({ component, onClose }: Props) {
             </div>
           )}
 
-          {/* ── Tick Steps Configuration ────────────────── */}
+          {/* ── Animation Steps Configuration ────────────────── */}
           {isClockableObj && component.type !== "CpuComponent" && (
             <div className="p-4 border-b border-gray-800 space-y-3">
               <div className="flex items-center justify-between">
-                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Tick Steps</h3>
+                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Animation Steps</h3>
                 <button
                   onClick={handleTickComponent}
                   className="text-[10px] px-2 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-colors"
@@ -403,7 +403,7 @@ export default function ConfigModal({ component, onClose }: Props) {
                 </button>
               </div>
               <p className="text-[10px] text-gray-500">
-                Select which CPU states trigger this component to tick.
+                Select which CPU states animate this component wires. Functional execution runs every CPU tick.
               </p>
               <div className="grid grid-cols-3 gap-1.5">
                 {ALL_CPU_STATES.map((state) => {

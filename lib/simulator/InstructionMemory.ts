@@ -104,17 +104,17 @@ export class InstructionMemory implements Clockable, Connectable {
   // ── Core ─────────────────────────────────────────────────────
 
   /**
-   * Read the instruction at the current address.
+   * Combinational phase: read the instruction at the current address.
    * Always outputs mem[addr] — no enable signal needed.
    */
-  execute(): void {
+  evaluate(): void {
     const addr = this.clampAddr(this.in_addr.value);
     this.out_data.set(this._cells[addr]);
   }
 
   /** Called by the global Clock on each tick. */
   onTick(): void {
-    this.execute();
+    this.evaluate();
   }
 
   /** Reset output to instruction at address 0 (does NOT clear memory). */

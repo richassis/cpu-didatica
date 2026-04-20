@@ -81,10 +81,10 @@ export class Adder implements Clockable, Connectable {
   // ── Core ─────────────────────────────────────────────────────
 
   /**
-   * Execute A + B, storing the result and carry flag in the output ports.
+   * Combinational phase: execute A + B and update outputs.
    * Returns the numeric result.
    */
-  execute(): number {
+  evaluate(): number {
     const raw = this.in_a.value + this.in_b.value;
     const max = this.max;
     const result = this.clamp(raw);
@@ -97,7 +97,7 @@ export class Adder implements Clockable, Connectable {
   compute(a: number, b: number = 0): number {
     this.in_a.set(this.clamp(a));
     this.in_b.set(this.clamp(b));
-    return this.execute();
+    return this.evaluate();
   }
 
   /** Reset to default state. */
@@ -111,7 +111,7 @@ export class Adder implements Clockable, Connectable {
   // ── Clockable callback ───────────────────────────────────────
 
   onTick(): void {
-    this.execute();
+    this.evaluate();
   }
 
   // ── Helpers ──────────────────────────────────────────────────

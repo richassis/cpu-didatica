@@ -126,10 +126,10 @@ export class Decoder implements Clockable, Connectable {
     return {
       instruction: this.in_instruction,
       opcode: this.out_opcode,
-      gprAddr: this.out_gprAddr,
       operand: this.out_operand,
       srcA: this.out_srcA,
       srcB: this.out_srcB,
+      gprAddr: this.out_gprAddr,
       dst: this.out_dst,
     };
   }
@@ -184,6 +184,13 @@ export class Decoder implements Clockable, Connectable {
    * Decodes the instruction from the input port and updates all output ports.
    */
   onTick(): void {
+    this.evaluate();
+  }
+
+  /**
+   * Combinational phase: decode current instruction and drive outputs.
+   */
+  evaluate(): void {
     this._decode();
   }
 

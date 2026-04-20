@@ -150,16 +150,36 @@ export class Gpr implements Clockable, Connectable {
    * Latches in_writeData into register at in_writeAddr if in_writeEnable is high.
    */
   onTick(): void {
+    this.evaluate();
+    this.commit();
+  }
+
+  /**
+   * Combinational phase: refresh read outputs for current addresses.
+   */
+  evaluate(): void {
     const readAddrA = this.clampIndex(this.in_readAddrA.get());
     const readAddrB = this.clampIndex(this.in_readAddrB.get());
     this.out_readDataA.set(this._registers[readAddrA]);
     this.out_readDataB.set(this._registers[readAddrB]);
-    
+  }
+
+  /**
+   * Sequential phase: apply pending write.
+   */
+  commit(): void {
     if (this.in_writeEnable.get()) {
       const addr = this.clampIndex(this.in_writeAddr.get());
       const mask = (1 << this.bitWidth) - 1;
       this._registers[addr] = this.in_writeData.get() & mask;
 
+      // Keep outputs coherent when writing into currently selected read registers.
+      if (addr === this.in_readAddrA.get()) {
+        this.out_readDataA.set(this._registers[addr]);
+      }
+      if (addr === this.in_readAddrB.get()) {
+        this.out_readDataB.set(this._registers[addr]);
+      }
     }
   }
 

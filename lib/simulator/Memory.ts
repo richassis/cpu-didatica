@@ -17,7 +17,7 @@ import { type Connectable, type PortMap, InputPort, OutputPort } from "./Port";
  *    out     – data read from mem[addr] (0 when rdMem = 0)
  *
  * Both rdMem and wrMem are evaluated on every clock tick.
- * If both are 1 simultaneously, the write happens first, then the read.
+ * In phased execution, reads happen in evaluate and writes happen in commit.
  *
  * Default: 256 words × 16 bits.
  */
@@ -121,32 +121,33 @@ export class Memory implements Clockable, Connectable {
   // ── Core ─────────────────────────────────────────────────────
 
   /**
-   * Evaluate one memory access cycle.
-   *
-   * If wrMem is 1 → write data to mem[addr].
-   * If rdMem is 1 → drive out_data with mem[addr].
-   * If rdMem is 0 → out_data is held at its previous value (bus hold).
-   *
-   * Write-before-read ordering means a simultaneous read+write returns
-   * the newly written value.
+   * Combinational phase: read from memory when enabled.
    */
-  execute(): void {
+  evaluate(): void {
     const addr  = this.clampAddr(this.in_addr.value);
-    const wr    = this.in_wrMem.value !== 0;
     const rd    = this.in_rdMem.value !== 0;
-
-    if (wr) {
-      this._cells[addr] = this.clampWord(this.in_data.value);
-    }
 
     if (rd) {
       this.out_data.set(this._cells[addr]);
     }
   }
 
+  /**
+   * Sequential phase: write to memory when enabled.
+   */
+  commit(): void {
+    const addr  = this.clampAddr(this.in_addr.value);
+    const wr    = this.in_wrMem.value !== 0;
+
+    if (wr) {
+      this._cells[addr] = this.clampWord(this.in_data.value);
+    }
+  }
+
   /** Called by the global Clock on each tick. */
   onTick(): void {
-    this.execute();
+    this.evaluate();
+    this.commit();
   }
 
   /** Reset all cells to zero and clear the output port. */

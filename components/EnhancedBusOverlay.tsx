@@ -65,6 +65,8 @@ export default function EnhancedBusOverlay({
   const zoom = useLayoutStore((s) => s.zoom);
   const objects = useSimulatorStore((s) => s.objects);
   const revision = useSimulatorStore((s) => s.revision);
+  const getPrimaryCpu = useSimulatorStore((s) => s.getPrimaryCpu);
+  const getComponentTickSteps = useSimulatorStore((s) => s.getComponentTickSteps);
   const base = useDisplayStore((s) => s.numericBase);
   const showCpuSignalWires = useDisplayStore((s) => s.showCpuSignalWires);
   const showDataSignalWires = useDisplayStore((s) => s.showDataSignalWires);
@@ -197,11 +199,26 @@ export default function EnhancedBusOverlay({
     }
 
     const currentWireData = Array.from(wireDataByIdRef.current.values());
+    const cpu = getPrimaryCpu();
+    const executedState = cpu?.previousState ?? cpu?.state;
 
     const visibleWireIds = currentWireData
       .filter((wireData) => {
         if (wireData.isCpuControlSignal && !showCpuSignalWires) return false;
         if (!wireData.isCpuControlSignal && !showDataSignalWires) return false;
+
+        // Keep per-state configuration as animation-only masking.
+        if (!wireData.isCpuControlSignal && executedState !== undefined) {
+          const animationSteps = getComponentTickSteps(wireData.wire.sourceComponentId);
+          if (
+            animationSteps &&
+            animationSteps.length > 0 &&
+            !animationSteps.includes(executedState)
+          ) {
+            return false;
+          }
+        }
+
         return true;
       })
       .map((wireData) => wireData.wire.id);
@@ -256,6 +273,8 @@ export default function EnhancedBusOverlay({
     };
   }, [
     revision,
+    getPrimaryCpu,
+    getComponentTickSteps,
     showCpuSignalWires,
     showDataSignalWires,
     cpuAnimationDuration,

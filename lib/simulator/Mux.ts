@@ -85,9 +85,9 @@ export class Mux implements Clockable, Connectable {
   // ── Core ─────────────────────────────────────────────────────
 
   /**
-   * Evaluate the mux: read sel, pick the corresponding input, update output.
+   * Combinational phase: read sel, pick the corresponding input, update output.
    */
-  execute(): number {
+  evaluate(): number {
     const sel = this.clamp(this.in_sel.value, this.numInputs === 3 ? 2 : 1);
     let result: number;
     switch (sel) {
@@ -110,7 +110,7 @@ export class Mux implements Clockable, Connectable {
   // ── Clockable callback ───────────────────────────────────────
 
   onTick(): void {
-    this.execute();
+    this.evaluate();
   }
 
   // ── Helpers ──────────────────────────────────────────────────

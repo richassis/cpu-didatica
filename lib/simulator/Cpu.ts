@@ -18,7 +18,7 @@ export interface ControlSignalDef {
 }
 
 export const CONTROL_SIGNAL_DEFS: ControlSignalDef[] = [
-  { name: "wrReg", bitWidth: 1, description: "Write enable for GPR" },
+  { name: "wrIR", bitWidth: 1, description: "Write enable for IR" },
   { name: "muxAReg", bitWidth: 1, description: "GPR address mux select" },
   { name: "muxDReg", bitWidth: 2, description: "GPR data mux select" },
   { name: "wrPC", bitWidth: 1, description: "Write enable for PC" },
@@ -26,7 +26,7 @@ export const CONTROL_SIGNAL_DEFS: ControlSignalDef[] = [
   { name: "rdMem", bitWidth: 1, description: "Memory read enable" },
   { name: "wrMem", bitWidth: 1, description: "Memory write enable" },
   { name: "muxAMem", bitWidth: 1, description: "Memory address mux select" },
-  { name: "wrIR", bitWidth: 1, description: "Write enable for IR" },
+  { name: "wrReg", bitWidth: 1, description: "Write enable for GPR" },
   { name: "opULA", bitWidth: 3, description: "ULA operation select" },
 ];
 
@@ -71,7 +71,7 @@ export const OPCODE_SEQUENCES: Readonly<Partial<Record<Opcode, CpuState[]>>> = {
  * - opULA: ULA operation code (see UlaOperation enum)
  */
 export interface ControlSignals {
-  wrReg?: number;
+  wrIR?: number;
   muxAReg?: number;
   muxDReg?: number;
   wrPC?: number;
@@ -79,7 +79,7 @@ export interface ControlSignals {
   rdMem?: number;
   wrMem?: number;
   muxAMem?: number;
-  wrIR?: number;
+  wrReg?: number;
   opULA?: number;
 }
 
@@ -89,7 +89,7 @@ export interface ControlSignals {
  * Note: Mux signals have non-zero defaults to select appropriate data paths.
  */
 export const DEFAULT_CONTROL_SIGNALS: Readonly<ControlSignals> = {
-  wrReg: 0,
+  wrIR: 0,
   muxAReg: 1,              // Default mux selection
   muxDReg: 2,              // Default mux selection
   wrPC: 0,
@@ -97,7 +97,7 @@ export const DEFAULT_CONTROL_SIGNALS: Readonly<ControlSignals> = {
   rdMem: 0,
   wrMem: 0,
   muxAMem: 1,              // Default mux selection
-  wrIR: 0,
+  wrReg: 0,
   opULA: UlaOperation.ADD, // Default ULA operation
 };
 
@@ -146,6 +146,7 @@ export const STATE_CONTROL_SIGNALS: Readonly<Partial<Record<CpuState, ControlSig
     muxAReg: 1,   // Select address for register
     muxDReg: 2,   // Select data for register
     rdMem: 1,     // Enable memory read (implicit from setting rdMem port)
+    wrReg: 0,
   },
 
   // DECODE state - instruction latched, PC incremented
@@ -216,6 +217,7 @@ export interface RegisteredComponent {
   id: string;
   type: string;
   component: Clockable;
+  /** Animation-only state mask (does not gate functional ticking). */
   tickSteps: CpuState[];
 }
 
@@ -270,7 +272,7 @@ export class CPU implements Clockable, Connectable {
   readonly in_flagNegative: InputPort<number>;
 
   // ── Output Ports (Control Signals) ───────────────────────────
-  readonly out_wrReg: OutputPort<number>;
+  readonly out_wrIR: OutputPort<number>;
   readonly out_muxAReg: OutputPort<number>;
   readonly out_muxDReg: OutputPort<number>;
   readonly out_wrPC: OutputPort<number>;
@@ -278,7 +280,7 @@ export class CPU implements Clockable, Connectable {
   readonly out_rdMem: OutputPort<number>;
   readonly out_wrMem: OutputPort<number>;
   readonly out_muxAMem: OutputPort<number>;
-  readonly out_wrIR: OutputPort<number>;
+  readonly out_wrReg: OutputPort<number>;
   readonly out_opULA: OutputPort<number>;
   readonly out_state: OutputPort<number>;
   readonly out_halted: OutputPort<boolean>;
@@ -294,7 +296,7 @@ export class CPU implements Clockable, Connectable {
     this.in_flagNegative = new InputPort<number>("in_flagNegative", "number", 1, 0);
 
     // Control signal output ports
-    this.out_wrReg = new OutputPort<number>("out_wrReg", "number", 1, 0);
+    this.out_wrIR = new OutputPort<number>("out_wrIR", "number", 1, 0);
     this.out_muxAReg = new OutputPort<number>("out_muxAReg", "number", 1, 1);
     this.out_muxDReg = new OutputPort<number>("out_muxDReg", "number", 2, 2);
     this.out_wrPC = new OutputPort<number>("out_wrPC", "number", 1, 0);
@@ -302,7 +304,7 @@ export class CPU implements Clockable, Connectable {
     this.out_rdMem = new OutputPort<number>("out_rdMem", "number", 1, 0);
     this.out_wrMem = new OutputPort<number>("out_wrMem", "number", 1, 1);
     this.out_muxAMem = new OutputPort<number>("out_muxAMem", "number", 1, 0);
-    this.out_wrIR = new OutputPort<number>("out_wrIR", "number", 1, 0);
+    this.out_wrReg = new OutputPort<number>("out_wrReg", "number", 1, 0);
     this.out_opULA = new OutputPort<number>("out_opULA", "number", 3, UlaOperation.ADD);
     this.out_state = new OutputPort<number>("out_state", "number", 4, CpuState.RESET);
     this.out_halted = new OutputPort<boolean>("out_halted", "boolean", 1, false);
@@ -314,11 +316,14 @@ export class CPU implements Clockable, Connectable {
   // ── Component Registration ───────────────────────────────────
 
   /**
-   * Register a component for step-based ticking.
+    * Register a component for CPU-managed ticking.
+    *
+    * Note: `tickSteps` is preserved as an animation mask only.
+    * Functional ticking is global for all registered components each CPU tick.
    * @param id Component ID
    * @param type Component type string (e.g., "Register", "GprComponent")
    * @param component The Clockable component instance
-   * @param customTickSteps Optional custom tick steps (uses defaults if not provided)
+    * @param customTickSteps Optional animation step mask (uses defaults if not provided)
    */
   registerComponent(
     id: string,
@@ -343,14 +348,14 @@ export class CPU implements Clockable, Connectable {
   }
 
   /**
-   * Get the tick steps for a registered component.
+   * Get animation steps for a registered component.
    */
   getComponentTickSteps(id: string): CpuState[] | undefined {
     return this._registeredComponents.get(id)?.tickSteps;
   }
 
   /**
-   * Set the tick steps for a registered component.
+   * Set animation steps for a registered component.
    */
   setComponentTickSteps(id: string, steps: CpuState[]): void {
     const entry = this._registeredComponents.get(id);
@@ -374,16 +379,16 @@ export class CPU implements Clockable, Connectable {
       in_flagZero: this.in_flagZero,
       in_flagCarry: this.in_flagCarry,
       in_flagNegative: this.in_flagNegative,
-      out_wrReg: this.out_wrReg,
-      out_muxAReg: this.out_muxAReg,
-      out_muxDReg: this.out_muxDReg,
-      out_wrPC: this.out_wrPC,
       out_muxPC: this.out_muxPC,
+      out_wrPC: this.out_wrPC,
+      out_wrIR: this.out_wrIR,
       out_rdMem: this.out_rdMem,
       out_wrMem: this.out_wrMem,
-      out_muxAMem: this.out_muxAMem,
-      out_wrIR: this.out_wrIR,
+      out_muxAReg: this.out_muxAReg,
+      out_muxDReg: this.out_muxDReg,
+      out_wrReg: this.out_wrReg,
       out_opULA: this.out_opULA,
+      out_muxAMem: this.out_muxAMem,
       out_state: this.out_state,
       out_halted: this.out_halted,
     };
@@ -500,14 +505,18 @@ export class CPU implements Clockable, Connectable {
   // ── Tick orchestration ───────────────────────────────────────
 
   /**
-   * Main tick method that advances the CPU state and ticks appropriate components.
-   * This replaces the old global clock tick.
+   * Main tick method that advances the CPU state and ticks all components.
+   * Execution is phased to avoid order-sensitive race behavior.
    */
   tick(): void {
     if (this._paused) return;
 
     this.syncTestingOpcodeInput();
     this._totalTicks++;
+
+    // Refresh decoder outputs before state logic so DECODE reads the latest opcode
+    // produced from the IR value latched on the previous tick.
+    this.refreshInputsBeforeStateLogic();
 
     // First, execute the CPU's own state logic (emits signals and transitions to next state)
     this.onTick();
@@ -517,19 +526,63 @@ export class CPU implements Clockable, Connectable {
       return;
     }
 
-    // Tick components for the state that was EXECUTED (previousState), not the next state.
-    // This ensures components see the control signals that were just emitted.
-    this.tickComponentsForState(this._previousState);
+    this.tickAllComponentsPhased();
   }
 
   /**
-   * Tick all components registered for the given state.
+   * Refresh combinational producers that feed CPU input ports used by state logic.
+   *
+   * Most importantly, the Decoder must run before DECODE so `in_opcode`
+   * reflects the current IR value.
    */
-  private tickComponentsForState(state: CpuState): void {
+  private refreshInputsBeforeStateLogic(): void {
+    // In testing mode, opcode is forced directly and does not depend on Decoder output.
+    if (this._testingModeEnabled && this._testingModeOpcode !== null) {
+      return;
+    }
+
     for (const entry of this._registeredComponents.values()) {
-      if (entry.tickSteps.includes(state)) {
-        entry.component.onTick();
+      if (entry.type === "DecoderComponent") {
+        this.runEvaluate(entry.component);
       }
+    }
+  }
+
+  /**
+   * Tick all registered components in two phases:
+   * 1) evaluate combinational logic
+   * 2) commit sequential state updates
+   */
+  private tickAllComponentsPhased(): void {
+    const entries = Array.from(this._registeredComponents.values());
+
+    for (const entry of entries) {
+      this.runEvaluate(entry.component);
+    }
+
+    for (const entry of entries) {
+      this.runCommit(entry.component);
+    }
+  }
+
+  private runEvaluate(component: Clockable): void {
+    const phased = component as Clockable & { evaluate?: () => void; commit?: () => void };
+
+    if (typeof phased.evaluate === "function") {
+      phased.evaluate();
+      return;
+    }
+
+    // Legacy components that only implement onTick continue to work.
+    if (typeof phased.commit !== "function") {
+      component.onTick();
+    }
+  }
+
+  private runCommit(component: Clockable): void {
+    const phased = component as Clockable & { commit?: () => void };
+    if (typeof phased.commit === "function") {
+      phased.commit();
     }
   }
 
@@ -540,7 +593,8 @@ export class CPU implements Clockable, Connectable {
   tickSingleComponent(id: string): void {
     const entry = this._registeredComponents.get(id);
     if (entry) {
-      entry.component.onTick();
+      this.runEvaluate(entry.component);
+      this.runCommit(entry.component);
     }
   }
 
