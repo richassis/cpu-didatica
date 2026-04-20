@@ -67,6 +67,7 @@ export default function EnhancedBusOverlay({
   const revision = useSimulatorStore((s) => s.revision);
   const getPrimaryCpu = useSimulatorStore((s) => s.getPrimaryCpu);
   const getComponentTickSteps = useSimulatorStore((s) => s.getComponentTickSteps);
+  const getComponentTickOrderByState = useSimulatorStore((s) => s.getComponentTickOrderByState);
   const base = useDisplayStore((s) => s.numericBase);
   const showCpuSignalWires = useDisplayStore((s) => s.showCpuSignalWires);
   const showDataSignalWires = useDisplayStore((s) => s.showDataSignalWires);
@@ -227,6 +228,29 @@ export default function EnhancedBusOverlay({
 
     const cpuIds = visibleWireIds.filter((id) => wireDataByIdRef.current.get(id)?.isCpuControlSignal);
     const nonCpuIds = visibleWireIds.filter((id) => !wireDataByIdRef.current.get(id)?.isCpuControlSignal);
+    const nonCpuOrderGroups = new Map<number, string[]>();
+
+    for (const id of nonCpuIds) {
+      const wireData = wireDataByIdRef.current.get(id);
+      if (!wireData) continue;
+
+      const sourceId = wireData.wire.sourceComponentId;
+      const orderForState =
+        executedState !== undefined
+          ? getComponentTickOrderByState(sourceId)?.[executedState] ?? 0
+          : 0;
+      const normalizedOrder = Number.isFinite(orderForState)
+        ? Math.max(0, Math.floor(orderForState))
+        : 0;
+
+      const group = nonCpuOrderGroups.get(normalizedOrder) ?? [];
+      group.push(id);
+      nonCpuOrderGroups.set(normalizedOrder, group);
+    }
+
+    const sortedNonCpuGroups = Array.from(nonCpuOrderGroups.entries())
+      .sort((a, b) => a[0] - b[0])
+      .map(([, ids]) => ids);
 
     const startTime = Date.now();
 
@@ -250,12 +274,20 @@ export default function EnhancedBusOverlay({
       }
 
       for (const id of nonCpuIds) {
-        if (elapsed <= cpuAnimationDuration) {
-          progress.set(id, 0);
-          continue;
-        }
+        progress.set(id, 0);
+      }
 
-        progress.set(id, Math.min(1, (elapsed - cpuAnimationDuration) / componentAnimationDuration));
+      if (elapsed > cpuAnimationDuration && componentAnimationDuration > 0 && sortedNonCpuGroups.length > 0) {
+        const compElapsed = elapsed - cpuAnimationDuration;
+        const perGroupDuration = componentAnimationDuration / sortedNonCpuGroups.length;
+
+        sortedNonCpuGroups.forEach((groupIds, index) => {
+          const groupStart = index * perGroupDuration;
+          const groupProgress = Math.min(1, Math.max(0, (compElapsed - groupStart) / perGroupDuration));
+          for (const id of groupIds) {
+            progress.set(id, groupProgress);
+          }
+        });
       }
 
       setAnimationProgress(progress);
@@ -275,6 +307,7 @@ export default function EnhancedBusOverlay({
     revision,
     getPrimaryCpu,
     getComponentTickSteps,
+    getComponentTickOrderByState,
     showCpuSignalWires,
     showDataSignalWires,
     cpuAnimationDuration,

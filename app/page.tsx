@@ -25,6 +25,9 @@ export default function Home() {
   const createObject = useSimulatorStore((s) => s.createObject);
   const applyObjectStates = useSimulatorStore((s) => s.applyObjectStates);
   const setComponentTickSteps = useSimulatorStore((s) => s.setComponentTickSteps);
+  const setComponentTickOrderByState = useSimulatorStore((s) => s.setComponentTickOrderByState);
+  const getComponentTickSteps = useSimulatorStore((s) => s.getComponentTickSteps);
+  const getComponentTickOrderByState = useSimulatorStore((s) => s.getComponentTickOrderByState);
 
   const [isHydrated, setIsHydrated] = useState(false);
   const previousActiveTabRef = useRef<string | null>(null);
@@ -167,6 +170,9 @@ export default function Home() {
       if (comp.tickSteps) {
         setComponentTickSteps(comp.id, comp.tickSteps);
       }
+      if (comp.tickOrderByState) {
+        setComponentTickOrderByState(comp.id, comp.tickOrderByState);
+      }
     }
 
     restoreWires(data.wires);
@@ -187,8 +193,10 @@ export default function Home() {
     clearObjects,
     createObject,
     setComponentTickSteps,
+    setComponentTickOrderByState,
     restoreWires,
     applyObjectStates,
+    setLayoutState,
   ]);
 
   // Persist current runtime/layout state into the active project.
@@ -200,13 +208,24 @@ export default function Home() {
       const projectWires = useProjectStore.getState().projectData[activeTabId]?.wires ?? [];
       const nodesById = new Map(projectWires.map((wire) => [wire.id, wire.nodes ?? []]));
 
+      const enhancedComponents = layoutComponents.map((component) => {
+        const tickSteps = getComponentTickSteps(component.id);
+        const tickOrderByState = getComponentTickOrderByState(component.id);
+
+        return {
+          ...component,
+          ...(tickSteps ? { tickSteps } : {}),
+          ...(tickOrderByState && Object.keys(tickOrderByState).length > 0 ? { tickOrderByState } : {}),
+        };
+      });
+
       const wires: WireDescriptor[] = runtimeWires.map((wire) => ({
         ...wire,
         nodes: nodesById.get(wire.id) ?? wire.nodes ?? [],
       }));
 
       updateProjectData(activeTabId, {
-        components: layoutComponents,
+        components: enhancedComponents,
         wires,
       });
 
@@ -219,7 +238,7 @@ export default function Home() {
     // Debounced save
     const timeout = setTimeout(saveState, 500);
     return () => clearTimeout(timeout);
-  }, [layoutComponents, activeTabId, isHydrated, updateProjectData, getWires, setLayoutState]);
+  }, [layoutComponents, activeTabId, isHydrated, updateProjectData, getWires, setLayoutState, getComponentTickSteps, getComponentTickOrderByState]);
 
   if (!isHydrated) {
     return (

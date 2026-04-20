@@ -35,6 +35,8 @@ export default function ConfigModal({ component, onClose }: Props) {
   const tickSingleComponent = useSimulatorStore((s) => s.tickSingleComponent);
   const getComponentTickSteps = useSimulatorStore((s) => s.getComponentTickSteps);
   const setComponentTickSteps = useSimulatorStore((s) => s.setComponentTickSteps);
+  const getComponentTickOrderByState = useSimulatorStore((s) => s.getComponentTickOrderByState);
+  const setComponentTickOrderByState = useSimulatorStore((s) => s.setComponentTickOrderByState);
   const recreateObject = useSimulatorStore((s) => s.recreateObject);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const wires = useMemo(() => getWires(), [getWires, revision]);
@@ -62,11 +64,21 @@ export default function ConfigModal({ component, onClose }: Props) {
   // Animation step configuration (kept in tickSteps for backward compatibility)
   const currentTickSteps = useMemo(() => getComponentTickSteps(component.id) ?? [], [component.id, getComponentTickSteps, revision]);
   const [tickSteps, setTickSteps] = useState<CpuState[]>(currentTickSteps);
+  const currentTickOrderByState = useMemo(
+    () => getComponentTickOrderByState(component.id) ?? {},
+    [component.id, getComponentTickOrderByState, revision]
+  );
+  const [tickOrderByState, setTickOrderByState] = useState<Partial<Record<CpuState, number>>>(currentTickOrderByState);
   
   // Update tickSteps when currentTickSteps changes
   useEffect(() => {
     setTickSteps(currentTickSteps);
   }, [currentTickSteps]);
+
+  // Update tickOrderByState when currentTickOrderByState changes
+  useEffect(() => {
+    setTickOrderByState(currentTickOrderByState);
+  }, [currentTickOrderByState]);
   
   const ports = useMemo(() => {
     if (!isConnectable) return [];
@@ -98,6 +110,33 @@ export default function ConfigModal({ component, onClose }: Props) {
         ? prev.filter((s) => s !== state)
         : [...prev, state].sort((a, b) => a - b)
     );
+  };
+
+  const setTickOrderForState = (state: CpuState, rawValue: string) => {
+    const trimmed = rawValue.trim();
+    setTickOrderByState((prev) => {
+      const next = { ...prev };
+      if (trimmed === "") {
+        delete next[state];
+        return next;
+      }
+
+      const parsed = Number(trimmed);
+      if (!Number.isFinite(parsed)) return prev;
+      next[state] = Math.max(0, Math.floor(parsed));
+      return next;
+    });
+  };
+
+  const normalizeOrderMap = (orderMap: Partial<Record<CpuState, number>>): Partial<Record<CpuState, number>> => {
+    const normalized: Partial<Record<CpuState, number>> = {};
+    for (const [stateKey, rawOrder] of Object.entries(orderMap)) {
+      const state = Number(stateKey) as CpuState;
+      const parsed = Number(rawOrder);
+      if (!Number.isFinite(parsed)) continue;
+      normalized[state] = Math.max(0, Math.floor(parsed));
+    }
+    return normalized;
   };
 
   // Sync testing mode from CPU when modal is opened for this component
@@ -158,6 +197,12 @@ export default function ConfigModal({ component, onClose }: Props) {
     // Save animation step mask if it changed
     if (isClockableObj && JSON.stringify(tickSteps) !== JSON.stringify(currentTickSteps)) {
       setComponentTickSteps(component.id, tickSteps);
+    }
+
+    const normalizedCurrentOrder = normalizeOrderMap(currentTickOrderByState);
+    const normalizedNewOrder = normalizeOrderMap(tickOrderByState);
+    if (isClockableObj && JSON.stringify(normalizedNewOrder) !== JSON.stringify(normalizedCurrentOrder)) {
+      setComponentTickOrderByState(component.id, normalizedNewOrder);
     }
     
     onClose();
@@ -422,6 +467,32 @@ export default function ConfigModal({ component, onClose }: Props) {
                     </button>
                   );
                 })}
+              </div>
+
+              <div className="pt-2 border-t border-gray-800 space-y-2">
+                <h4 className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Animation Substep Order</h4>
+                <p className="text-[10px] text-gray-500">
+                  Lower values animate earlier inside the same CPU state. Leave blank to use default order (0).
+                </p>
+                <div className="grid grid-cols-3 gap-2">
+                  {ALL_CPU_STATES.map((state) => {
+                    const value = tickOrderByState[state];
+                    return (
+                      <label key={`order-${state}`} className="flex flex-col gap-1">
+                        <span className="text-[9px] font-mono text-gray-400">{CPU_STATE_LABELS[state]}</span>
+                        <input
+                          type="number"
+                          min={0}
+                          step={1}
+                          value={value ?? ""}
+                          onChange={(e) => setTickOrderForState(state, e.target.value)}
+                          className="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-[10px] font-mono text-gray-200 focus:border-cyan-500 focus:outline-none"
+                          placeholder="0"
+                        />
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           )}

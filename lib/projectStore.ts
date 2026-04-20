@@ -27,6 +27,8 @@ export interface ComponentConfig {
   name: string;
   /** CPU states/steps this component ticks on */
   tickSteps?: number[];
+  /** Animation substep order by CPU state (lower runs first) */
+  tickOrderByState?: Partial<Record<number, number>>;
   /** Additional configuration metadata */
   config?: Record<string, unknown>;
 }
@@ -381,7 +383,8 @@ export const useProjectStore = create<ProjectState>()(
           showWelcome: false,
         }));
 
-        // If this is a v2+ project with component configurations, restore them
+        // If this is a v2+ project with component configurations, restore them.
+        // tickOrderByState is optional and backwards-compatible.
         if (data.version && data.version >= 2) {
           // Delay the restoration to allow components to be created first
           setTimeout(() => {
@@ -394,6 +397,9 @@ export const useProjectStore = create<ProjectState>()(
                 if (component.tickSteps) {
                   cpu.setComponentTickSteps(component.id, component.tickSteps);
                 }
+                if (component.tickOrderByState) {
+                  cpu.setComponentTickOrderByState(component.id, component.tickOrderByState);
+                }
               }
               
               // Then try componentConfigs array (fallback for older v2 format)
@@ -401,6 +407,9 @@ export const useProjectStore = create<ProjectState>()(
                 for (const config of data.componentConfigs) {
                   if (config.tickSteps && !data.components.find(c => c.id === config.id)?.tickSteps) {
                     cpu.setComponentTickSteps(config.id, config.tickSteps);
+                  }
+                  if (config.tickOrderByState && !data.components.find(c => c.id === config.id)?.tickOrderByState) {
+                    cpu.setComponentTickOrderByState(config.id, config.tickOrderByState);
                   }
                 }
               }
@@ -426,7 +435,13 @@ export const useProjectStore = create<ProjectState>()(
         // Enhance components with current tick step configurations
         const enhancedComponents = basicProject.components.map(component => {
           const tickSteps = cpu?.getComponentTickSteps(component.id);
-          return tickSteps ? { ...component, tickSteps } : component;
+          const tickOrderByState = cpu?.getComponentTickOrderByState(component.id);
+
+          return {
+            ...component,
+            ...(tickSteps ? { tickSteps } : {}),
+            ...(tickOrderByState && Object.keys(tickOrderByState).length > 0 ? { tickOrderByState } : {}),
+          };
         });
         
         // Collect component configurations including tick steps (for backwards compatibility)
@@ -441,6 +456,7 @@ export const useProjectStore = create<ProjectState>()(
               type: regComp.type,
               name: layoutComponent?.label || regComp.type,
               tickSteps: regComp.tickSteps,
+              tickOrderByState: regComp.tickOrderByState,
               config: layoutComponent?.meta || {},
             });
           }
@@ -451,7 +467,7 @@ export const useProjectStore = create<ProjectState>()(
           ...basicProject,
           components: enhancedComponents,
           componentConfigs,
-          version: 2,
+          version: 3,
         };
       },
 

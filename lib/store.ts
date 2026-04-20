@@ -34,6 +34,8 @@ export interface ComponentInstance {
   state?: ComponentState;
   /** CPU states this component should tick on (overrides defaults) */
   tickSteps?: number[];
+  /** Animation substep order by CPU state (lower runs first). */
+  tickOrderByState?: Partial<Record<number, number>>;
 }
 
 export interface Props {
@@ -203,6 +205,9 @@ export const useLayoutStore = create<LayoutState>()(
           for (const c of state.components) {
             if (c.tickSteps) {
               cpu.setComponentTickSteps(c.id, c.tickSteps);
+            }
+            if (c.tickOrderByState) {
+              cpu.setComponentTickOrderByState(c.id, c.tickOrderByState);
             }
           }
         }

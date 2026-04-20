@@ -143,6 +143,16 @@ interface SimulatorState {
    */
   setComponentTickSteps: (id: string, steps: CpuState[]) => void;
 
+  /**
+   * Get animation substep order map by CPU state for a component.
+   */
+  getComponentTickOrderByState: (id: string) => Partial<Record<CpuState, number>> | undefined;
+
+  /**
+   * Set animation substep order map by CPU state for a component.
+   */
+  setComponentTickOrderByState: (id: string, orderByState: Partial<Record<CpuState, number>>) => void;
+
   // ── Wire Management ────────────────────────────────────────────
 
   /**
@@ -274,7 +284,8 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
 
           const inferredType = inferComponentType(existingObj);
           const customSteps = layoutById.get(existingId)?.tickSteps as CpuState[] | undefined;
-          newObj.registerComponent(existingId, inferredType, existingObj, customSteps);
+          const customOrder = layoutById.get(existingId)?.tickOrderByState as Partial<Record<CpuState, number>> | undefined;
+          newObj.registerComponent(existingId, inferredType, existingObj, customSteps, customOrder);
         }
       }
       
@@ -283,7 +294,10 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
         // Find the primary CPU and register this component
         for (const obj of map.values()) {
           if (obj instanceof CPU) {
-            obj.registerComponent(id, type, newObj);
+            const layoutComponent = getLayoutStore().getState().components.find((c) => c.id === id);
+            const customSteps = layoutComponent?.tickSteps as CpuState[] | undefined;
+            const customOrder = layoutComponent?.tickOrderByState as Partial<Record<CpuState, number>> | undefined;
+            obj.registerComponent(id, type, newObj, customSteps, customOrder);
             break;
           }
         }
@@ -477,6 +491,27 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
     for (const obj of objects.values()) {
       if (obj instanceof CPU) {
         obj.setComponentTickSteps(id, steps);
+        set((s) => ({ revision: s.revision + 1 }));
+        break;
+      }
+    }
+  },
+
+  getComponentTickOrderByState: (id) => {
+    const { objects } = get();
+    for (const obj of objects.values()) {
+      if (obj instanceof CPU) {
+        return obj.getComponentTickOrderByState(id);
+      }
+    }
+    return undefined;
+  },
+
+  setComponentTickOrderByState: (id, orderByState) => {
+    const { objects } = get();
+    for (const obj of objects.values()) {
+      if (obj instanceof CPU) {
+        obj.setComponentTickOrderByState(id, orderByState);
         set((s) => ({ revision: s.revision + 1 }));
         break;
       }

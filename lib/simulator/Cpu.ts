@@ -219,6 +219,8 @@ export interface RegisteredComponent {
   component: Clockable;
   /** Animation-only state mask (does not gate functional ticking). */
   tickSteps: CpuState[];
+  /** Optional animation substep order by CPU state. Lower runs first. */
+  tickOrderByState: Partial<Record<CpuState, number>>;
 }
 
 
@@ -316,20 +318,17 @@ export class CPU implements Clockable, Connectable {
   // ── Component Registration ───────────────────────────────────
 
   /**
-    * Register a component for CPU-managed ticking.
-    *
-    * Note: `tickSteps` is preserved as an animation mask only.
-    * Functional ticking is global for all registered components each CPU tick.
-   * @param id Component ID
-   * @param type Component type string (e.g., "Register", "GprComponent")
-   * @param component The Clockable component instance
-    * @param customTickSteps Optional animation step mask (uses defaults if not provided)
+   * Register a component for CPU-managed ticking.
+   *
+   * Note: `tickSteps` and `tickOrderByState` are animation metadata only.
+   * Functional ticking is global for all registered components each CPU tick.
    */
   registerComponent(
     id: string,
     type: string,
     component: Clockable,
-    customTickSteps?: CpuState[]
+    customTickSteps?: CpuState[],
+    customTickOrderByState?: Partial<Record<CpuState, number>>
   ): void {
     const defaultSteps = DEFAULT_TICK_STEPS[type] ?? ALL_CPU_STATES;
     this._registeredComponents.set(id, {
@@ -337,6 +336,7 @@ export class CPU implements Clockable, Connectable {
       type,
       component,
       tickSteps: customTickSteps ?? [...defaultSteps],
+      tickOrderByState: customTickOrderByState ?? {},
     });
   }
 
@@ -362,6 +362,31 @@ export class CPU implements Clockable, Connectable {
     if (entry) {
       entry.tickSteps = [...steps];
     }
+  }
+
+  /**
+   * Get per-state animation substep order for a registered component.
+   */
+  getComponentTickOrderByState(id: string): Partial<Record<CpuState, number>> | undefined {
+    return this._registeredComponents.get(id)?.tickOrderByState;
+  }
+
+  /**
+   * Set per-state animation substep order for a registered component.
+   */
+  setComponentTickOrderByState(id: string, orderByState: Partial<Record<CpuState, number>>): void {
+    const entry = this._registeredComponents.get(id);
+    if (!entry) return;
+
+    const normalized: Partial<Record<CpuState, number>> = {};
+    for (const [stateKey, rawOrder] of Object.entries(orderByState)) {
+      const parsedState = Number(stateKey) as CpuState;
+      const parsedOrder = Number(rawOrder);
+      if (!Number.isFinite(parsedOrder)) continue;
+      normalized[parsedState] = Math.max(0, Math.floor(parsedOrder));
+    }
+
+    entry.tickOrderByState = normalized;
   }
 
   /**
