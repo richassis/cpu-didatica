@@ -12,7 +12,7 @@
  */
 
 import { create } from "zustand";
-import { Register, Gpr, Ula, Adder, Mux, Memory, InstructionMemory, CPU, Decoder, Bus, isClockable, CpuState, ALL_CPU_STATES } from "@/lib/simulator";
+import { Register, Constant, Gpr, Ula, Adder, Mux, Memory, InstructionMemory, CPU, Decoder, Bus, isClockable, CpuState, ALL_CPU_STATES } from "@/lib/simulator";
 import type { Connectable, WireDescriptor } from "@/lib/simulator";
 import type { ComponentState } from "@/lib/store";
 // Lazy import via getter to avoid circular initialisation (store.ts imports simulatorStore).
@@ -20,7 +20,7 @@ const getLayoutStore = () =>
   (require("@/lib/store") as typeof import("@/lib/store")).useLayoutStore;
 
 /** Union of every data-layer object type */
-export type SimulatorObject = Register | Gpr | Ula | Adder | Mux | Memory | InstructionMemory | CPU | Decoder;
+export type SimulatorObject = Register | Constant | Gpr | Ula | Adder | Mux | Memory | InstructionMemory | CPU | Decoder;
 
 /** Type guard to check if an object is Connectable */
 function isConnectable(obj: unknown): obj is Connectable {
@@ -35,6 +35,7 @@ function isConnectable(obj: unknown): obj is Connectable {
 
 function inferComponentType(obj: SimulatorObject): string {
   if (obj instanceof Register) return "Register";
+  if (obj instanceof Constant) return "ConstantComponent";
   if (obj instanceof Gpr) return "GprComponent";
   if (obj instanceof Ula) return "UlaComponent";
   if (obj instanceof Adder) return "AdderComponent";
@@ -83,6 +84,7 @@ interface SimulatorState {
    * Returns undefined if not found or if the type doesn't match.
    */
   getRegister: (id: string) => Register | undefined;
+  getConstant: (id: string) => Constant | undefined;
   getGpr: (id: string) => Gpr | undefined;
   getUla: (id: string) => Ula | undefined;
   getAdder: (id: string) => Adder | undefined;
@@ -226,7 +228,14 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
     switch (type) {
       case "Register": {
         const bitWidth = typeof meta?.bitWidth === "number" ? meta.bitWidth : 16;
-        newObj = new Register(id, label, bitWidth);
+        const hasWriteEnable = typeof meta?.hasWriteEnable === "boolean" ? meta.hasWriteEnable : true;
+        newObj = new Register(id, label, bitWidth, 0, hasWriteEnable);
+        break;
+      }
+      case "ConstantComponent": {
+        const bitWidth = typeof meta?.bitWidth === "number" ? meta.bitWidth : 16;
+        const constantValue = typeof meta?.constantValue === "number" ? meta.constantValue : 1;
+        newObj = new Constant(id, label, bitWidth, constantValue);
         break;
       }
       case "GprComponent":
@@ -346,6 +355,11 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
   getRegister: (id) => {
     const obj = get().objects.get(id);
     return obj instanceof Register ? obj : undefined;
+  },
+
+  getConstant: (id) => {
+    const obj = get().objects.get(id);
+    return obj instanceof Constant ? obj : undefined;
   },
 
   getGpr: (id) => {

@@ -14,32 +14,37 @@ export class Register implements Clockable, Connectable {
   name: string;
   /** Bit width of this register (default 16) */
   readonly bitWidth: number;
+  /** Whether this register exposes a write-enable input port */
+  readonly hasWriteEnable: boolean;
 
   // ── Ports ────────────────────────────────────────────────────
 
   /** Input: value to latch into the register. */
   readonly in_data: InputPort<number>;
 
-  /** Input: write-enable signal (1 = latch on tick, 0 = hold). */
-  readonly in_writeEnable: InputPort<number>;
+  /** Optional input: write-enable signal (1 = latch on tick, 0 = hold). */
+  readonly in_writeEnable?: InputPort<number>;
 
   /** Output: current register value. */
   readonly out_value: OutputPort<number>;
 
-  constructor(id: string, name: string, bitWidth = 16, initialValue = 0) {
+  constructor(id: string, name: string, bitWidth = 16, initialValue = 0, hasWriteEnable = true) {
     this.id = id;
     this.name = name;
     this.bitWidth = bitWidth;
+    this.hasWriteEnable = hasWriteEnable;
 
     // Create input ports
     this.in_data = new InputPort<number>(
       "data", "number", bitWidth, 0,
       "Data input to be latched"
     );
-    this.in_writeEnable = new InputPort<number>(
-      "writeEnable", "number", 1, 1,
-      "Write-enable signal (1 = latch, 0 = hold)"
-    );
+    if (this.hasWriteEnable) {
+      this.in_writeEnable = new InputPort<number>(
+        "writeEnable", "number", 1, 1,
+        "Write-enable signal (1 = latch, 0 = hold)"
+      );
+    }
 
     // Create output port
     this.out_value = new OutputPort<number>(
@@ -51,11 +56,16 @@ export class Register implements Clockable, Connectable {
   // ── Connectable interface ────────────────────────────────────
 
   getPorts(): PortMap {
-    return {
+    const ports: PortMap = {
       data: this.in_data,
-      writeEnable: this.in_writeEnable,
       value: this.out_value,
     };
+
+    if (this.in_writeEnable) {
+      ports.writeEnable = this.in_writeEnable;
+    }
+
+    return ports;
   }
 
   // ── Accessors ────────────────────────────────────────────────
@@ -96,7 +106,7 @@ export class Register implements Clockable, Connectable {
    * Sequential phase: latch data when write-enable is high.
    */
   commit(): void {
-    if (this.in_writeEnable.value !== 0) {
+    if (!this.in_writeEnable || this.in_writeEnable.value !== 0) {
       this.out_value.set(this.clamp(this.in_data.value));
     }
   }

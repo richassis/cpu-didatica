@@ -259,6 +259,8 @@ export class CPU implements Clockable, Connectable {
 
   // Previous signal values for change detection
   private _prevSignals: Map<string, number | boolean> = new Map();
+  // Control output port names that changed in the most recent tick.
+  private _changedControlSignalPorts: Set<string> = new Set();
   
   // Track the state that was just executed (whose signals are currently active)
   private _previousState: CpuState = CpuState.RESET;
@@ -441,6 +443,14 @@ export class CPU implements Clockable, Connectable {
     return this._totalTicks;
   }
 
+  /**
+   * Returns CPU control output port names that changed on the latest tick.
+   * Example values: "out_wrIR", "out_rdMem".
+   */
+  getChangedControlSignalPorts(): string[] {
+    return Array.from(this._changedControlSignalPorts);
+  }
+
   /** Pause or resume the CPU without affecting halted state. */
   setPaused(paused: boolean): void {
     this._paused = paused;
@@ -487,6 +497,7 @@ export class CPU implements Clockable, Connectable {
     this._FSMindex = 0;
     this._halted = false;
     this._totalTicks = 0;
+    this._changedControlSignalPorts.clear();
     this.initPrevSignals();
     // Apply RESET state control signals immediately
     this.emitSignals(CpuState.RESET, Opcode.HLT, true);
@@ -521,10 +532,14 @@ export class CPU implements Clockable, Connectable {
     force_update: boolean = false
   ): void {
     const prevValue = this._prevSignals.get(signalName);
-    // if (prevValue !== value || force_update) {
+    if (prevValue !== value) {
+      this._changedControlSignalPorts.add(port.name);
+    }
+
+    if (prevValue !== value || force_update) {
       port.set(value);
       this._prevSignals.set(signalName, value);
-    // }
+    }
   }
 
   // ── Tick orchestration ───────────────────────────────────────
@@ -757,6 +772,9 @@ export class CPU implements Clockable, Connectable {
    * handling for EXECUTE (opcode-dependent ULA operation) and WRITEPC (conditional jumps).
    */
   private emitSignals(state: CpuState, opcode: Opcode, force_write: boolean = false): void {
+    // Recomputed once per CPU tick/state emission.
+    this._changedControlSignalPorts.clear();
+
     // Get base configuration for this state
     const config = STATE_CONTROL_SIGNALS[state];
     

@@ -202,6 +202,7 @@ export default function EnhancedBusOverlay({
     const currentWireData = Array.from(wireDataByIdRef.current.values());
     const cpu = getPrimaryCpu();
     const executedState = cpu?.previousState ?? cpu?.state;
+    const changedCpuSignals = new Set(cpu?.getChangedControlSignalPorts() ?? []);
 
     const visibleWireIds = currentWireData
       .filter((wireData) => {
@@ -226,8 +227,13 @@ export default function EnhancedBusOverlay({
 
     if (visibleWireIds.length === 0) return;
 
-    const cpuIds = visibleWireIds.filter((id) => wireDataByIdRef.current.get(id)?.isCpuControlSignal);
+    const cpuIds = visibleWireIds.filter((id) => {
+      const wireData = wireDataByIdRef.current.get(id);
+      if (!wireData?.isCpuControlSignal) return false;
+      return changedCpuSignals.has(wireData.wire.sourcePortName);
+    });
     const nonCpuIds = visibleWireIds.filter((id) => !wireDataByIdRef.current.get(id)?.isCpuControlSignal);
+    if (cpuIds.length === 0 && nonCpuIds.length === 0) return;
     const nonCpuOrderGroups = new Map<number, string[]>();
 
     for (const id of nonCpuIds) {
@@ -253,14 +259,24 @@ export default function EnhancedBusOverlay({
       .map(([, ids]) => ids);
 
     const startTime = Date.now();
+    const nonCpuGroupCount = sortedNonCpuGroups.length;
+    // Strict sequencing: each substep starts only after the previous one finishes.
+    const nonCpuStaggerStep = componentAnimationDuration;
+    const effectiveCpuDuration = cpuIds.length > 0 ? cpuAnimationDuration : 0;
+    const nonCpuPhaseDuration = nonCpuGroupCount > 0
+      ? componentAnimationDuration * nonCpuGroupCount
+      : 0;
+    const totalDuration = effectiveCpuDuration + nonCpuPhaseDuration;
+
+    const animatingIds = [...cpuIds, ...nonCpuIds];
 
     const kickoff = window.setTimeout(() => {
-      setAnimatingWires(new Set(visibleWireIds));
+      setAnimatingWires(new Set(animatingIds));
     }, 0);
 
     const animate = () => {
       const elapsed = Date.now() - startTime;
-      if (elapsed >= cpuAnimationDuration + componentAnimationDuration) {
+      if (elapsed >= totalDuration) {
         setAnimatingWires(new Set());
         setAnimationProgress(new Map());
         animationRef.current = null;
@@ -270,20 +286,19 @@ export default function EnhancedBusOverlay({
       const progress = new Map<string, number>();
 
       for (const id of cpuIds) {
-        progress.set(id, Math.min(1, elapsed / cpuAnimationDuration));
+        progress.set(id, Math.min(1, elapsed / Math.max(1, effectiveCpuDuration)));
       }
 
       for (const id of nonCpuIds) {
         progress.set(id, 0);
       }
 
-      if (elapsed > cpuAnimationDuration && componentAnimationDuration > 0 && sortedNonCpuGroups.length > 0) {
-        const compElapsed = elapsed - cpuAnimationDuration;
-        const perGroupDuration = componentAnimationDuration / sortedNonCpuGroups.length;
+      if (elapsed > effectiveCpuDuration && componentAnimationDuration > 0 && sortedNonCpuGroups.length > 0) {
+        const compElapsed = elapsed - effectiveCpuDuration;
 
         sortedNonCpuGroups.forEach((groupIds, index) => {
-          const groupStart = index * perGroupDuration;
-          const groupProgress = Math.min(1, Math.max(0, (compElapsed - groupStart) / perGroupDuration));
+          const groupStart = index * nonCpuStaggerStep;
+          const groupProgress = Math.min(1, Math.max(0, (compElapsed - groupStart) / componentAnimationDuration));
           for (const id of groupIds) {
             progress.set(id, groupProgress);
           }

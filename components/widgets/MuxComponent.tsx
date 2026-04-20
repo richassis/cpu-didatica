@@ -26,12 +26,6 @@ export default function MuxComponent({ component, zoom }: Props) {
   const bitWidth    = mux ? mux.bitWidth : 16;
   const resultFmt   = formatNum(result, base, bitWidth);
 
-  // Get input values for display
-  const in0 = mux?.in_0.value ?? 0;
-  const in1 = mux?.in_1.value ?? 0;
-  const in2 = mux?.in_2?.value ?? 0;
-  const inputValues = numInputs === 3 ? [in0, in1, in2] : [in0, in1];
-
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({ id });
 
@@ -67,11 +61,47 @@ export default function MuxComponent({ component, zoom }: Props) {
       >
         {/* ── Trapezoid body ── */}
         <div
-          className={`absolute inset-0 transition-colors ${
-            isDragging ? "bg-violet-500" : "bg-violet-800/90"
+          className={`absolute inset-0 transition-all duration-150 overflow-hidden ${
+            isDragging
+              ? "bg-indigo-700/90 shadow-xl shadow-indigo-900/60"
+              : "bg-gray-900/95 shadow-lg shadow-black/50"
           }`}
           style={{ clipPath: trapClip }}
-        />
+        >
+          {/* Compact internal content */}
+          <div className="absolute inset-0 pointer-events-none">
+            {/* Input indicators */}
+            <div
+              className="absolute left-1.5 right-[42%] flex flex-col justify-around"
+              style={{ top: "12%", bottom: "12%" }}
+            >
+              {Array.from({ length: numInputs }).map((_, i) => {
+                const active = sel === i;
+                return (
+                  <div key={i} className="flex items-center gap-1">
+                    <span
+                      className={`w-2 h-2 rounded-full border shrink-0 ${
+                        active
+                          ? "bg-cyan-300 border-cyan-100 shadow-[0_0_6px_rgba(34,211,238,0.7)]"
+                          : "bg-gray-700 border-gray-500"
+                      }`}
+                    />
+                    <span className={`text-[8px] font-mono ${active ? "text-cyan-200" : "text-gray-500"}`}>
+                      i{i}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Current output value */}
+            <div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+              <span className="text-[8px] font-mono text-indigo-50 bg-indigo-700/70 border border-indigo-400/50 rounded px-1.5 py-px leading-none">
+                {resultFmt}
+              </span>
+            </div>
+          </div>
+        </div>
 
         {/* ── Border outline via SVG trapezoid ── */}
         <svg
@@ -83,8 +113,8 @@ export default function MuxComponent({ component, zoom }: Props) {
           <polygon
             points={`0,0 ${!w || isNaN(w) ? 64 : w},${inset} ${!w || isNaN(w) ? 64 : w},${(!h || isNaN(h) ? 96 : h) - inset} 0,${!h || isNaN(h) ? 96 : h}`}
             fill="none"
-            stroke={isDragging ? "#a78bfa" : "#7c3aed"}
-            strokeWidth="1.5"
+            stroke={isDragging ? "#93c5fd" : "#6366f1"}
+            strokeWidth="2"
           />
         </svg>
 
@@ -92,66 +122,11 @@ export default function MuxComponent({ component, zoom }: Props) {
         <button
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => { e.stopPropagation(); removeComponent(id); }}
-          className="absolute top-0.5 right-1 pointer-events-auto text-violet-300/60 hover:text-white text-[10px] leading-none z-10"
+          className="absolute top-0.5 right-1 pointer-events-auto text-indigo-300/60 hover:text-white text-[10px] leading-none z-10"
           aria-label="Remove"
         >
           ✕
         </button>
-
-        {/* ── Label (top-center) ── */}
-        <div
-          className="absolute inset-x-0 flex justify-center pointer-events-none"
-          style={{ top: "8%" }}
-        >
-          <span className="text-[9px] font-bold text-violet-200 drop-shadow leading-none truncate px-1">
-            {label}
-          </span>
-        </div>
-
-        {/* ── Input indicators on left edge ── */}
-        <div
-          className="absolute left-0 flex flex-col justify-around pointer-events-none"
-          style={{ top: "18%", height: "64%", paddingLeft: "4px" }}
-        >
-          {inputValues.map((val, i) => (
-            <div key={i} className="flex items-center gap-1">
-              <div
-                className={`w-2 h-2 rounded-full border transition-colors ${
-                  sel === i
-                    ? "bg-violet-300 border-violet-100 shadow-sm shadow-violet-400/50"
-                    : "bg-gray-700 border-gray-500"
-                }`}
-              />
-              <span className={`text-[7px] font-mono ${sel === i ? "text-violet-200" : "text-violet-400/70"}`}>
-                {i}
-              </span>
-            </div>
-          ))}
-        </div>
-
-        {/* ── SEL indicator (bottom) ── */}
-        <div
-          className="absolute inset-x-0 flex justify-center pointer-events-none"
-          style={{ bottom: "6%" }}
-        >
-          <span className="text-[8px] font-mono text-violet-300 bg-violet-950/60 rounded px-1">
-            S={sel}
-          </span>
-        </div>
-
-        {/* ── Output value (right edge) ── */}
-        <div
-          className="absolute right-0 flex items-center pointer-events-none"
-          style={{
-            top: "50%",
-            transform: "translateY(-50%)",
-            paddingRight: "3px",
-          }}
-        >
-          <span className="text-[8px] font-mono text-violet-100 bg-violet-900/80 rounded px-1 leading-tight">
-            {resultFmt}
-          </span>
-        </div>
         
         {/* Port indicators */}
         <PortsOverlay componentId={id} />

@@ -2,7 +2,7 @@
   "id": "default-full-datapath",
   "name": "Full Datapath",
   "createdAt": "2026-04-07T03:40:44.124Z",
-  "updatedAt": "2026-04-20T01:35:50.148Z",
+  "updatedAt": "2026-04-20T02:15:24.751Z",
   "components": [
     {
       "id": "cpu-1",
@@ -54,7 +54,10 @@
       },
       "tickSteps": [
         0
-      ]
+      ],
+      "tickOrderByState": {
+        "0": 0
+      }
     },
     {
       "id": "ir-1",
@@ -358,9 +361,11 @@
         ]
       },
       "tickSteps": [
-        3,
-        4
-      ]
+        3
+      ],
+      "tickOrderByState": {
+        "3": 1
+      }
     },
     {
       "id": "gpr-1",
@@ -394,11 +399,12 @@
       },
       "tickSteps": [
         5,
-        6,
-        7,
-        8,
-        9
-      ]
+        6
+      ],
+      "tickOrderByState": {
+        "5": 1,
+        "6": 1
+      }
     },
     {
       "id": "ula-1",
@@ -422,7 +428,10 @@
       },
       "tickSteps": [
         2
-      ]
+      ],
+      "tickOrderByState": {
+        "2": 1
+      }
     },
     {
       "id": "decoder-1",
@@ -446,7 +455,10 @@
       },
       "tickSteps": [
         1
-      ]
+      ],
+      "tickOrderByState": {
+        "1": 1
+      }
     },
     {
       "id": "adder-pc",
@@ -467,7 +479,10 @@
       },
       "tickSteps": [
         0
-      ]
+      ],
+      "tickOrderByState": {
+        "0": 1
+      }
     },
     {
       "id": "mux-pc",
@@ -490,7 +505,10 @@
       },
       "tickSteps": [
         0
-      ]
+      ],
+      "tickOrderByState": {
+        "0": 2
+      }
     },
     {
       "id": "9effa048-4a2e-4064-b42c-dda2468dcf62",
@@ -766,23 +784,25 @@
       },
       "tickSteps": [
         0
-      ]
+      ],
+      "tickOrderByState": {
+        "0": 1
+      }
     },
     {
       "id": "71514764-4187-4f67-af42-21f0b8742c3a",
-      "type": "Register",
+      "type": "ConstantComponent",
       "label": "ONE",
       "w": 144,
       "h": 48,
       "x": 432,
       "y": 784,
       "meta": {
-        "bitWidth": 16
+        "bitWidth": 16,
+        "constantValue": 1
       },
       "state": {
         "ports": {
-          "data": 0,
-          "writeEnable": 1,
           "value": 1
         }
       },
@@ -815,7 +835,11 @@
         7,
         8,
         9
-      ]
+      ],
+      "tickOrderByState": {
+        "7": 1,
+        "8": 1
+      }
     },
     {
       "id": "ca323bab-6c50-4dba-b6f4-72dde14de432",
@@ -863,7 +887,12 @@
         7,
         8,
         9
-      ]
+      ],
+      "tickOrderByState": {
+        "4": 0,
+        "7": 1,
+        "8": 1
+      }
     },
     {
       "id": "8447ad64-3e71-4ffc-97f1-7d93bad0bb6e",
@@ -1531,6 +1560,9 @@
       "tickSteps": [
         0
       ],
+      "tickOrderByState": {
+        "0": 0
+      },
       "config": {
         "bitWidth": 16
       }
@@ -1542,6 +1574,7 @@
       "tickSteps": [
         1
       ],
+      "tickOrderByState": {},
       "config": {
         "bitWidth": 16
       }
@@ -1551,9 +1584,11 @@
       "type": "MemoryComponent",
       "name": "Memory",
       "tickSteps": [
-        3,
-        4
+        3
       ],
+      "tickOrderByState": {
+        "3": 1
+      },
       "config": {
         "bitWidth": 16,
         "wordCount": 256
@@ -1565,11 +1600,12 @@
       "name": "GPR",
       "tickSteps": [
         5,
-        6,
-        7,
-        8,
-        9
+        6
       ],
+      "tickOrderByState": {
+        "5": 1,
+        "6": 1
+      },
       "config": {}
     },
     {
@@ -1579,6 +1615,9 @@
       "tickSteps": [
         2
       ],
+      "tickOrderByState": {
+        "2": 1
+      },
       "config": {}
     },
     {
@@ -1588,6 +1627,9 @@
       "tickSteps": [
         1
       ],
+      "tickOrderByState": {
+        "1": 1
+      },
       "config": {}
     },
     {
@@ -1597,6 +1639,9 @@
       "tickSteps": [
         0
       ],
+      "tickOrderByState": {
+        "0": 1
+      },
       "config": {}
     },
     {
@@ -1606,6 +1651,9 @@
       "tickSteps": [
         0
       ],
+      "tickOrderByState": {
+        "0": 2
+      },
       "config": {
         "numInputs": 2
       }
@@ -1617,18 +1665,10 @@
       "tickSteps": [
         0
       ],
+      "tickOrderByState": {
+        "0": 1
+      },
       "config": {}
-    },
-    {
-      "id": "71514764-4187-4f67-af42-21f0b8742c3a",
-      "type": "Register",
-      "name": "ONE",
-      "tickSteps": [
-        0
-      ],
-      "config": {
-        "bitWidth": 16
-      }
     },
     {
       "id": "9c3b9c7b-52e0-4388-9287-b4e8144873b2",
@@ -1639,6 +1679,10 @@
         8,
         9
       ],
+      "tickOrderByState": {
+        "7": 1,
+        "8": 1
+      },
       "config": {
         "bitWidth": 16,
         "numInputs": 3
@@ -1651,6 +1695,7 @@
       "tickSteps": [
         3
       ],
+      "tickOrderByState": {},
       "config": {
         "bitWidth": 16
       }
@@ -1664,6 +1709,11 @@
         8,
         9
       ],
+      "tickOrderByState": {
+        "4": 0,
+        "7": 1,
+        "8": 1
+      },
       "config": {
         "bitWidth": 16,
         "numInputs": 2
@@ -1676,6 +1726,7 @@
       "tickSteps": [
         2
       ],
+      "tickOrderByState": {},
       "config": {
         "bitWidth": 16
       }
@@ -1687,6 +1738,7 @@
       "tickSteps": [
         2
       ],
+      "tickOrderByState": {},
       "config": {
         "bitWidth": 16
       }
@@ -1699,10 +1751,11 @@
         3,
         10
       ],
+      "tickOrderByState": {},
       "config": {
         "bitWidth": 16
       }
     }
   ],
-  "version": 2
+  "version": 3
 }

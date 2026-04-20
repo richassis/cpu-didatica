@@ -55,6 +55,11 @@ export const DEFAULT_TICK_STEPS: Record<string, CpuState[]> = {
     // CpuState.EXECUTE,
   ],
 
+  // Constant sources are relevant in datapaths like PC+1 during fetch.
+  ConstantComponent: [
+    CpuState.FETCH,
+  ],
+
   // Mux is combinational, ticks whenever its inputs might change
   MuxComponent: [
     CpuState.FETCH,

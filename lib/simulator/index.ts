@@ -5,6 +5,7 @@
  * re-exported from here for convenience.
  */
 export { Register } from "./Register";
+export { Constant } from "./Constant";
 export { Gpr } from "./Gpr";
 export { Ula } from "./Ula";
 export { Adder } from "./Adder";

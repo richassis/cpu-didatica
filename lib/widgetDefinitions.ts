@@ -161,6 +161,22 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     },
   },
   {
+    type: "ConstantComponent",
+    label: "Constant N",
+    namePrefix: "CONST",
+    icon: "N",
+    defaultWidth: 112,  // 7 grid cells
+    defaultHeight: 48,  // 3 grid cells
+    description: "Constant numeric source with configurable N",
+    // Constant source: single output on right
+    portConfig: {
+      defaultOutputSide: "right",
+      ports: {
+        "value": { side: "right", offset: 50 },
+      },
+    },
+  },
+  {
     type: "DecoderComponent",
     label: "Decoder",
     namePrefix: "DEC",

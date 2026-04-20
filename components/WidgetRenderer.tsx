@@ -8,6 +8,7 @@ import UlaComponent from "./widgets/UlaComponent";
 import AdderComponent from "./widgets/AdderComponent";
 import MuxComponent from "./widgets/MuxComponent";
 import RegisterComponent from "./widgets/RegisterComponent";
+import ConstantComponent from "./widgets/ConstantComponent";
 import DecoderComponent from "./widgets/DecoderComponent";
 import CpuComponent from "./widgets/CpuComponent";
 
@@ -32,6 +33,8 @@ export default function WidgetRenderer({ component, zoom }: Props) {
       return <MuxComponent component={component} zoom={zoom} />;
     case "Register":
       return <RegisterComponent component={component} zoom={zoom} />;
+    case "ConstantComponent":
+      return <ConstantComponent component={component} zoom={zoom} />;
     case "DecoderComponent":
       return <DecoderComponent component={component} zoom={zoom} />;
     case "CpuComponent":

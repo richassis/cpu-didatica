@@ -14,9 +14,9 @@ export type AnimationSpeedPreset = "fast" | "normal" | "slow";
 
 /** Preset durations in ms: [cpuAnimationDuration, componentAnimationDuration] */
 export const ANIMATION_PRESETS: Record<AnimationSpeedPreset, { cpu: number; component: number }> = {
-  fast:   { cpu: 2000,  component: 1500 },
-  normal: { cpu: 8000,  component: 6000 },
-  slow:   { cpu: 15000, component: 10000 },
+  fast:   { cpu: 2000,  component: 2000 },
+  normal: { cpu: 4000, component: 4000 },
+  slow:   { cpu: 5000, component: 5000 },
 };
 
 interface DisplayState {
@@ -68,7 +68,20 @@ export const useDisplayStore = create<DisplayState>()(
         componentAnimationDuration: ANIMATION_PRESETS[preset].component,
       }),
     }),
-    { name: "simulator-display" }
+    {
+      name: "simulator-display",
+      version: 2,
+      migrate: (persistedState) => {
+        const state = persistedState as Partial<DisplayState>;
+        const preset = state.animationSpeed ?? "normal";
+
+        return {
+          ...state,
+          cpuAnimationDuration: ANIMATION_PRESETS[preset].cpu,
+          componentAnimationDuration: ANIMATION_PRESETS[preset].component,
+        };
+      },
+    }
   )
 );
 

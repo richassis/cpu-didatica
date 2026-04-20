@@ -16,6 +16,10 @@ export interface ComponentConfig {
   numInputs?: number;
   /** Number of addressable words for Memory. Default 256. */
   wordCount?: number;
+  /** Whether Register has a write-enable input port. Default true. */
+  hasWriteEnable?: boolean;
+  /** Fixed numeric value for ConstantComponent. Default 1. */
+  constantValue?: number;
 }
 
 interface PanelProps {
@@ -125,6 +129,22 @@ export function RegisterComponentConfigPanel(props: PanelProps) {
     <div className="flex flex-col gap-3">
       <NameField {...props} />
       <BitWidthField {...props} />
+      <div className="flex items-center justify-between rounded-lg border border-gray-700 bg-gray-800/60 px-3 py-2">
+        <div className="flex flex-col">
+          <span className="text-xs text-gray-300 font-semibold">Write Enable Port</span>
+          <span className="text-[10px] text-gray-500">Disable for always-write registers</span>
+        </div>
+        <label className="relative inline-flex items-center cursor-pointer">
+          <input
+            type="checkbox"
+            className="sr-only peer"
+            checked={props.config.hasWriteEnable ?? true}
+            onChange={(e) => props.onChange({ hasWriteEnable: e.target.checked })}
+          />
+          <div className="w-11 h-6 bg-gray-700 rounded-full peer peer-checked:bg-cyan-600 transition-colors" />
+          <div className="absolute left-1 top-1 w-4 h-4 rounded-full bg-white transition-transform peer-checked:translate-x-5" />
+        </label>
+      </div>
     </div>
   );
 }
@@ -151,6 +171,26 @@ export function MuxComponentConfigPanel(props: PanelProps) {
   );
 }
 
+export function ConstantComponentConfigPanel(props: PanelProps) {
+  return (
+    <div className="flex flex-col gap-3">
+      <NameField {...props} />
+      <BitWidthField {...props} />
+      <div className="flex flex-col gap-1">
+        <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider">
+          Constant Value (N)
+        </label>
+        <input
+          type="number"
+          value={props.config.constantValue ?? 1}
+          onChange={(e) => props.onChange({ constantValue: Number(e.target.value) })}
+          className="bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors"
+        />
+      </div>
+    </div>
+  );
+}
+
 // ── Dispatcher ────────────────────────────────────────────────────────────
 
 export function ConfigPanelForType({
@@ -170,6 +210,8 @@ export function ConfigPanelForType({
       return <RegisterComponentConfigPanel {...props} />;
     case "MuxComponent":
       return <MuxComponentConfigPanel {...props} />;
+    case "ConstantComponent":
+      return <ConstantComponentConfigPanel {...props} />;
     default:
       return <NameField {...props} />;
   }

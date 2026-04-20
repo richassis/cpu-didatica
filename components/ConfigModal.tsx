@@ -6,7 +6,7 @@ import { useLayoutStore, ComponentInstance } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { getWidgetDefinition } from "@/lib/widgetDefinitions";
 import { ConfigPanelForType, ComponentConfig } from "@/components/widgets/ConfigPanel";
-import { CpuState, CPU_STATE_LABELS, ALL_CPU_STATES, isClockable } from "@/lib/simulator";
+import { CpuState, CPU_STATE_LABELS, ALL_CPU_STATES, isClockable, Constant } from "@/lib/simulator";
 import { Opcode, INSTRUCTION_SET } from "@/lib/simulator/ISA";
 import { OPCODE_SEQUENCES } from "@/lib/simulator/Cpu";
 import type { CPU } from "@/lib/simulator/Cpu";
@@ -38,6 +38,7 @@ export default function ConfigModal({ component, onClose }: Props) {
   const getComponentTickOrderByState = useSimulatorStore((s) => s.getComponentTickOrderByState);
   const setComponentTickOrderByState = useSimulatorStore((s) => s.setComponentTickOrderByState);
   const recreateObject = useSimulatorStore((s) => s.recreateObject);
+  const getConstant = useSimulatorStore((s) => s.getConstant);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const wires = useMemo(() => getWires(), [getWires, revision]);
 
@@ -46,6 +47,8 @@ export default function ConfigModal({ component, onClose }: Props) {
     bitWidth:  typeof component.meta?.bitWidth  === "number" ? component.meta.bitWidth  : undefined,
     numInputs: typeof component.meta?.numInputs === "number" ? component.meta.numInputs : undefined,
     wordCount: typeof component.meta?.wordCount === "number" ? component.meta.wordCount : undefined,
+    hasWriteEnable: typeof component.meta?.hasWriteEnable === "boolean" ? component.meta.hasWriteEnable : undefined,
+    constantValue: typeof component.meta?.constantValue === "number" ? component.meta.constantValue : undefined,
   });
   // portInputs: map portName → current text being typed
   const [portInputs, setPortInputs] = useState<Record<string, string>>({});
@@ -163,19 +166,41 @@ export default function ConfigModal({ component, onClose }: Props) {
     if (config.bitWidth  !== undefined) meta.bitWidth  = config.bitWidth;
     if (config.numInputs !== undefined) meta.numInputs = config.numInputs;
     if (config.wordCount !== undefined) meta.wordCount = config.wordCount;
+    if (config.hasWriteEnable !== undefined) meta.hasWriteEnable = config.hasWriteEnable;
+    if (config.constantValue !== undefined) meta.constantValue = config.constantValue;
     
     // Check if we need to recreate the object (when port structure changes)
     const currentNumInputs = component.meta?.numInputs;
-    const needsRecreate = component.type === "MuxComponent" && 
-                          config.numInputs !== undefined && 
-                          config.numInputs !== currentNumInputs;
+    const currentHasWriteEnable =
+      typeof component.meta?.hasWriteEnable === "boolean" ? component.meta.hasWriteEnable : true;
+    const nextHasWriteEnable = config.hasWriteEnable ?? true;
+
+    const muxNeedsRecreate =
+      component.type === "MuxComponent" &&
+      config.numInputs !== undefined &&
+      config.numInputs !== currentNumInputs;
+
+    const registerNeedsRecreate =
+      component.type === "Register" &&
+      nextHasWriteEnable !== currentHasWriteEnable;
+
+    const needsRecreate = muxNeedsRecreate || registerNeedsRecreate;
     
     if (needsRecreate) {
-      // Recreate Mux with new numInputs (changes port structure)
+      // Recreate component when port structure changes.
       updateMeta(component.id, meta);
       recreateObject(component.id, component.type, newLabel, { ...component.meta, ...meta });
     } else if (Object.keys(meta).length > 0) {
       updateMeta(component.id, meta);
+
+      // Keep Constant runtime output in sync without breaking existing wires.
+      if (component.type === "ConstantComponent" && config.constantValue !== undefined) {
+        const constant = getConstant(component.id);
+        if (constant instanceof Constant) {
+          constant.setConstantValue(config.constantValue);
+          touch();
+        }
+      }
     }
     
     // Apply all pending port value changes (only if not recreated)
