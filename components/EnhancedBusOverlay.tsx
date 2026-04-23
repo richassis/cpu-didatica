@@ -17,6 +17,7 @@ import {
 } from "@/lib/wireRouting";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import type { WireDescriptor } from "@/lib/simulator";
+import { Register } from "@/lib/simulator";
 
 const GRID_SIZE = 16;
 const HIT_AREA_WIDTH = 14;
@@ -126,6 +127,15 @@ export default function EnhancedBusOverlay({
     const resolveWireValue = (wire: WireDescriptor): string => {
       const sourceObj = objects.get(wire.sourceComponentId);
       if (!sourceObj || !("getPorts" in sourceObj)) return "?";
+
+      // For Register output ports, use the pre-commit snapshot so the animation
+      // shows the value the register was *driving* when this tick began,
+      // not the newly latched value it received during commit().
+      // This is most visible on PC: PC=0 sends 0 to InstructionMemory in FETCH,
+      // even though PC commits to 1 in the same tick.
+      if (sourceObj instanceof Register && wire.sourcePortName === "value") {
+        return formatNum(sourceObj.preCommitValue, base, sourceObj.bitWidth);
+      }
 
       const ports = (sourceObj as { getPorts: () => Record<string, { value: unknown; bitWidth: number | null }> }).getPorts();
       const port = ports[wire.sourcePortName];

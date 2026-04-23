@@ -28,6 +28,13 @@ export class Register implements Clockable, Connectable {
   /** Output: current register value. */
   readonly out_value: OutputPort<number>;
 
+  /**
+   * Snapshot of out_value captured in evaluate(), before commit() overwrites it.
+   * Used by the animation system to show the value that was *sent* on the wire
+   * during this tick (i.e. the pre-commit value), not the newly latched value.
+   */
+  private _preCommitValue: number = 0;
+
   constructor(id: string, name: string, bitWidth = 16, initialValue = 0, hasWriteEnable = true) {
     this.id = id;
     this.name = name;
@@ -103,12 +110,30 @@ export class Register implements Clockable, Connectable {
   }
 
   /**
+   * Combinational phase: snapshot the current output value before commit runs.
+   * This lets the animation overlay read the pre-commit value (i.e. what was
+   * actually driving downstream inputs during this tick) via `preCommitValue`.
+   */
+  evaluate(): void {
+    this._preCommitValue = this.out_value.value;
+  }
+
+  /**
    * Sequential phase: latch data when write-enable is high.
    */
   commit(): void {
     if (!this.in_writeEnable || this.in_writeEnable.value !== 0) {
       this.out_value.set(this.clamp(this.in_data.value));
     }
+  }
+
+  /**
+   * The value of `out_value` captured just before the last `commit()` call.
+   * Use this in animations to show what the register was *outputting* during
+   * the tick, not what it received.
+   */
+  get preCommitValue(): number {
+    return this._preCommitValue;
   }
 
   // ── Helpers ──────────────────────────────────────────────────
