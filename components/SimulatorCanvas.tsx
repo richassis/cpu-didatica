@@ -15,6 +15,7 @@ import { useWireCreationStore } from "@/lib/wireCreationStore";
 import { useWireSelectionStore } from "@/lib/wireSelectionStore";
 import { useProjectStore } from "@/lib/projectStore";
 import { useModeStore } from "@/lib/modeStore";
+import { useExecutionStore } from "@/lib/executionStore";
 import { snapToGrid } from "@/lib/wireRouting";
 import { calculatePortPosition, type PortSide } from "@/lib/portPositioning";
 import WidgetRenderer from "./WidgetRenderer";
@@ -24,7 +25,11 @@ import { useEffect, useRef, useState, useCallback } from "react";
 
 export const GRID_SIZE = 16;
 
-export default function SimulatorCanvas() {
+interface SimulatorCanvasProps {
+  isReadOnly?: boolean;
+}
+
+export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasProps) {
   const components = useLayoutStore((s) => s.components);
   const zoom = useLayoutStore((s) => s.zoom);
   const updatePosition = useLayoutStore((s) => s.updatePosition);
@@ -50,8 +55,10 @@ export default function SimulatorCanvas() {
 
   // Mode state - determines what actions are allowed
   const mode = useModeStore((s) => s.mode);
-  const isEditMode = mode === "edit";
+  const isEditMode = mode === "edit" && !isReadOnly;
   const getSnapshot = useModeStore((s) => s.getSnapshot);
+
+  const executionTick = useExecutionStore((s) => s.currentIndex);
 
   // Clock state
   const tickClock = useSimulatorStore((s) => s.tickClock);
@@ -65,6 +72,7 @@ export default function SimulatorCanvas() {
   const cpu = getPrimaryCpu();
   const totalTicks = cpu?.totalTicks ?? 0;
   const isHalted = cpu?.halted ?? false;
+  const displayedTick = isReadOnly ? executionTick : totalTicks;
 
   // Display settings
   const numericBase = useDisplayStore((s) => s.numericBase);
@@ -227,7 +235,7 @@ export default function SimulatorCanvas() {
 
   // Drag-based wire creation: track mouse and complete on mouseup.
   useEffect(() => {
-    if (!isCreatingWire) return;
+    if (!isCreatingWire || isReadOnly) return;
 
     const resolveHoveredTargetFromEvent = (e: PointerEvent) => {
       const target = (e.target as HTMLElement | null);
@@ -348,6 +356,7 @@ export default function SimulatorCanvas() {
     };
   }, [
     isCreatingWire,
+    isReadOnly,
     zoom,
     sourceDirection,
     sourceComponentId,
@@ -361,14 +370,20 @@ export default function SimulatorCanvas() {
     flashRejectedPreview,
   ]);
 
+  useEffect(() => {
+    if (!isReadOnly) return;
+    if (!isCreatingWire) return;
+    cancelWireCreation();
+  }, [isReadOnly, isCreatingWire, cancelWireCreation]);
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } })
   );
 
   const handleDragEnd = (event: DragEndEvent) => {
-    // Block component movement in simulation mode
-    if (!isEditMode) return;
+    // Block component movement in simulation mode and read-only mode.
+    if (!isEditMode || isReadOnly) return;
     
     const { active, delta } = event;
     if (delta.x !== 0 || delta.y !== 0) {
@@ -479,7 +494,7 @@ export default function SimulatorCanvas() {
         deselectWire();
       }}
     >
-      <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+      <DndContext sensors={isReadOnly ? [] : sensors} onDragEnd={handleDragEnd}>
         <div style={{ width: CANVAS_WIDTH * zoom, height: CANVAS_HEIGHT * zoom }}>
           <div
             className="relative bg-gray-900 origin-top-left"
@@ -500,10 +515,11 @@ export default function SimulatorCanvas() {
       </DndContext>
 
       {/* ── FAB actions menu (bottom-right) ───────────────── */}
-      <div
-        className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2"
-        onMouseDown={(e) => e.stopPropagation()} // prevent outside-click handler
-      >
+      {!isReadOnly && (
+        <div
+          className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2"
+          onMouseDown={(e) => e.stopPropagation()} // prevent outside-click handler
+        >
         {/* Action items — slide up when open */}
         {fabOpen && (
           <div className="flex flex-col items-end gap-2 mb-1">
@@ -698,30 +714,36 @@ export default function SimulatorCanvas() {
         >
           {fabOpen ? "✕" : "⋯"}
         </button>
-      </div>
+        </div>
+      )}
 
       {/* ── Clock toolbar (bottom-left) ───────────────────── */}
       <div
         className="fixed bottom-6 left-6 z-40 flex items-center gap-2 bg-gray-900/90 border border-gray-700 rounded-full px-3 py-1.5 shadow-xl backdrop-blur-sm"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <span className="text-xs font-mono text-gray-400 min-w-[4rem] text-center">T{totalTicks}</span>
-        <button
-          onClick={tickClock}
-          disabled={isHalted}
-          className="px-2.5 py-1 rounded-full text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          title="Advance clock by one tick"
-        >Tick</button>
-        <button
-          onClick={handleReset}
-          className="w-7 h-7 flex items-center justify-center rounded-full text-gray-400 hover:bg-gray-700 hover:text-white transition-colors"
-          title={mode === "simulation" ? "Reset to initial state" : "Reset clock"}
-        >↺</button>
-        {isHalted && (
-          <span className="flex items-center gap-1 text-xs text-red-400 font-semibold">
-            <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-            Halted
-          </span>
+        <span className="text-xs font-mono text-gray-400 min-w-[4rem] text-center">T{displayedTick}</span>
+
+        {!isReadOnly && (
+          <>
+            <button
+              onClick={tickClock}
+              disabled={isHalted}
+              className="px-2.5 py-1 rounded-full text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Advance clock by one tick"
+            >Tick</button>
+            <button
+              onClick={handleReset}
+              className="w-7 h-7 flex items-center justify-center rounded-full text-gray-400 hover:bg-gray-700 hover:text-white transition-colors"
+              title={mode === "simulation" ? "Reset to initial state" : "Reset clock"}
+            >↺</button>
+            {isHalted && (
+              <span className="flex items-center gap-1 text-xs text-red-400 font-semibold">
+                <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                Halted
+              </span>
+            )}
+          </>
         )}
       </div>
 

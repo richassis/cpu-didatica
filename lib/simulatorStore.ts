@@ -12,11 +12,12 @@
  */
 
 import { create } from "zustand";
-import { Register, Constant, Gpr, Ula, Adder, Mux, Memory, InstructionMemory, CPU, Decoder, Bus, isClockable, CpuState, ALL_CPU_STATES } from "@/lib/simulator";
+import { Register, Constant, Gpr, Ula, Adder, Mux, Memory, InstructionMemory, CPU, Decoder, Bus, isClockable, CpuState } from "@/lib/simulator";
 import type { Connectable, WireDescriptor } from "@/lib/simulator";
 import type { ComponentState } from "@/lib/store";
 // Lazy import via getter to avoid circular initialisation (store.ts imports simulatorStore).
 const getLayoutStore = () =>
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   (require("@/lib/store") as typeof import("@/lib/store")).useLayoutStore;
 
 /** Union of every data-layer object type */
@@ -109,6 +110,9 @@ interface SimulatorState {
 
   /** Monotonically increasing counter bumped by `touch` — forces selector updates. */
   revision: number;
+
+  /** True while a bulk execution loop is running (skip persistence churn). */
+  isBatchExecuting: boolean;
 
   // ── Clock / CPU-based ticking ──────────────────────────────────
 
@@ -219,6 +223,7 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
   objects: new Map<string, SimulatorObject>(),
   bus: new Bus(),
   revision: 0,
+  isBatchExecuting: false,
 
   createObject: (id, type, label, meta) => {
     const { objects, bus } = get();
@@ -461,8 +466,10 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
 
     // Bump revision so UI re-renders
     set((s) => ({ revision: s.revision + 1 }));
-    // Persist updated port/register/memory values
-    getLayoutStore().getState().saveState();
+    if (!get().isBatchExecuting) {
+      // Persist updated port/register/memory values
+      getLayoutStore().getState().saveState();
+    }
   },
 
   resetClock: () => {
@@ -476,8 +483,10 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
     }
 
     set((s) => ({ revision: s.revision + 1 }));
-    // Persist cleared values
-    getLayoutStore().getState().saveState();
+    if (!get().isBatchExecuting) {
+      // Persist cleared values
+      getLayoutStore().getState().saveState();
+    }
   },
 
   tickSingleComponent: (id) => {
