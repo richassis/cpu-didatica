@@ -1,142 +1,198 @@
 import { create } from "zustand";
-import { enforceOrthogonal, snapToGrid, type Point } from "@/lib/wireRouting";
+import { autoRoute, snapToGrid, type Point, type AABB } from "@/lib/wireRouting";
+import type { PortSide } from "@/lib/portPositioning";
 
 const GRID_SIZE = 16;
 
 type Direction = "input" | "output";
 
+export interface DragSource {
+  componentId: string;
+  portName: string;
+  direction: Direction;
+  position: Point;
+  portSide: PortSide;
+}
+
+export interface HoveredPort {
+  componentId: string;
+  portName: string;
+  direction: Direction;
+  position: Point;
+  portSide: PortSide;
+}
+
+export interface DragResult {
+  sourceComponentId: string;
+  sourcePortName: string;
+  targetComponentId: string;
+  targetPortName: string;
+  /** Auto-routed path nodes (excluding start/end port positions) for persistence. */
+  nodes: Point[];
+}
+
 interface WireCreationState {
-  isCreating: boolean;
+  /** idle = nothing happening, dragging = user is dragging from a port */
+  phase: "idle" | "dragging";
+
+  // Source info (set on drag start)
   sourceComponentId: string | null;
   sourcePortName: string | null;
   sourceDirection: Direction | null;
-  mousePosition: { x: number; y: number } | null;
-  /** Start position of the wire (snapped to grid) */
-  startPosition: Point | null;
-  /** Committed waypoints (does not include start point) */
-  waypoints: Point[];
-  /** Current preview path points: [start, waypoints..., previewEnd] */
-  pathPoints: Point[];
+  sourcePosition: Point | null;
+  sourcePortSide: PortSide | null;
 
-  startWireCreation: (
-    componentId: string,
-    portName: string,
-    direction: Direction,
-    startPosition: Point,
-  ) => void;
-  addWaypoint: (x: number, y: number) => void;
-  updateMousePosition: (x: number, y: number) => void;
-  completeWireCreation: (
-    targetComponentId: string,
-    targetPortName: string,
-    targetDirection: Direction,
-  ) => boolean;
-  cancelWireCreation: () => void;
+  // Live preview
+  mousePosition: Point | null;
+  /** Complete auto-routed preview path from source to cursor/target. */
+  previewPath: Point[];
+
+  /** Component AABBs to avoid during routing (set once on drag start). */
+  obstacles: AABB[];
+
+  // Target highlight
+  hoveredTargetPort: HoveredPort | null;
+
+  // Actions
+  startDrag: (source: DragSource, obstacles: AABB[]) => void;
+  updateDrag: (mousePos: Point, hoveredPort?: HoveredPort | null) => void;
+  completeDrag: () => DragResult | null;
+  cancelDrag: () => void;
 }
 
-const resetCreationState = {
-  isCreating: false,
+const resetState = {
+  phase: "idle" as const,
   sourceComponentId: null,
   sourcePortName: null,
   sourceDirection: null,
+  sourcePosition: null,
+  sourcePortSide: null,
   mousePosition: null,
-  startPosition: null,
-  waypoints: [],
-  pathPoints: [],
+  previewPath: [],
+  obstacles: [],
+  hoveredTargetPort: null,
 };
 
 export const useWireCreationStore = create<WireCreationState>((set, get) => ({
-  ...resetCreationState,
+  ...resetState,
 
-  startWireCreation: (componentId, portName, direction, startPos) => {
-    const snappedStart = {
-      x: snapToGrid(startPos.x, GRID_SIZE),
-      y: snapToGrid(startPos.y, GRID_SIZE),
-    };
-
+  startDrag: (source, obstacles) => {
     set({
-      isCreating: true,
-      sourceComponentId: componentId,
-      sourcePortName: portName,
-      sourceDirection: direction,
-      mousePosition: snappedStart,
-      startPosition: snappedStart,
-      waypoints: [],
-      pathPoints: [snappedStart],
+      phase: "dragging",
+      sourceComponentId: source.componentId,
+      sourcePortName: source.portName,
+      sourceDirection: source.direction,
+      sourcePosition: source.position,
+      sourcePortSide: source.portSide,
+      obstacles,
+      mousePosition: source.position,
+      previewPath: [source.position],
+      hoveredTargetPort: null,
     });
   },
 
-  addWaypoint: (x, y) => {
+  updateDrag: (mousePos, hoveredPort) => {
     const state = get();
-    if (!state.isCreating || !state.startPosition) return;
-
-    const snappedPoint = {
-      x: snapToGrid(x, GRID_SIZE),
-      y: snapToGrid(y, GRID_SIZE),
-    };
-
-    const committedPath = enforceOrthogonal([
-      state.startPosition,
-      ...state.waypoints,
-      snappedPoint,
-    ]);
-
-    set({
-      mousePosition: snappedPoint,
-      waypoints: committedPath.slice(1),
-      pathPoints: committedPath,
-    });
-  },
-
-  updateMousePosition: (x, y) => {
-    const state = get();
-    if (!state.isCreating || !state.startPosition) return;
+    if (state.phase !== "dragging" || !state.sourcePosition || !state.sourcePortSide) return;
 
     const snappedMouse = {
-      x: snapToGrid(x, GRID_SIZE),
-      y: snapToGrid(y, GRID_SIZE),
+      x: snapToGrid(mousePos.x, GRID_SIZE),
+      y: snapToGrid(mousePos.y, GRID_SIZE),
     };
 
-    const pathPoints = enforceOrthogonal([
-      state.startPosition,
-      ...state.waypoints,
-      snappedMouse,
-    ]);
+    // If hovering over a compatible target port, snap the preview to it
+    const targetPos = hoveredPort ? hoveredPort.position : snappedMouse;
+    const targetSide: PortSide = hoveredPort
+      ? hoveredPort.portSide
+      // When no target port is hovered, guess a reasonable entry side
+      // based on relative position to source.
+      : guessTargetSide(state.sourcePosition, snappedMouse, state.sourcePortSide);
+
+    const previewPath = autoRoute(
+      state.sourcePosition,
+      state.sourcePortSide,
+      targetPos,
+      targetSide,
+      state.obstacles,
+    );
 
     set({
       mousePosition: snappedMouse,
-      pathPoints,
+      previewPath,
+      hoveredTargetPort: hoveredPort ?? null,
     });
   },
 
-  completeWireCreation: (targetComponentId, targetPortName, targetDirection) => {
+  completeDrag: () => {
     const state = get();
-
+    if (state.phase !== "dragging") return null;
     if (
-      !state.isCreating ||
       !state.sourceComponentId ||
       !state.sourcePortName ||
-      !state.sourceDirection
+      !state.sourceDirection ||
+      !state.hoveredTargetPort
     ) {
-      return false;
+      // No valid target — cancel
+      set(resetState);
+      return null;
     }
 
-    if (state.sourceComponentId === targetComponentId && state.sourcePortName === targetPortName) {
-      return false;
+    const target = state.hoveredTargetPort;
+
+    // Validate compatibility
+    if (state.sourceComponentId === target.componentId && state.sourcePortName === target.portName) {
+      set(resetState);
+      return null;
+    }
+    if (state.sourceDirection === target.direction) {
+      set(resetState);
+      return null;
     }
 
-    const isCompatibleDirection = state.sourceDirection !== targetDirection;
+    // Normalize direction: source must be output, target must be input
+    const isReversed = state.sourceDirection === "input";
+    const sourceId = isReversed ? target.componentId : state.sourceComponentId;
+    const sourcePort = isReversed ? target.portName : state.sourcePortName;
+    const targetId = isReversed ? state.sourceComponentId : target.componentId;
+    const targetPort = isReversed ? state.sourcePortName : target.portName;
 
-    if (!isCompatibleDirection) {
-      return false;
-    }
+    // Extract persisted nodes from the preview path.
+    // Path shape is: [source, sourceEscape, ...mid, targetEscape, target].
+    // Persist only the middle custom points (exclude both escape points).
+    const routedNodes = state.previewPath.length > 4
+      ? state.previewPath.slice(2, -2)
+      : [];
 
-    set(resetCreationState);
+    const nodes = isReversed ? [...routedNodes].reverse() : routedNodes;
 
-    return true;
+    const result: DragResult = {
+      sourceComponentId: sourceId,
+      sourcePortName: sourcePort,
+      targetComponentId: targetId,
+      targetPortName: targetPort,
+      nodes,
+    };
+
+    set(resetState);
+    return result;
   },
 
-  cancelWireCreation: () => {
-    set(resetCreationState);
+  cancelDrag: () => {
+    set(resetState);
   },
 }));
+
+/**
+ * When no target port is hovered, guess a reasonable entry side
+ * for the preview endpoint based on direction from source.
+ */
+function guessTargetSide(source: Point, target: Point, sourceSide: PortSide): PortSide {
+  const dx = target.x - source.x;
+  const dy = target.y - source.y;
+
+  // Opposite of dominant direction from source
+  if (Math.abs(dx) > Math.abs(dy)) {
+    return dx > 0 ? "left" : "right";
+  }
+  return dy > 0 ? "top" : "bottom";
+}

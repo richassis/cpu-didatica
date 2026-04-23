@@ -1,9 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
-  allowedDevOrigins: ['192.168.2.102'],
+  /* Opções principais agora */
+  allowedDevOrigins: ['local-origin.dev', '*.local-origin.dev', '192.168.0.12'],
 
+  // Se houver outras opções experimentais, mantenha o bloco:
+  // experimental: { ... }
 };
 
 export default nextConfig;

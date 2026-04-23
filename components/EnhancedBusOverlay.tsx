@@ -4,6 +4,8 @@ import { useLayoutStore, CANVAS_WIDTH, CANVAS_HEIGHT } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayStore, formatNum } from "@/lib/displayStore";
 import { useWireCreationStore } from "@/lib/wireCreationStore";
+import { useWireSelectionStore } from "@/lib/wireSelectionStore";
+import type { DragSegmentState, DragNodeState } from "@/lib/wireSelectionStore";
 import { useProjectStore } from "@/lib/projectStore";
 import { calculatePortPosition, getPortPlacement, type PortSide } from "@/lib/portPositioning";
 import { getWidgetDefinition } from "@/lib/widgetDefinitions";
@@ -31,19 +33,6 @@ interface WireRenderData {
   targetEscape: Point;
   value: string;
   isCpuControlSignal: boolean;
-}
-
-interface DragNodeState {
-  wireId: string;
-  nodeIndex: number;
-}
-
-interface DragSegmentState {
-  wireId: string;
-  segmentIndex: number;
-  orientation: SegmentOrientation;
-  startAxisValue: number;
-  initialNodes: Point[];
 }
 
 function normalizeNodes(nodes: Array<{ x: number; y: number }>): Point[] {
@@ -82,13 +71,23 @@ export default function EnhancedBusOverlay({
   const updateWireNodes = useProjectStore((s) => s.updateWireNodes);
   const removeWireFromProject = useProjectStore((s) => s.removeWireFromProject);
 
-  const isCreating = useWireCreationStore((s) => s.isCreating);
-  const pathPoints = useWireCreationStore((s) => s.pathPoints);
+  const creationPhase = useWireCreationStore((s) => s.phase);
+  const previewPath = useWireCreationStore((s) => s.previewPath);
+  const isCreating = creationPhase === "dragging";
 
-  const [selectedWireId, setSelectedWireId] = useState<string | null>(null);
-  const [selectedNodeIndex, setSelectedNodeIndex] = useState<number | null>(null);
-  const [dragNodeState, setDragNodeState] = useState<DragNodeState | null>(null);
-  const [dragSegmentState, setDragSegmentState] = useState<DragSegmentState | null>(null);
+  // Wire selection/editing from shared store
+  const selectedWireId = useWireSelectionStore((s) => s.selectedWireId);
+  const hoveredWireId = useWireSelectionStore((s) => s.hoveredWireId);
+  const selectedNodeIndex = useWireSelectionStore((s) => s.selectedNodeIndex);
+  const dragNodeState = useWireSelectionStore((s) => s.dragNode);
+  const dragSegmentState = useWireSelectionStore((s) => s.dragSegment);
+  const selectWire = useWireSelectionStore((s) => s.selectWire);
+  const deselectWire = useWireSelectionStore((s) => s.deselectWire);
+  const setHoveredWire = useWireSelectionStore((s) => s.setHoveredWire);
+  const selectNode = useWireSelectionStore((s) => s.selectNode);
+  const startSegmentDrag = useWireSelectionStore((s) => s.startSegmentDrag);
+  const startNodeDrag = useWireSelectionStore((s) => s.startNodeDrag);
+  const endDrag = useWireSelectionStore((s) => s.endDrag);
 
   const [animatingWires, setAnimatingWires] = useState<Set<string>>(new Set());
   const [animationProgress, setAnimationProgress] = useState<Map<string, number>>(new Map());
@@ -465,8 +464,7 @@ export default function EnhancedBusOverlay({
     };
 
     const handleMouseUp = () => {
-      setDragNodeState(null);
-      setDragSegmentState(null);
+      endDrag();
     };
 
     window.addEventListener("mousemove", handleMouseMove);
@@ -476,7 +474,7 @@ export default function EnhancedBusOverlay({
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [dragNodeState, dragSegmentState, zoom, wireDataById, commitWireNodes]);
+  }, [dragNodeState, dragSegmentState, zoom, wireDataById, commitWireNodes, endDrag]);
 
   const handleDeleteSelection = useCallback(() => {
     if (!selectedWireId) return;
@@ -490,13 +488,13 @@ export default function EnhancedBusOverlay({
         nodes.splice(selectedNodeIndex, 1);
         commitWireNodes(selectedWireId, nodes);
       }
-      setSelectedNodeIndex(null);
+      useWireSelectionStore.getState().deselectNode();
       return;
     }
 
     removeSimulatorWire(selectedWireId);
     removeWireFromProject(selectedWireId);
-    setSelectedWireId(null);
+    deselectWire();
   }, [
     selectedWireId,
     selectedNodeIndex,
@@ -504,13 +502,13 @@ export default function EnhancedBusOverlay({
     commitWireNodes,
     removeSimulatorWire,
     removeWireFromProject,
+    deselectWire,
   ]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        setSelectedWireId(null);
-        setSelectedNodeIndex(null);
+        deselectWire();
       } else if ((e.key === "Delete" || e.key === "Backspace") && selectedWireId) {
         e.preventDefault();
         handleDeleteSelection();
@@ -569,6 +567,7 @@ export default function EnhancedBusOverlay({
           const { wire, path, value, isCpuControlSignal } = wireData;
           const pathD = pointsToSVGPath(path);
           const isSelected = wire.id === selectedWireId;
+          const isHovered = wire.id === hoveredWireId && !isSelected;
           const isAnimating = animatingWires.has(wire.id);
 
           const baseColor = isCpuControlSignal ? "url(#wireGradientControl)" : "url(#wireGradientData)";
@@ -600,9 +599,8 @@ export default function EnhancedBusOverlay({
                       const canvasX = snapToGrid((e.clientX - rect.left + canvas.scrollLeft) / zoom, GRID_SIZE);
                       const canvasY = snapToGrid((e.clientY - rect.top + canvas.scrollTop) / zoom, GRID_SIZE);
 
-                      setSelectedWireId(wire.id);
-                      setSelectedNodeIndex(null);
-                      setDragSegmentState({
+                      selectWire(wire.id);
+                      startSegmentDrag({
                         wireId: wire.id,
                         segmentIndex: index,
                         orientation,
@@ -627,7 +625,7 @@ export default function EnhancedBusOverlay({
                       });
 
                       commitWireNodes(wire.id, nodes);
-                      setSelectedWireId(wire.id);
+                      selectWire(wire.id);
                     }}
                   />
                 );
@@ -636,8 +634,8 @@ export default function EnhancedBusOverlay({
               <path
                 d={pathD}
                 fill="none"
-                stroke={isSelected ? pulseColor : baseColor}
-                strokeWidth={isSelected ? 4 : 3}
+                stroke={isSelected ? pulseColor : isHovered ? pulseColor : baseColor}
+                strokeWidth={isSelected ? 5 : isHovered ? 4 : 3}
                 strokeLinecap="round"
                 filter="url(#glow)"
                 opacity={isAnimating ? 0.95 : 0.78}
@@ -652,9 +650,10 @@ export default function EnhancedBusOverlay({
                 className="pointer-events-auto cursor-pointer"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setSelectedWireId(wire.id);
-                  setSelectedNodeIndex(null);
+                  selectWire(wire.id);
                 }}
+                onMouseEnter={() => setHoveredWire(wire.id)}
+                onMouseLeave={() => setHoveredWire(null)}
               />
 
               {(wire.nodes ?? []).map((node, index) => {
@@ -671,20 +670,19 @@ export default function EnhancedBusOverlay({
                       className="pointer-events-auto cursor-move"
                       onMouseDown={(e) => {
                         e.stopPropagation();
-                        setSelectedWireId(wire.id);
-                        setSelectedNodeIndex(index);
-                        setDragNodeState({ wireId: wire.id, nodeIndex: index });
+                        selectNode(wire.id, index);
+                        startNodeDrag({ wireId: wire.id, nodeIndex: index });
                       }}
                     />
                     <rect
-                      x={node.x - 2}
-                      y={node.y - 2}
-                      width={4}
-                      height={4}
-                      rx={0.5}
-                      fill={isNodeSelected ? "#22d3ee" : "#9ca3af"}
-                      stroke={isNodeSelected ? "#67e8f9" : "#e5e7eb"}
-                      strokeWidth={1}
+                      x={node.x - 4}
+                      y={node.y - 4}
+                      width={8}
+                      height={8}
+                      rx={2}
+                      fill={isNodeSelected ? "#22d3ee" : isSelected ? "#9ca3af" : "transparent"}
+                      stroke={isNodeSelected ? "#67e8f9" : isSelected ? "#e5e7eb" : "transparent"}
+                      strokeWidth={isNodeSelected ? 2 : 1}
                       className="pointer-events-none"
                     />
                   </g>
@@ -717,28 +715,72 @@ export default function EnhancedBusOverlay({
             </g>
           );
         })}
+      {/* ── Selected wire delete button ──────────────────────── */}
+      {selectedWireId && (() => {
+        const wd = wireDataById.get(selectedWireId);
+        if (!wd) return null;
+        const mid = wd.path[Math.floor(wd.path.length / 2)];
+        if (!mid) return null;
+        return (
+          <g transform={`translate(${mid.x}, ${mid.y - 18})`} className="pointer-events-auto">
+            <rect x="-12" y="-12" width="24" height="24" rx="6"
+              fill="#1f2937" stroke="#ef4444" strokeWidth="1.5" cursor="pointer"
+              onClick={(e) => { e.stopPropagation(); handleDeleteSelection(); }}
+            />
+            <text textAnchor="middle" dominantBaseline="central"
+              style={{ fontSize: "14px", fill: "#ef4444", cursor: "pointer", userSelect: "none" }}
+              onClick={(e) => { e.stopPropagation(); handleDeleteSelection(); }}
+            >✕</text>
+          </g>
+        );
+      })()}
 
-      {isCreating && pathPoints.length > 1 && (
+      {/* ── Segment hover handles ──────────────────────────── */}
+      {(selectedWireId || hoveredWireId) && (() => {
+        const wireId = selectedWireId || hoveredWireId;
+        if (!wireId) return null;
+        const wd = wireDataById.get(wireId);
+        if (!wd) return null;
+        const chain = [wd.sourceEscape, ...(wd.wire.nodes ?? []), wd.targetEscape];
+        return chain.slice(0, -1).map((pt, i) => {
+          const next = chain[i + 1];
+          const mx = (pt.x + next.x) / 2;
+          const my = (pt.y + next.y) / 2;
+          const isH = pt.y === next.y;
+          return (
+            <rect key={`handle-${wireId}-${i}`}
+              x={isH ? mx - 3 : mx - 2} y={isH ? my - 2 : my - 3}
+              width={isH ? 6 : 4} height={isH ? 4 : 6} rx="1"
+              fill={selectedWireId === wireId ? "#9ca3af" : "#6b7280"}
+              opacity="0.7"
+              className="pointer-events-none"
+            />
+          );
+        });
+      })()}
+
+      {/* ── Wire creation preview (auto-routed) ───────────── */}
+      {isCreating && previewPath.length > 1 && (
         <g>
           <path
-            d={pointsToSVGPath(pathPoints)}
+            d={pointsToSVGPath(previewPath)}
             fill="none"
             stroke={previewRejected ? "#ef4444" : "#22d3ee"}
             strokeWidth="3"
             strokeLinecap="round"
-            strokeDasharray="6,4"
-            opacity="0.75"
+            strokeDasharray="8,4"
+            opacity="0.8"
+            filter="url(#glow)"
           />
-          {pathPoints.length > 2 && (
-            <path
-              d={`M ${pathPoints[pathPoints.length - 2].x} ${pathPoints[pathPoints.length - 2].y} L ${pathPoints[pathPoints.length - 1].x} ${pathPoints[pathPoints.length - 1].y}`}
-              fill="none"
-              stroke={previewRejected ? "#f87171" : "#67e8f9"}
-              strokeWidth="4"
-              strokeLinecap="round"
-              opacity="0.95"
-            />
-          )}
+          {/* Endpoint dot */}
+          <circle
+            cx={previewPath[previewPath.length - 1].x}
+            cy={previewPath[previewPath.length - 1].y}
+            r="5"
+            fill={previewRejected ? "#ef4444" : "#22d3ee"}
+            opacity="0.9"
+            className="pointer-events-none"
+          />
         </g>
       )}
 
