@@ -155,7 +155,7 @@ export default function DecoderComponent({ component, zoom }: Props) {
             return (
               <>
                 {stdDesc.usesGPR && (
-                  <Row label="GPR addr" value={`R${d.gprAddr}`} accent="text-cyan-300" />
+                  <Row label="gprAddrA" value={`R${d.gprAddr}`} accent="text-cyan-300" />
                 )}
                 {stdDesc.usesOperand && (
                   <Row label="operand" value={hex8(d.operand)} accent="text-cyan-200" />
@@ -169,9 +169,9 @@ export default function DecoderComponent({ component, zoom }: Props) {
             const ulaDesc = desc as (typeof INSTRUCTION_SET)[keyof typeof INSTRUCTION_SET] & { usesSrcB?: boolean };
             return (
               <>
-                <Row label="srcA"  value={`R${d.srcA}`} accent="text-lime-300" />
+                <Row label="gprAddrA"  value={`R${d.srcA}`} accent="text-lime-300" />
                 {ulaDesc.usesSrcB && (
-                  <Row label="srcB" value={`R${d.srcB}`} accent="text-lime-300" />
+                  <Row label="gprAddrB" value={`R${d.srcB}`} accent="text-lime-300" />
                 )}
                 <Row label="dst"   value={`R${d.dst}`}  accent="text-lime-200" />
               </>

@@ -9,8 +9,8 @@
  *   │                         DECODER                              │
  *   │                                                              │
  *   │  raw word ──▶  opcode  ──────────────────────────▶  CPU      │
- *   │                gprAddr / srcA ──────────────────▶  GPR mux   │
- *   │                srcB          ──────────────────▶  GPR mux   │
+ *   │                gprAddrA      ──────────────────▶  GPR mux   │
+ *   │                gprAddrB      ──────────────────▶  GPR mux   │
  *   │                dst           ──────────────────▶  GPR mux   │
  *   │                operand       ──────────────────▶  Imm / MAR │
  *   └──────────────────────────────────────────────────────────────┘
@@ -59,17 +59,14 @@ export class Decoder implements Clockable, Connectable {
   /** Output: 5-bit opcode (to CPU). */
   readonly out_opcode: OutputPort<number>;
 
-  /** Output: GPR address field [10:8] (standard format). */
-  readonly out_gprAddr: OutputPort<number>;
+  /** Output: shared GPR address field [10:8] (standard / ULA srcA). */
+  readonly out_gprAddrA: OutputPort<number>;
 
   /** Output: 8-bit operand/immediate [7:0] (standard format). */
   readonly out_operand: OutputPort<number>;
 
-  /** Output: ULA source A [10:8]. */
-  readonly out_srcA: OutputPort<number>;
-
-  /** Output: ULA source B [7:5]. */
-  readonly out_srcB: OutputPort<number>;
+  /** Output: ULA source B / second GPR address [7:5]. */
+  readonly out_gprAddrB: OutputPort<number>;
 
   /** Output: ULA destination [2:0]. */
   readonly out_dst: OutputPort<number>;
@@ -94,9 +91,9 @@ export class Decoder implements Clockable, Connectable {
       "5-bit opcode sent to CPU"
     );
 
-    this.out_gprAddr = new OutputPort<number>(
-      "gprAddr", "number", GPR_ADDR_BITS, 0,
-      "GPR address field [10:8] for standard instructions"
+    this.out_gprAddrA = new OutputPort<number>(
+      "gprAddrA", "number", GPR_ADDR_BITS, 0,
+      "Shared GPR address field [10:8] for standard instructions and ULA srcA"
     );
 
     this.out_operand = new OutputPort<number>(
@@ -104,14 +101,9 @@ export class Decoder implements Clockable, Connectable {
       "8-bit immediate/address [7:0] for standard instructions"
     );
 
-    this.out_srcA = new OutputPort<number>(
-      "srcA", "number", GPR_ADDR_BITS, 0,
-      "ULA source A register address [10:8]"
-    );
-
-    this.out_srcB = new OutputPort<number>(
-      "srcB", "number", GPR_ADDR_BITS, 0,
-      "ULA source B register address [7:5]"
+    this.out_gprAddrB = new OutputPort<number>(
+      "gprAddrB", "number", GPR_ADDR_BITS, 0,
+      "ULA source B / second GPR address [7:5]"
     );
 
     this.out_dst = new OutputPort<number>(
@@ -127,9 +119,8 @@ export class Decoder implements Clockable, Connectable {
       instruction: this.in_instruction,
       opcode: this.out_opcode,
       operand: this.out_operand,
-      srcA: this.out_srcA,
-      srcB: this.out_srcB,
-      gprAddr: this.out_gprAddr,
+      gprAddrA: this.out_gprAddrA,
+      gprAddrB: this.out_gprAddrB,
       dst: this.out_dst,
     };
   }
@@ -153,8 +144,8 @@ export class Decoder implements Clockable, Connectable {
   }
 
   /** GPR address field. */
-  get gprAddr(): number {
-    return this.out_gprAddr.value;
+  get gprAddrA(): number {
+    return this.out_gprAddrA.value;
   }
 
   /** Operand/immediate field. */
@@ -162,14 +153,9 @@ export class Decoder implements Clockable, Connectable {
     return this.out_operand.value;
   }
 
-  /** ULA source A. */
-  get srcA(): number {
-    return this.out_srcA.value;
-  }
-
-  /** ULA source B. */
-  get srcB(): number {
-    return this.out_srcB.value;
+  /** ULA source B / second GPR address. */
+  get gprAddrB(): number {
+    return this.out_gprAddrB.value;
   }
 
   /** ULA destination. */
@@ -236,12 +222,11 @@ export class Decoder implements Clockable, Connectable {
       const srcB = (raw & ULA_SRC_B_MASK) >>> ULA_SRC_B_SHIFT;
       const dst  = (raw & ULA_DST_MASK)   >>> ULA_DST_SHIFT;
 
-      this.out_srcA.set(srcA);
-      this.out_srcB.set(srcB);
+      this.out_gprAddrA.set(srcA);
+      this.out_gprAddrB.set(srcB);
       this.out_dst.set(dst);
 
       // Clear standard outputs
-      this.out_gprAddr.set(0);
       this.out_operand.set(0);
 
       this._decoded = {
@@ -252,12 +237,11 @@ export class Decoder implements Clockable, Connectable {
       const gprAddr = (raw & GPR_ADDR_MASK) >>> GPR_ADDR_SHIFT;
       const operand = (raw & OPERAND_MASK)  >>> OPERAND_SHIFT;
 
-      this.out_gprAddr.set(gprAddr);
+      this.out_gprAddrA.set(gprAddr);
       this.out_operand.set(operand);
 
       // Clear ULA outputs
-      this.out_srcA.set(0);
-      this.out_srcB.set(0);
+      this.out_gprAddrB.set(0);
       this.out_dst.set(0);
 
       this._decoded = {
