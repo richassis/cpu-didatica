@@ -5,6 +5,7 @@ import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { Props } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
+import { useDeferredPortValue } from "@/lib/useDeferredValue";
 import React from "react";
 import ConfigModal from "@/components/ConfigModal";
 import PortsOverlay from "@/components/PortsOverlay";
@@ -70,10 +71,15 @@ export default function DecoderComponent({ component, zoom }: Props) {
   };
 
   // ── derived display values ─────────────────────────────────────────────────
+  // During animation, show snapshot values until the wire from IR reaches us.
+  const deferredOpcode = useDeferredPortValue(id, "opcode", dec ? dec.opcode : Opcode.HLT);
+  const isDeferred = deferredOpcode !== (dec ? dec.opcode : Opcode.HLT);
+  
+  // When deferred, show old values; when revealed, show live values
   const instr    = dec ? dec.instruction   : 0;
-  const op       = dec ? (dec.opcode as Opcode) : Opcode.HLT;
-  const opMnem   = dec ? mnemonic(dec)     : "HLT";
-  const decoded  = dec ? dec.decoded       : null;
+  const op       = isDeferred ? (deferredOpcode as Opcode) : (dec ? (dec.opcode as Opcode) : Opcode.HLT);
+  const opMnem   = isDeferred ? (Object.values(INSTRUCTION_SET).find((d) => d.opcode === op)?.mnemonic ?? "???") : (dec ? mnemonic(dec) : "HLT");
+  const decoded  = isDeferred ? null : (dec ? dec.decoded : null);
 
   // Figure out instruction format from the INSTRUCTION_SET
   const desc     = decoded

@@ -6,6 +6,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { useLayoutStore, Props } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayStore, formatNum } from "@/lib/displayStore";
+import { useDeferredPortValue } from "@/lib/useDeferredValue";
 import React from "react";
 import ConfigModal from "@/components/ConfigModal";
 import PortsOverlay from "@/components/PortsOverlay";
@@ -38,10 +39,11 @@ export default function MemoryComponent({ component, zoom }: Props) {
   const wrMem      = mem ? mem.in_wrMem.value : 0;
   const dataIn     = mem ? mem.in_data.value  : 0;
   const dataOut    = mem ? mem.output         : 0;
+  const deferredDataOut = useDeferredPortValue(id, "out", dataOut);
 
   const addrFmt   = addrHex(addr, addrBits);
   const dataInFmt = formatNum(dataIn,  base, bitWidth);
-  const dataOutFmt= formatNum(dataOut, base, bitWidth);
+  const dataOutFmt= formatNum(deferredDataOut, base, bitWidth);
 
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({ id });

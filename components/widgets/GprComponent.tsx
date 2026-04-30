@@ -6,6 +6,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { useLayoutStore, Props } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayStore, formatNum } from "@/lib/displayStore";
+import { useShouldDefer, useDeferredRegisters, useDeferredPortValue } from "@/lib/useDeferredValue";
 import React from "react";
 import ConfigModal from "@/components/ConfigModal";
 import PortsOverlay from "@/components/PortsOverlay";
@@ -27,12 +28,19 @@ export default function GprComponent({ component, zoom }: Props) {
 
   const regs     = gpr ? gpr.snapshot() : [];
   const bitWidth  = gpr?.bitWidth ?? 16;
+  const isDeferred = useShouldDefer(id);
+  const snapshotRegs = useDeferredRegisters(id);
+  // Use snapshot register values during animation if available
+  const displayRegs = isDeferred && snapshotRegs
+    ? snapshotRegs.map((v, i) => ({ name: `R${i}`, value: v }))
+    : regs;
   
-  // I/O port values
+  // I/O port values — use deferred values during animation
+  const deferredDataOutA = useDeferredPortValue(id, "out_readDataA", gpr?.out_readDataA?.value ?? 0);
   const addrIn   = gpr?.in_writeAddr?.value ?? 0;
   const dataIn   = gpr?.in_writeData?.value ?? 0;
   const wrSignal = gpr?.in_writeEnable?.value ?? 0;
-  const dataOut  = gpr?.out_readDataA?.value ?? 0;
+  const dataOut  = deferredDataOutA;
 
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({ id });
@@ -169,7 +177,7 @@ export default function GprComponent({ component, zoom }: Props) {
               </div>
             ) : (
               <div className="flex flex-col gap-px px-2 py-1.5">
-                {regs.map(({ value }, i) => (
+                {displayRegs.map(({ value }, i) => (
                   <RegisterRow
                     key={i}
                     index={i}

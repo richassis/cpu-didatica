@@ -19,7 +19,7 @@ import {
 } from "@/lib/wireRouting";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import type { WireDescriptor } from "@/lib/simulator";
-import { Register } from "@/lib/simulator";
+import { useSnapshotStore } from "@/lib/snapshotStore";
 
 const GRID_SIZE = 16;
 const HIT_AREA_WIDTH = 14;
@@ -127,13 +127,16 @@ export default function EnhancedBusOverlay({
       const sourceObj = objects.get(wire.sourceComponentId);
       if (!sourceObj || !("getPorts" in sourceObj)) return "?";
 
-      // For Register output ports, use the pre-commit snapshot so the animation
-      // shows the value the register was *driving* when this tick began,
-      // not the newly latched value it received during commit().
-      // This is most visible on PC: PC=0 sends 0 to InstructionMemory in FETCH,
-      // even though PC commits to 1 in the same tick.
-      if (sourceObj instanceof Register && wire.sourcePortName === "value") {
-        return formatNum(sourceObj.preCommitValue, base, sourceObj.bitWidth);
+      // When animating, use snapshot values so the wire label shows the
+      // value that was driving the wire BEFORE the tick committed.
+      const snapshotState = useSnapshotStore.getState();
+      if (snapshotState.isAnimating) {
+        const snapVal = snapshotState.getSnapshotPortValue(wire.sourceComponentId, wire.sourcePortName);
+        if (snapVal !== undefined) {
+          const ports = (sourceObj as { getPorts: () => Record<string, { bitWidth: number | null }> }).getPorts();
+          const port = ports[wire.sourcePortName];
+          return formatNum(snapVal, base, port?.bitWidth ?? 16);
+        }
       }
 
       const ports = (sourceObj as { getPorts: () => Record<string, { value: unknown; bitWidth: number | null }> }).getPorts();
@@ -234,7 +237,11 @@ export default function EnhancedBusOverlay({
       })
       .map((wireData) => wireData.wire.id);
 
-    if (visibleWireIds.length === 0) return;
+    if (visibleWireIds.length === 0) {
+      // No wires to animate — reveal all components immediately
+      useSnapshotStore.getState().finishAnimation();
+      return;
+    }
 
     const cpuIds = visibleWireIds.filter((id) => {
       const wireData = wireDataByIdRef.current.get(id);
@@ -242,7 +249,10 @@ export default function EnhancedBusOverlay({
       return changedCpuSignals.has(wireData.wire.sourcePortName);
     });
     const nonCpuIds = visibleWireIds.filter((id) => !wireDataByIdRef.current.get(id)?.isCpuControlSignal);
-    if (cpuIds.length === 0 && nonCpuIds.length === 0) return;
+    if (cpuIds.length === 0 && nonCpuIds.length === 0) {
+      useSnapshotStore.getState().finishAnimation();
+      return;
+    }
     const nonCpuOrderGroups = new Map<number, string[]>();
 
     for (const id of nonCpuIds) {
@@ -267,6 +277,37 @@ export default function EnhancedBusOverlay({
       .sort((a, b) => a[0] - b[0])
       .map(([, ids]) => ids);
 
+    // ── Snapshot-based deferred display ────────────────────────
+    // Determine which component IDs are targets of animated wires.
+    // Components NOT targeted by any visible wire are revealed immediately.
+    const allAnimatedWireIds = [...cpuIds, ...nonCpuIds];
+    const targetedComponentIds = new Set<string>();
+    const sourceComponentIds = new Set<string>();
+    for (const id of allAnimatedWireIds) {
+      const wd = wireDataByIdRef.current.get(id);
+      if (wd) {
+        targetedComponentIds.add(wd.wire.targetComponentId);
+        sourceComponentIds.add(wd.wire.sourceComponentId);
+      }
+    }
+    // Components with no incoming animated wire should reveal immediately
+    const allComponentIds = new Set<string>();
+    for (const wd of currentWireData) {
+      allComponentIds.add(wd.wire.sourceComponentId);
+      allComponentIds.add(wd.wire.targetComponentId);
+    }
+    // Also include any simulator objects that have no wires at all
+    const simObjects = useSimulatorStore.getState().objects;
+    for (const id of simObjects.keys()) {
+      allComponentIds.add(id);
+    }
+    const immediateRevealIds = Array.from(allComponentIds).filter(
+      (id) => !targetedComponentIds.has(id)
+    );
+
+    // Start the snapshot animation phase
+    useSnapshotStore.getState().startAnimation(immediateRevealIds);
+
     const startTime = Date.now();
     const nonCpuGroupCount = sortedNonCpuGroups.length;
     // Strict sequencing: each substep starts only after the previous one finishes.
@@ -277,7 +318,11 @@ export default function EnhancedBusOverlay({
       : 0;
     const totalDuration = effectiveCpuDuration + nonCpuPhaseDuration;
 
-    const animatingIds = [...cpuIds, ...nonCpuIds];
+    const animatingIds = allAnimatedWireIds;
+
+    // Track which groups have already been revealed to avoid duplicate calls
+    const revealedCpuGroup = { done: false };
+    const revealedNonCpuGroups = new Set<number>();
 
     const kickoff = window.setTimeout(() => {
       setAnimatingWires(new Set(animatingIds));
@@ -289,6 +334,8 @@ export default function EnhancedBusOverlay({
         setAnimatingWires(new Set());
         setAnimationProgress(new Map());
         animationRef.current = null;
+        // Finish animation — reveal everything remaining
+        useSnapshotStore.getState().finishAnimation();
         return;
       }
 
@@ -296,6 +343,17 @@ export default function EnhancedBusOverlay({
 
       for (const id of cpuIds) {
         progress.set(id, Math.min(1, elapsed / Math.max(1, effectiveCpuDuration)));
+      }
+
+      // Reveal CPU wire targets when CPU phase completes
+      if (!revealedCpuGroup.done && elapsed >= effectiveCpuDuration && cpuIds.length > 0) {
+        revealedCpuGroup.done = true;
+        const cpuTargetIds = cpuIds
+          .map((id) => wireDataByIdRef.current.get(id)?.wire.targetComponentId)
+          .filter((id): id is string => !!id);
+        if (cpuTargetIds.length > 0) {
+          useSnapshotStore.getState().revealComponents(cpuTargetIds);
+        }
       }
 
       for (const id of nonCpuIds) {
@@ -310,6 +368,17 @@ export default function EnhancedBusOverlay({
           const groupProgress = Math.min(1, Math.max(0, (compElapsed - groupStart) / componentAnimationDuration));
           for (const id of groupIds) {
             progress.set(id, groupProgress);
+          }
+
+          // Reveal target components when this group's animation completes
+          if (groupProgress >= 1.0 && !revealedNonCpuGroups.has(index)) {
+            revealedNonCpuGroups.add(index);
+            const targetIds = groupIds
+              .map((id) => wireDataByIdRef.current.get(id)?.wire.targetComponentId)
+              .filter((id): id is string => !!id);
+            if (targetIds.length > 0) {
+              useSnapshotStore.getState().revealComponents(targetIds);
+            }
           }
         });
       }
@@ -326,6 +395,8 @@ export default function EnhancedBusOverlay({
         cancelAnimationFrame(animationRef.current);
         animationRef.current = null;
       }
+      // If effect is cleaned up early, finish animation to avoid stuck state
+      useSnapshotStore.getState().finishAnimation();
     };
   }, [
     revision,

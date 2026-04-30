@@ -7,6 +7,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { useLayoutStore, Props } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayStore, formatNum } from "@/lib/displayStore";
+import { useDeferredPortValue } from "@/lib/useDeferredValue";
 import React from "react";
 import ConfigModal from "@/components/ConfigModal";
 import PortsOverlay from "@/components/PortsOverlay";
@@ -21,7 +22,8 @@ export default function AdderComponent({ component, zoom }: Props) {
   const adder = useSimulatorStore((s) => s.getAdder(id));
   void revision; // subscribe so we re-render on touch()
   const base = useDisplayStore((s) => s.numericBase);
-  const resultHex = adder ? formatNum(adder.result, base, adder.bitWidth) : "0x0000";
+  const deferredResult = useDeferredPortValue(id, "result", adder?.result ?? 0);
+  const resultHex = adder ? formatNum(deferredResult, base, adder.bitWidth) : "0x0000";
 
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({ id });

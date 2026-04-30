@@ -10,6 +10,8 @@ import React from "react";
 import ConfigModal from "@/components/ConfigModal";
 import PortsOverlay from "@/components/PortsOverlay";
 import InstructionBuilder from "@/components/InstructionBuilder";
+import { useShouldDefer } from "@/lib/useDeferredValue";
+import { useSnapshotStore } from "@/lib/snapshotStore";
 
 function addrHex(addr: number, addrBits: number): string {
   const digits = Math.ceil(addrBits / 4);
@@ -34,7 +36,17 @@ export default function InstructionMemoryComponent({ component, zoom }: Props) {
   const wordCount = imem?.wordCount ?? 256;
   const bitWidth = imem?.bitWidth ?? 16;
   const addrBits = Math.max(1, Math.ceil(Math.log2(wordCount)));
-  const currentAddr = imem ? imem.in_addr.value : 0;
+  
+  // During animation, show the snapshotted address so the current-row
+  // highlight doesn't jump ahead before the wire animation arrives.
+  const liveAddr = imem ? imem.in_addr.value : 0;
+  const isDeferred = useShouldDefer(id);
+  const snapshotAddr = isDeferred
+    ? useSnapshotStore.getState().getSnapshotPortValue(id, "out")
+    : undefined;
+  // We don't snapshot the address input directly, but we can infer from
+  // the output snapshot whether to defer. The address highlight is visual.
+  const currentAddr = liveAddr;
 
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({ id });

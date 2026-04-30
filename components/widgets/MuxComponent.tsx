@@ -6,6 +6,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { useLayoutStore, Props } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayStore, formatNum } from "@/lib/displayStore";
+import { useDeferredPortValue } from "@/lib/useDeferredValue";
 import React from "react";
 import ConfigModal from "@/components/ConfigModal";
 import PortsOverlay from "@/components/PortsOverlay";
@@ -24,7 +25,8 @@ export default function MuxComponent({ component, zoom }: Props) {
   const result      = mux ? mux.result : 0;
   const numInputs   = mux ? mux.numInputs : (component.meta?.numInputs as number) ?? 2;
   const bitWidth    = mux ? mux.bitWidth : 16;
-  const resultFmt   = formatNum(result, base, bitWidth);
+  const deferredResult = useDeferredPortValue(id, "result", result);
+  const resultFmt   = formatNum(deferredResult, base, bitWidth);
 
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({ id });

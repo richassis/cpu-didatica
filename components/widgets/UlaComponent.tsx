@@ -7,6 +7,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { useLayoutStore, Props } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayStore, formatNum } from "@/lib/displayStore";
+import { useDeferredPortValue } from "@/lib/useDeferredValue";
 import React from "react";
 import ConfigModal from "@/components/ConfigModal";
 import PortsOverlay from "@/components/PortsOverlay";
@@ -26,7 +27,8 @@ export default function UlaComponent({ component, zoom }: Props) {
   void revision; // subscribe so we re-render on touch()
   const base = useDisplayStore((s) => s.numericBase);
   const operation = ula ? ula.operation : "NOP";
-  const resultHex = ula ? formatNum(ula.result, base, ula.bitWidth) : "0x0000";
+  const deferredResult = useDeferredPortValue(id, "result", ula?.result ?? 0);
+  const resultHex = ula ? formatNum(deferredResult, base, ula.bitWidth) : "0x0000";
 
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({ id });

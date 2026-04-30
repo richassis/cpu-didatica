@@ -15,6 +15,7 @@ import { create } from "zustand";
 import { Register, Constant, Gpr, Ula, Adder, Mux, Memory, InstructionMemory, CPU, Decoder, Bus, isClockable, CpuState, ALL_CPU_STATES } from "@/lib/simulator";
 import type { Connectable, WireDescriptor } from "@/lib/simulator";
 import type { ComponentState } from "@/lib/store";
+import { useSnapshotStore } from "@/lib/snapshotStore";
 // Lazy import via getter to avoid circular initialisation (store.ts imports simulatorStore).
 const getLayoutStore = () =>
   (require("@/lib/store") as typeof import("@/lib/store")).useLayoutStore;
@@ -437,6 +438,16 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
 
   tickClock: () => {
     const { objects } = get();
+
+    // If an animation is already in progress (rapid stepping), finish it
+    // instantly so all pending reveals complete before the new snapshot.
+    const snapshotState = useSnapshotStore.getState();
+    if (snapshotState.isAnimating) {
+      snapshotState.finishAnimation();
+    }
+
+    // Snapshot all display values BEFORE the tick runs.
+    snapshotState.captureSnapshot(objects);
     
     // Find the primary CPU
     let cpu: CPU | null = null;

@@ -6,6 +6,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { Props } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayStore, formatNum } from "@/lib/displayStore";
+import { useDeferredPortValue } from "@/lib/useDeferredValue";
 import React from "react";
 import ConfigModal from "@/components/ConfigModal";
 import PortsOverlay from "@/components/PortsOverlay";
@@ -19,7 +20,8 @@ export default function RegisterComponent({ component, zoom }: Props) {
   const reg = useSimulatorStore((s) => s.getRegister(id));
   void revision; // subscribe so we re-render on touch()
   const base = useDisplayStore((s) => s.numericBase);
-  const displayValue = reg ? formatNum(reg.value, base, reg.bitWidth) : "0x0000";
+  const deferredValue = useDeferredPortValue(id, "value", reg?.value ?? 0);
+  const displayValue = reg ? formatNum(deferredValue, base, reg.bitWidth) : "0x0000";
 
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({ id });
