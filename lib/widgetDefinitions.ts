@@ -49,6 +49,11 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
       defaultOutputSide: "right",
       ports: {
         "in_writeEnable": { side: "top" },  // Control signal → top
+        "in_readAddrA": { side: "left", offset: 19 },
+        "in_readAddrB": { side: "left", offset: 31 },
+        "in_writeAddr": { side: "left", offset: 48 },
+        "in_writeData": { side: "left", offset: 64 },
+
         // Address and data ports stay on left (default)
         // Output ports stay on right (default)
       },
@@ -69,8 +74,8 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
       ports: {
         "addr": { side: "left" },    // Address signal → left
         "data": { side: "left" },    // Data input → left  
-        "rdMem": { side: "top" , offset: 45},    // Control signal → top
-        "wrMem": { side: "top" , offset: 55},    // Control signal → top
+        "rdMem": { side: "top", offset: 45 },    // Control signal → top
+        "wrMem": { side: "top", offset: 55 },    // Control signal → top
       },
     },
   },

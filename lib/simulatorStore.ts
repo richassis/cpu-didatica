@@ -442,32 +442,24 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
 
   tickClock: () => {
     const { objects } = get();
-    
+
     // Find the primary CPU
     let cpu: CPU | null = null;
     for (const obj of objects.values()) {
-      if (obj instanceof CPU) {
-        cpu = obj;
-        break;
-      }
+      if (obj instanceof CPU) { cpu = obj; break; }
     }
 
     if (cpu) {
-      // CPU-controlled ticking: CPU decides which components tick
       cpu.tick();
     } else {
-      // Fallback: tick all Clockable objects if no CPU exists
       for (const obj of objects.values()) {
-        if (isClockable(obj)) {
-          obj.onTick();
-        }
+        if (isClockable(obj)) obj.onTick();
       }
     }
 
     // Bump revision so UI re-renders
     set((s) => ({ revision: s.revision + 1 }));
     if (!get().isBatchExecuting) {
-      // Persist updated port/register/memory values
       getLayoutStore().getState().saveState();
     }
   },
@@ -475,16 +467,19 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
   resetClock: () => {
     const { objects } = get();
 
-    // Reset every data object
     for (const obj of objects.values()) {
       if ("reset" in obj && typeof obj.reset === "function") {
         (obj as { reset: () => void }).reset();
       }
     }
 
+    // Re-initialize display latch from the now-reset real values
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const displayStore = (require("@/lib/displaySnapshotStore") as typeof import("@/lib/displaySnapshotStore")).useDisplaySnapshotStore;
+    displayStore.getState().reset(get().objects);
+
     set((s) => ({ revision: s.revision + 1 }));
     if (!get().isBatchExecuting) {
-      // Persist cleared values
       getLayoutStore().getState().saveState();
     }
   },
@@ -642,6 +637,10 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
     const obj = get().objects.get(id);
     if (obj instanceof Memory) {
       obj.poke(addr, value);
+      // Immediately reflect the edit in the display latch
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const ds = (require("@/lib/displaySnapshotStore") as typeof import("@/lib/displaySnapshotStore")).useDisplaySnapshotStore;
+      ds.getState().forceUpdate(id, get().objects);
       set((s) => ({ revision: s.revision + 1 }));
       getLayoutStore().getState().saveState();
     }
@@ -651,6 +650,10 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
     const obj = get().objects.get(id);
     if (obj instanceof Gpr) {
       obj.write(index, value);
+      // Immediately reflect the edit in the display latch
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const ds = (require("@/lib/displaySnapshotStore") as typeof import("@/lib/displaySnapshotStore")).useDisplaySnapshotStore;
+      ds.getState().forceUpdate(id, get().objects);
       set((s) => ({ revision: s.revision + 1 }));
       getLayoutStore().getState().saveState();
     }

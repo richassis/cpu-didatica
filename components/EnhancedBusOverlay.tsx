@@ -3,6 +3,7 @@
 import { useLayoutStore, CANVAS_WIDTH, CANVAS_HEIGHT } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayStore, formatNum } from "@/lib/displayStore";
+import { useDisplaySnapshotStore } from "@/lib/displaySnapshotStore";
 import { useWireCreationStore } from "@/lib/wireCreationStore";
 import { useWireSelectionStore } from "@/lib/wireSelectionStore";
 import type { DragSegmentState, DragNodeState } from "@/lib/wireSelectionStore";
@@ -89,6 +90,16 @@ export default function EnhancedBusOverlay({
   const startNodeDrag = useWireSelectionStore((s) => s.startNodeDrag);
   const endDrag = useWireSelectionStore((s) => s.endDrag);
 
+  const startDisplayAnimation = useDisplaySnapshotStore((s) => s.startAnimation);
+  const tickDisplaySnapshot = useDisplaySnapshotStore((s) => s.tick);
+  const finishDisplayAnimation = useDisplaySnapshotStore((s) => s.finishAnimation);
+  const initializeDisplay = useDisplaySnapshotStore((s) => s.initialize);
+
+  // Seed display latch whenever the objects map grows (new components added)
+  const objectsSize = objects.size;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (objectsSize > 0) initializeDisplay(objects); }, [objectsSize]);
+
   const [animatingWires, setAnimatingWires] = useState<Set<string>>(new Set());
   const [animationProgress, setAnimationProgress] = useState<Map<string, number>>(new Map());
   const animationRef = useRef<number | null>(null);
@@ -160,7 +171,18 @@ export default function EnhancedBusOverlay({
       const nodes = normalizeNodes(wire.nodes ?? []);
 
       const rawPath = [source.pos, sourceEscape, ...nodes, targetEscape, target.pos];
-      const path = simplifyOrthogonalPath(enforceOrthogonal(rawPath));
+      let path = simplifyOrthogonalPath(enforceOrthogonal(rawPath));
+
+      // Guard: if simplification collapsed the path to a degenerate single point
+      // or two identical points, fall back to a direct source→target connection.
+      if (
+        path.length < 2 ||
+        (path.length === 2 &&
+          Math.abs(path[0].x - path[1].x) < 0.5 &&
+          Math.abs(path[0].y - path[1].y) < 0.5)
+      ) {
+        path = [source.pos, target.pos];
+      }
 
       const sourceComponent = components.find((c) => c.id === wire.sourceComponentId);
       const isCpuControlSignal = sourceComponent?.type === "CpuComponent";
@@ -279,18 +301,34 @@ export default function EnhancedBusOverlay({
 
     const animatingIds = [...cpuIds, ...nonCpuIds];
 
+    // Tell the display snapshot store about this animation so widgets can
+    // delay updating their displayed values until the dot reaches them.
+    startDisplayAnimation(
+      currentWireData,
+      effectiveCpuDuration,
+      componentAnimationDuration,
+      sortedNonCpuGroups,
+      cpuIds,
+      useSimulatorStore.getState().objects,
+    );
+
     const kickoff = window.setTimeout(() => {
       setAnimatingWires(new Set(animatingIds));
     }, 0);
 
     const animate = () => {
-      const elapsed = Date.now() - startTime;
+      const now = Date.now();
+      const elapsed = now - startTime;
       if (elapsed >= totalDuration) {
         setAnimatingWires(new Set());
         setAnimationProgress(new Map());
+        finishDisplayAnimation();
         animationRef.current = null;
         return;
       }
+
+      // Update display latch for components whose commit-time has elapsed
+      tickDisplaySnapshot(now, useSimulatorStore.getState().objects);
 
       const progress = new Map<string, number>();
 
@@ -336,6 +374,9 @@ export default function EnhancedBusOverlay({
     showDataSignalWires,
     cpuAnimationDuration,
     componentAnimationDuration,
+    startDisplayAnimation,
+    tickDisplaySnapshot,
+    finishDisplayAnimation,
   ]);
 
   const getPointAlongPath = useCallback((path: Point[], progress: number): Point => {
@@ -630,6 +671,18 @@ export default function EnhancedBusOverlay({
                   />
                 );
               })}
+
+              {/* Base path without filter — guarantees wire is always visible
+                  even for very short segments where feGaussianBlur can wash it out */}
+              <path
+                d={pathD}
+                fill="none"
+                stroke={isCpuControlSignal ? "#3b82f6" : "#f59e0b"}
+                strokeWidth={isSelected ? 4 : isHovered ? 3 : 2}
+                strokeLinecap="round"
+                opacity={isAnimating ? 0.7 : 0.5}
+                className="pointer-events-none"
+              />
 
               <path
                 d={pathD}

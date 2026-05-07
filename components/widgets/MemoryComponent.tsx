@@ -6,6 +6,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { useLayoutStore, Props } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayStore, formatNum } from "@/lib/displayStore";
+import { useDisplaySnapshotStore } from "@/lib/displaySnapshotStore";
 import React from "react";
 import ConfigModal from "@/components/ConfigModal";
 import PortsOverlay from "@/components/PortsOverlay";
@@ -28,6 +29,8 @@ export default function MemoryComponent({ component, zoom }: Props) {
   const mem       = useSimulatorStore((s) => s.getMemory(id));
   const pokeMemory = useSimulatorStore((s) => s.pokeMemory);
   const base      = useDisplayStore((s) => s.numericBase);
+  const latch     = useDisplaySnapshotStore((s) => s.displayedValues.get(id));
+  const pending   = useDisplaySnapshotStore((s) => s.commitTimes.has(id));
   void revision;
 
   const wordCount  = mem?.wordCount ?? 256;
@@ -37,7 +40,10 @@ export default function MemoryComponent({ component, zoom }: Props) {
   const rdMem      = mem ? mem.in_rdMem.value : 0;
   const wrMem      = mem ? mem.in_wrMem.value : 0;
   const dataIn     = mem ? mem.in_data.value  : 0;
-  const dataOut    = mem ? mem.output         : 0;
+  const realDataOut = mem ? mem.output : 0;
+  const dataOut = latch !== undefined
+    ? (latch["out"] as number ?? realDataOut)
+    : realDataOut;
 
   const addrFmt   = addrHex(addr, addrBits);
   const dataInFmt = formatNum(dataIn,  base, bitWidth);
@@ -161,8 +167,10 @@ export default function MemoryComponent({ component, zoom }: Props) {
             {/* Data-out */}
             <div className="flex items-center justify-between">
               <span className="text-amber-300/70 uppercase tracking-wide text-[9px]">data out</span>
-              <span className={`rounded px-1 py-px ${
-                rdMem ? "text-amber-100 bg-amber-800/70 font-bold" : "text-gray-500 bg-gray-800/60"
+              <span className={`rounded px-1 py-px transition-colors ${
+                pending
+                  ? "text-gray-400/50 bg-gray-800/40 italic"
+                  : rdMem ? "text-amber-100 bg-amber-800/70 font-bold" : "text-gray-500 bg-gray-800/60"
               }`}>
                 {dataOutFmt}
               </span>

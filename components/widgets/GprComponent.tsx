@@ -6,6 +6,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { useLayoutStore, Props } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayStore, formatNum } from "@/lib/displayStore";
+import { useDisplaySnapshotStore } from "@/lib/displaySnapshotStore";
 import React from "react";
 import ConfigModal from "@/components/ConfigModal";
 import PortsOverlay from "@/components/PortsOverlay";
@@ -23,10 +24,19 @@ export default function GprComponent({ component, zoom }: Props) {
   const gpr             = useSimulatorStore((s) => s.getGpr(id));
   const pokeGprRegister = useSimulatorStore((s) => s.pokeGprRegister);
   const base            = useDisplayStore((s) => s.numericBase);
+  const latch           = useDisplaySnapshotStore((s) => s.displayedValues.get(id));
+  const pending         = useDisplaySnapshotStore((s) => s.commitTimes.has(id));
   void revision;
 
-  const regs     = gpr ? gpr.snapshot() : [];
+  const regs      = gpr ? gpr.snapshot() : [];
   const bitWidth  = gpr?.bitWidth ?? 16;
+
+  // Show latch values per-register when available
+  const displayRegs = regs.map(({ value }, i) => ({
+    value: latch !== undefined
+      ? (latch[`reg_${i}`] as number ?? value)
+      : value,
+  }));
   
   // I/O port values
   const addrIn   = gpr?.in_writeAddr?.value ?? 0;
@@ -169,7 +179,7 @@ export default function GprComponent({ component, zoom }: Props) {
               </div>
             ) : (
               <div className="flex flex-col gap-px px-2 py-1.5">
-                {regs.map(({ value }, i) => (
+                {displayRegs.map(({ value }, i) => (
                   <RegisterRow
                     key={i}
                     index={i}
@@ -177,6 +187,7 @@ export default function GprComponent({ component, zoom }: Props) {
                     bitWidth={bitWidth}
                     base={base}
                     editMode={editMode}
+                    pending={pending}
                     onPoke={(idx, val) => pokeGprRegister(id, idx, val)}
                   />
                 ))}
@@ -204,10 +215,11 @@ interface RowProps {
   bitWidth: number;
   base: import("@/lib/displayStore").NumericBase;
   editMode: boolean;
+  pending?: boolean;
   onPoke: (index: number, value: number) => void;
 }
 
-function RegisterRow({ index, value, bitWidth, base, editMode, onPoke }: RowProps) {
+function RegisterRow({ index, value, bitWidth, base, editMode, pending, onPoke }: RowProps) {
   const name      = `R${index}`;
   const displayed = formatNum(value, base, bitWidth);
   const inputRef  = useRef<HTMLInputElement>(null);
@@ -252,7 +264,9 @@ function RegisterRow({ index, value, bitWidth, base, editMode, onPoke }: RowProp
   return (
     <div className="flex items-center justify-between py-0.5">
       <span className="text-[10px] text-teal-400 font-semibold w-5">{name}</span>
-      <span className="text-[10px] font-mono text-teal-100">{displayed}</span>
+      <span className={`text-[10px] font-mono transition-colors ${
+        pending ? "text-teal-400/50 italic" : "text-teal-100"
+      }`}>{displayed}</span>
     </div>
   );
 }

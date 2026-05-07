@@ -6,6 +6,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { Props } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayStore, formatNum } from "@/lib/displayStore";
+import { useDisplaySnapshotStore } from "@/lib/displaySnapshotStore";
 import React from "react";
 import ConfigModal from "@/components/ConfigModal";
 import PortsOverlay from "@/components/PortsOverlay";
@@ -14,12 +15,19 @@ export default function RegisterComponent({ component, zoom }: Props) {
   const { id, x, y, w, h, label } = component;
   const [configOpen, setConfigOpen] = useState(false);
 
-  // Read value from the data layer
   const revision = useSimulatorStore((s) => s.revision);
   const reg = useSimulatorStore((s) => s.getRegister(id));
-  void revision; // subscribe so we re-render on touch()
+  void revision;
   const base = useDisplayStore((s) => s.numericBase);
-  const displayValue = reg ? formatNum(reg.value, base, reg.bitWidth) : "0x0000";
+
+  // Latch: show the display-layer value (only updates when animation commits)
+  const latch = useDisplaySnapshotStore((s) => s.displayedValues.get(id));
+  const pending = useDisplaySnapshotStore((s) => s.commitTimes.has(id));
+
+  const rawValue = latch !== undefined
+    ? (latch["value"] as number ?? reg?.value ?? 0)
+    : (reg?.value ?? 0);
+  const displayValue = reg ? formatNum(rawValue, base, reg.bitWidth) : "0x0000";
 
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({ id });
@@ -63,7 +71,11 @@ export default function RegisterComponent({ component, zoom }: Props) {
             {label}
           </span>
           {/* Value shown on hover */}
-          <span className="text-sm font-mono text-cyan-100 bg-cyan-900/60 rounded px-1.5 py-0.5">
+          <span className={`text-sm font-mono rounded px-1.5 py-0.5 transition-colors ${
+            pending
+              ? "text-cyan-400/60 bg-cyan-900/30 italic"
+              : "text-cyan-100 bg-cyan-900/60"
+          }`}>
             {displayValue}
           </span>
         </div>

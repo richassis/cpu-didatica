@@ -5,6 +5,7 @@ import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { Props } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
+import { useDisplaySnapshotStore } from "@/lib/displaySnapshotStore";
 import React from "react";
 import ConfigModal from "@/components/ConfigModal";
 import PortsOverlay from "@/components/PortsOverlay";
@@ -49,6 +50,8 @@ export default function DecoderComponent({ component, zoom }: Props) {
 
   const revision = useSimulatorStore((s) => s.revision);
   const dec      = useSimulatorStore((s) => s.getDecoder(id));
+  const latch    = useDisplaySnapshotStore((s) => s.displayedValues.get(id));
+  const pending  = useDisplaySnapshotStore((s) => s.commitTimes.has(id));
   void revision;
 
   const { attributes, listeners, setNodeRef, transform, isDragging } =
@@ -70,7 +73,10 @@ export default function DecoderComponent({ component, zoom }: Props) {
   };
 
   // ── derived display values ─────────────────────────────────────────────────
-  const instr    = dec ? dec.instruction   : 0;
+  const realInstr = dec ? dec.instruction : 0;
+  const instr = latch !== undefined
+    ? (latch["instruction"] as number ?? realInstr)
+    : realInstr;
   const op       = dec ? (dec.opcode as Opcode) : Opcode.HLT;
   const opMnem   = dec ? mnemonic(dec)     : "HLT";
   const decoded  = dec ? dec.decoded       : null;
@@ -130,7 +136,7 @@ export default function DecoderComponent({ component, zoom }: Props) {
         {/* ── Field rows ── */}
         <div className="flex-1 overflow-y-auto">
           {/* Raw instruction */}
-          <Row label="IR" value={hex16(instr)} accent="text-yellow-200" />
+          <Row label="IR" value={hex16(instr)} accent={pending ? "text-yellow-500/50" : "text-yellow-200"} />
 
           {/* Binary breakdown header */}
           <div className="px-2 py-0.5 text-[9px] text-gray-600 font-mono tracking-widest border-t border-gray-800">

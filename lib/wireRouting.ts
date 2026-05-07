@@ -115,8 +115,12 @@ export function snapToGrid(value: number, gridSize: number): number {
   return Math.round(value / gridSize) * gridSize;
 }
 
+const EPS = 0.5;
+
 /**
  * Ensures all segments are orthogonal by inserting corner points when needed.
+ * Uses a floating-point tolerance (EPS) to avoid spurious phantom corners
+ * when consecutive points are nearly-but-not-exactly colinear.
  */
 export function enforceOrthogonal(points: Point[]): Point[] {
   if (points.length <= 1) return points;
@@ -127,22 +131,25 @@ export function enforceOrthogonal(points: Point[]): Point[] {
     const prev = normalized[normalized.length - 1];
     const next = points[i];
 
-    if (prev.x === next.x && prev.y === next.y) {
+    if (Math.abs(prev.x - next.x) < EPS && Math.abs(prev.y - next.y) < EPS) {
       continue;
     }
 
-    if (prev.x !== next.x && prev.y !== next.y) {
+    const isDiagonal =
+      Math.abs(prev.x - next.x) > EPS && Math.abs(prev.y - next.y) > EPS;
+
+    if (isDiagonal) {
       const beforePrev = normalized.length > 1 ? normalized[normalized.length - 2] : null;
 
       // Keep continuity with the previous segment orientation when possible.
       const corner =
-        beforePrev && beforePrev.y === prev.y
+        beforePrev && Math.abs(beforePrev.y - prev.y) < EPS
           ? { x: next.x, y: prev.y }
-          : beforePrev && beforePrev.x === prev.x
+          : beforePrev && Math.abs(beforePrev.x - prev.x) < EPS
             ? { x: prev.x, y: next.y }
             : { x: next.x, y: prev.y };
 
-      if (corner.x !== prev.x || corner.y !== prev.y) {
+      if (Math.abs(corner.x - prev.x) > EPS || Math.abs(corner.y - prev.y) > EPS) {
         normalized.push(corner);
       }
     }
@@ -257,6 +264,7 @@ function routeBetweenEscapes(
 
 /**
  * enforceOrthogonal without calling simplify (avoids recursion).
+ * Uses float tolerance to avoid spurious phantom corners.
  */
 function enforceOrthogonalRaw(points: Point[]): Point[] {
   if (points.length <= 1) return points;
@@ -267,17 +275,20 @@ function enforceOrthogonalRaw(points: Point[]): Point[] {
     const prev = normalized[normalized.length - 1];
     const next = points[i];
 
-    if (prev.x === next.x && prev.y === next.y) continue;
+    if (Math.abs(prev.x - next.x) < EPS && Math.abs(prev.y - next.y) < EPS) continue;
 
-    if (prev.x !== next.x && prev.y !== next.y) {
+    const isDiagonal =
+      Math.abs(prev.x - next.x) > EPS && Math.abs(prev.y - next.y) > EPS;
+
+    if (isDiagonal) {
       const beforePrev = normalized.length > 1 ? normalized[normalized.length - 2] : null;
       const corner =
-        beforePrev && beforePrev.y === prev.y
+        beforePrev && Math.abs(beforePrev.y - prev.y) < EPS
           ? { x: next.x, y: prev.y }
-          : beforePrev && beforePrev.x === prev.x
+          : beforePrev && Math.abs(beforePrev.x - prev.x) < EPS
             ? { x: prev.x, y: next.y }
             : { x: next.x, y: prev.y };
-      if (corner.x !== prev.x || corner.y !== prev.y) {
+      if (Math.abs(corner.x - prev.x) > EPS || Math.abs(corner.y - prev.y) > EPS) {
         normalized.push(corner);
       }
     }
@@ -375,6 +386,20 @@ export function autoRoute(
   const srcEsc = srcEscapePoints[srcEscapePoints.length - 1];
   const tgtEsc = tgtEscapePoints[tgtEscapePoints.length - 1];
 
+  // Short-circuit: if both escapes are colinear with source/target, use a
+  // direct two-point path to avoid degenerate simplification artefacts.
+  const srcHorizontal = sourceSide === "left" || sourceSide === "right";
+  const tgtHorizontal = targetSide === "left" || targetSide === "right";
+  const bothH = srcHorizontal && tgtHorizontal;
+  const bothV = !srcHorizontal && !tgtHorizontal;
+  const straightH = bothH && Math.abs(source.y - target.y) < EPS;
+  const straightV = bothV && Math.abs(source.x - target.x) < EPS;
+
+  if (straightH || straightV) {
+    const directPath: Point[] = [source, target];
+    return obstacles.length > 0 ? avoidObstacles(directPath, obstacles) : directPath;
+  }
+
   // 2. Route between escape endpoints
   const midPoints = routeBetweenEscapes(srcEsc, sourceSide, tgtEsc, targetSide);
 
@@ -392,18 +417,23 @@ export function autoRoute(
 
 /**
  * Removes duplicate points, zero-length segments and redundant collinear corners.
+ * Always returns at least [first, last] so callers can assume length >= 2
+ * when the input has 2 or more distinct points.
  */
 export function simplifyOrthogonalPath(points: Point[]): Point[] {
-  if (points.length <= 2) return points;
+  if (points.length === 0) return [];
+  if (points.length === 1) return [points[0]];
 
+  // De-duplicate adjacent identical points
   const deduped: Point[] = [];
   for (const point of points) {
     const last = deduped[deduped.length - 1];
-    if (!last || last.x !== point.x || last.y !== point.y) {
+    if (!last || Math.abs(last.x - point.x) > EPS || Math.abs(last.y - point.y) > EPS) {
       deduped.push(point);
     }
   }
 
+  // After dedup, ensure we have at least 2 points
   if (deduped.length <= 2) return deduped;
 
   const simplified: Point[] = [deduped[0]];
@@ -413,8 +443,8 @@ export function simplifyOrthogonalPath(points: Point[]): Point[] {
     const curr = deduped[i];
     const next = deduped[i + 1];
 
-    const collinearVertical = prev.x === curr.x && curr.x === next.x;
-    const collinearHorizontal = prev.y === curr.y && curr.y === next.y;
+    const collinearVertical   = Math.abs(prev.x - curr.x) < EPS && Math.abs(curr.x - next.x) < EPS;
+    const collinearHorizontal = Math.abs(prev.y - curr.y) < EPS && Math.abs(curr.y - next.y) < EPS;
 
     if (!collinearVertical && !collinearHorizontal) {
       simplified.push(curr);
@@ -422,5 +452,11 @@ export function simplifyOrthogonalPath(points: Point[]): Point[] {
   }
 
   simplified.push(deduped[deduped.length - 1]);
+
+  // Safety net: never return fewer than 2 points when input had at least 2
+  if (simplified.length < 2) {
+    return [deduped[0], deduped[deduped.length - 1]];
+  }
+
   return simplified;
 }
