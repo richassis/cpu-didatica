@@ -7,8 +7,9 @@ import { useWireCreationStore } from "@/lib/wireCreationStore";
 import type { HoveredPort } from "@/lib/wireCreationStore";
 import { useDisplayStore } from "@/lib/displayStore";
 import { useModeStore } from "@/lib/modeStore";
+import { useExecutionStore } from "@/lib/executionStore";
 import { getWidgetDefinition } from "@/lib/widgetDefinitions";
-import { findPortPosition, getPortPlacement, calculatePortPosition } from "@/lib/portPositioning";
+import { findPortPosition, getPortPlacement } from "@/lib/portPositioning";
 import type { PortSide } from "@/lib/portPositioning";
 import type { AABB } from "@/lib/wireRouting";
 import PortIndicator from "./PortIndicator";
@@ -42,6 +43,8 @@ export default function PortsOverlay({ componentId }: Props) {
 
   const showWiresAndPorts = useDisplayStore((s) => s.showWiresAndPorts);
   const isEditMode = useModeStore((s) => s.mode === "edit");
+  const isProgramMode = useExecutionStore((s) => s.isProgramMode);
+  const isEditableCanvas = isEditMode && !isProgramMode;
 
   const isCreating = phase === "dragging";
 
@@ -78,9 +81,8 @@ export default function PortsOverlay({ componentId }: Props) {
       portName: string,
       direction: "input" | "output",
       portSide: PortSide,
-      _event: React.PointerEvent,
     ) => {
-      if (!isEditMode) return;
+      if (!isEditableCanvas) return;
       if (isCreating) return;
 
       const sourceComp = components.find((c) => c.id === compId);
@@ -105,7 +107,7 @@ export default function PortsOverlay({ componentId }: Props) {
         buildObstacles(compId),
       );
     },
-    [isEditMode, isCreating, components, ports, portConfig, startDrag, buildObstacles],
+    [isEditableCanvas, isCreating, components, ports, portConfig, startDrag, buildObstacles],
   );
 
   const handlePortHoverStart = useCallback(

@@ -30,7 +30,7 @@ const STATE_LABELS: Record<CpuState, string> = {
   [CpuState.HALT]:      "HALT",
 };
 
-const STATE_COLORS: Record<CpuState, string> = {
+export const STATE_COLORS: Record<CpuState, string> = {
   [CpuState.RESET]:     "text-gray-300    bg-gray-800/60    border-gray-600",
   [CpuState.FETCH]:     "text-indigo-300  bg-indigo-900/60  border-indigo-600",
   [CpuState.DECODE]:    "text-purple-300  bg-purple-900/60  border-purple-600",

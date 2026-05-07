@@ -223,6 +223,14 @@ export interface RegisteredComponent {
   tickOrderByState: Partial<Record<CpuState, number>>;
 }
 
+export interface CpuInternalStateSnapshot {
+  state: CpuState;
+  fsmIndex: number;
+  halted: boolean;
+  totalTicks: number;
+  previousState: CpuState;
+}
+
 
 /**
  * CPU control unit.
@@ -443,6 +451,10 @@ export class CPU implements Clockable, Connectable {
     return this._totalTicks;
   }
 
+  get fsmIndex(): number {
+    return this._FSMindex;
+  }
+
   /**
    * Returns CPU control output port names that changed on the latest tick.
    * Example values: "out_wrIR", "out_rdMem".
@@ -505,6 +517,17 @@ export class CPU implements Clockable, Connectable {
     this.out_halted.set(false);
     // After reset, the next state should be FETCH
     this._state = CpuState.FETCH;
+  }
+
+  /** Restore internal FSM fields for timeline replay without re-ticking. */
+  restoreInternalState(snapshot: CpuInternalStateSnapshot): void {
+    this._state = snapshot.state;
+    this._FSMindex = snapshot.fsmIndex;
+    this._halted = snapshot.halted;
+    this._totalTicks = snapshot.totalTicks;
+    this._previousState = snapshot.previousState;
+    this.out_state.set(snapshot.state);
+    this.out_halted.set(snapshot.halted);
   }
 
   /** Initialize previous signal values for change detection. */
