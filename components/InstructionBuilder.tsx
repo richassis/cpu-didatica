@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { 
   INSTRUCTION_SET, 
   Opcode, 
   encodeInstruction,
-  type InstructionDescriptor,
   type StandardDescriptor,
   type ULADescriptor
 } from "@/lib/simulator/ISA";
@@ -40,14 +39,14 @@ export default function InstructionBuilder({ imem, onClose, initialAddress = 0 }
     dst,
   });
 
-  // Reset fields when mnemonic changes
-  useEffect(() => {
+  const handleMnemonicChange = (value: keyof typeof Opcode) => {
+    setSelectedMnemonic(value);
     setGprAddr(0);
     setOperand(0);
     setSrcA(0);
     setSrcB(0);
     setDst(0);
-  }, [selectedMnemonic]);
+  };
 
   const handleSet = () => {
     imem.poke(selectedAddress, encodedValue);
@@ -129,7 +128,7 @@ export default function InstructionBuilder({ imem, onClose, initialAddress = 0 }
         <div className="flex-1">
           <select
             value={selectedMnemonic}
-            onChange={(e) => setSelectedMnemonic(e.target.value as keyof typeof Opcode)}
+            onChange={(e) => handleMnemonicChange(e.target.value as keyof typeof Opcode)}
             className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white focus:outline-none focus:border-indigo-500 mb-2"
           >
             {(Object.keys(INSTRUCTION_SET) as Array<keyof typeof Opcode>).map((mnemonic) => (

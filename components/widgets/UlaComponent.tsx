@@ -7,6 +7,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { useLayoutStore, Props } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayStore, formatNum } from "@/lib/displayStore";
+import { UlaOperation } from "@/lib/simulator/ISA";
 import React from "react";
 import ConfigModal from "@/components/ConfigModal";
 import PortsOverlay from "@/components/PortsOverlay";
@@ -25,7 +26,7 @@ export default function UlaComponent({ component, zoom }: Props) {
   const ula = useSimulatorStore((s) => s.getUla(id));
   void revision; // subscribe so we re-render on touch()
   const base = useDisplayStore((s) => s.numericBase);
-  const operation = ula ? ula.operation : "NOP";
+  const operation = ula ? formatUlaOperation(ula.operation) : "NOP";
   const resultHex = ula ? formatNum(ula.result, base, ula.bitWidth) : "0x0000";
 
   const { attributes, listeners, setNodeRef, transform, isDragging } =
@@ -118,4 +119,21 @@ export default function UlaComponent({ component, zoom }: Props) {
       )}
     </>
   );
+}
+
+function formatUlaOperation(op: number): string {
+  switch (op) {
+    case UlaOperation.ADD:
+      return "ADD";
+    case UlaOperation.SUB:
+      return "SUB";
+    case UlaOperation.AND:
+      return "AND";
+    case UlaOperation.OR:
+      return "OR";
+    case UlaOperation.NOT:
+      return "NOT";
+    default:
+      return `OP${op}`;
+  }
 }

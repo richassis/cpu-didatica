@@ -1,18 +1,17 @@
 "use client";
 
 import { useState } from "react";
+import type { CSSProperties } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { useLayoutStore, Props } from "@/lib/store";
+import { Props } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayStore, formatNum } from "@/lib/displayStore";
-import React from "react";
 import ConfigModal from "@/components/ConfigModal";
 import PortsOverlay from "@/components/PortsOverlay";
 
 export default function MuxComponent({ component, zoom }: Props) {
-  const { id, x, y, w, h, label } = component;
-  const removeComponent = useLayoutStore((s) => s.removeComponent);
+  const { id, x, y, w, h } = component;
   const [configOpen, setConfigOpen] = useState(false);
 
   const revision   = useSimulatorStore((s) => s.revision);
@@ -33,7 +32,7 @@ export default function MuxComponent({ component, zoom }: Props) {
     ? { ...transform, x: transform.x / zoom, y: transform.y / zoom }
     : null;
 
-  const style: React.CSSProperties = {
+  const style: CSSProperties = {
     position: "absolute",
     left: x,
     top: y,

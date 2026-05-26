@@ -28,11 +28,9 @@ export default function ProjectSwitcher() {
   const {
     tabs,
     activeTabId,
-    projectData,
     setActiveTab,
     createProject,
     importProject,
-    exportProject,
     getCurrentProjectDataEnhanced,
     closeTab,
     markSaved,

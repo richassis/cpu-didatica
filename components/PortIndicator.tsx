@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useMemo } from "react";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useLayoutStore } from "@/lib/store";
 import { useWireCreationStore } from "@/lib/wireCreationStore";
@@ -84,7 +84,6 @@ export default function PortIndicator({
   onPortHoverEnd,
 }: Props) {
   const [hover, setHover] = useState(false);
-  const [portValue, setPortValue] = useState<string>("");
   const objects = useSimulatorStore((s) => s.objects);
   const revision = useSimulatorStore((s) => s.revision);
   const components = useLayoutStore((s) => s.components);
@@ -100,23 +99,23 @@ export default function PortIndicator({
   const componentType = component?.type ?? "";
   const isControlSignal = isControlSignalPort(componentType, portName, direction);
 
-  useEffect(() => {
+  const portValue = useMemo(() => {
+    void revision;
     const obj = objects.get(componentId);
-    if (!obj || !("getPorts" in obj)) return;
+    if (!obj || !("getPorts" in obj)) return "";
 
     const portMap = (obj as { getPorts: () => Record<string, { value: unknown }> }).getPorts();
     const port = portMap[portName];
-    if (!port) return;
+    if (!port) return "";
 
     const val = port.value;
-    const newValue =
-      typeof val === "number"
-        ? `0x${val.toString(16).toUpperCase().padStart(4, "0")}`
-        : typeof val === "boolean"
-          ? (val ? "1" : "0")
-          : String(val);
-
-    setPortValue((prev) => (prev === newValue ? prev : newValue));
+    if (typeof val === "number") {
+      return `0x${val.toString(16).toUpperCase().padStart(4, "0")}`;
+    }
+    if (typeof val === "boolean") {
+      return val ? "1" : "0";
+    }
+    return String(val);
   }, [componentId, portName, objects, revision]);
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {

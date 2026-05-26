@@ -9,8 +9,10 @@
 
 import { create } from "zustand";
 import { useSimulatorStore } from "@/lib/simulatorStore";
+import { useExecutionStore } from "@/lib/executionStore";
 import { Gpr, Memory, InstructionMemory } from "@/lib/simulator";
-import { TEST_PROGRAM_SOURCE } from "@/lib/testProgram";
+import { assemble } from "@/lib/assembler";
+import { loadTestProgram, TEST_PROGRAM_SOURCE } from "@/lib/testProgram";
 
 /** Schema for .cpudat files */
 export interface CpuDataFile {
@@ -38,6 +40,12 @@ interface ProgramDataState {
   /** Download current assemblySource as program.asm */
   exportAssembly: () => void;
 
+  /** True while a program run is executing and snapshots are being captured. */
+  isRunning: boolean;
+
+  /** Assemble, load, and execute the current program source. */
+  runProgram: () => void;
+
   // ── Data I/O ────────────────────────────────────────────────
 
   /**
@@ -55,8 +63,9 @@ interface ProgramDataState {
   exportData: () => void;
 }
 
-export const useProgramDataStore = create<ProgramDataState>()((set) => ({
+export const useProgramDataStore = create<ProgramDataState>()((set, get) => ({
   assemblySource: TEST_PROGRAM_SOURCE,
+  isRunning: false,
 
   setAssemblySource: (src) => set({ assemblySource: src }),
 
@@ -80,6 +89,32 @@ export const useProgramDataStore = create<ProgramDataState>()((set) => ({
     const { assemblySource } = useProgramDataStore.getState();
     const blob = new Blob([assemblySource], { type: "text/plain" });
     triggerDownload(blob, "program.asm");
+  },
+
+  runProgram: () => {
+    const { isRunning, assemblySource } = get();
+    if (isRunning) return;
+
+    set({ isRunning: true });
+
+    const execution = useExecutionStore.getState();
+    if (execution.isTimelineActive) {
+      execution.exitTimeline();
+    }
+
+    window.setTimeout(() => {
+      try {
+        const words = assemble(assemblySource);
+        if (words === null) {
+          // Fall back to test program while assembler is not implemented.
+          loadTestProgram();
+        }
+        // TODO: when assemble() returns words, load into IMEM.
+        execution.loadAndExecute();
+      } finally {
+        set({ isRunning: false });
+      }
+    }, 0);
   },
 
   importData: (file) =>

@@ -106,7 +106,7 @@ export const useWireCreationStore = create<WireCreationState>((set, get) => ({
       ? hoveredPort.portSide
       // When no target port is hovered, guess a reasonable entry side
       // based on relative position to source.
-      : guessTargetSide(state.sourcePosition, snappedMouse, state.sourcePortSide);
+      : guessTargetSide(state.sourcePosition, snappedMouse);
 
     const previewPath = autoRoute(
       state.sourcePosition,
@@ -186,7 +186,7 @@ export const useWireCreationStore = create<WireCreationState>((set, get) => ({
  * When no target port is hovered, guess a reasonable entry side
  * for the preview endpoint based on direction from source.
  */
-function guessTargetSide(source: Point, target: Point, sourceSide: PortSide): PortSide {
+function guessTargetSide(source: Point, target: Point): PortSide {
   const dx = target.x - source.x;
   const dy = target.y - source.y;
 

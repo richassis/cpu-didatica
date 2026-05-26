@@ -41,6 +41,8 @@ export interface ExecutionState extends ExecutionDerivedState {
   isTimelineActive: boolean;
   /** Safety cap for batch execution. */
   MAX_TICKS: 1000;
+  /** Error message when execution stops due to max ticks. */
+  executionError: string | null;
 
   loadAndExecute: () => void;
   goToTick: (index: number) => void;
@@ -127,6 +129,7 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
   currentIndex: 0,
   isLoaded: false,
   isTimelineActive: false,
+  executionError: null,
   MAX_TICKS: DEFAULT_MAX_TICKS,
   totalTicks: 0,
   canGoForward: false,
@@ -153,6 +156,15 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
         if (sim.getPrimaryCpu()?.halted) {
           break;
         }
+      }
+
+      const halted = sim.getPrimaryCpu()?.halted ?? false;
+      if (!halted && tickCount >= get().MAX_TICKS) {
+        const message = `Execution stopped after ${get().MAX_TICKS} ticks (possible infinite loop).`;
+        console.warn(message);
+        set({ executionError: message });
+      } else {
+        set({ executionError: null });
       }
     } finally {
       useSimulatorStore.setState({ isBatchExecuting: false });
@@ -218,6 +230,7 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
       currentIndex: 0,
       isLoaded: false,
       isTimelineActive: false,
+      executionError: null,
       MAX_TICKS: DEFAULT_MAX_TICKS,
       totalTicks: 0,
       canGoForward: false,

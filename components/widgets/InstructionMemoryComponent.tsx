@@ -6,6 +6,7 @@ import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { Props } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
+import type { InstructionMemory } from "@/lib/simulator/InstructionMemory";
 import React from "react";
 import ConfigModal from "@/components/ConfigModal";
 import PortsOverlay from "@/components/PortsOverlay";
@@ -173,7 +174,7 @@ function InstructionBuilderWithAddress({
   initialAddress, 
   onClose 
 }: { 
-  imem: any; 
+  imem: InstructionMemory; 
   initialAddress: number; 
   onClose: () => void; 
 }) {

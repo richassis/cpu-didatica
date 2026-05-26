@@ -5,7 +5,6 @@ import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayStore, formatNum } from "@/lib/displayStore";
 import { useWireCreationStore } from "@/lib/wireCreationStore";
 import { useWireSelectionStore } from "@/lib/wireSelectionStore";
-import type { DragSegmentState, DragNodeState } from "@/lib/wireSelectionStore";
 import { useProjectStore } from "@/lib/projectStore";
 import { calculatePortPosition, getPortPlacement, type PortSide } from "@/lib/portPositioning";
 import { getWidgetDefinition } from "@/lib/widgetDefinitions";
@@ -94,6 +93,7 @@ export default function EnhancedBusOverlay({
   const animationRef = useRef<number | null>(null);
   const wireDataByIdRef = useRef<Map<string, WireRenderData>>(new Map());
   const lastAnimatedRevisionRef = useRef<number | null>(null);
+  const previousCpuSignalValuesRef = useRef<Map<string, string>>(new Map());
 
   const projectWires = useMemo(
     () => (activeTabId ? projectData[activeTabId]?.wires ?? [] : []),
@@ -176,7 +176,7 @@ export default function EnhancedBusOverlay({
     }
 
     return data;
-  }, [projectWires, components, objects, base]);
+  }, [projectWires, components, objects, base, revision]);
 
   const wireDataById = useMemo(() => {
     const map = new Map<string, WireRenderData>();
@@ -237,10 +237,22 @@ export default function EnhancedBusOverlay({
 
     if (visibleWireIds.length === 0) return;
 
+    const cpuValueChanges = new Set<string>();
+    for (const id of visibleWireIds) {
+      const wireData = wireDataByIdRef.current.get(id);
+      if (!wireData?.isCpuControlSignal) continue;
+
+      const previousValue = previousCpuSignalValuesRef.current.get(id);
+      if (previousValue !== undefined && previousValue !== wireData.value) {
+        cpuValueChanges.add(id);
+      }
+      previousCpuSignalValuesRef.current.set(id, wireData.value);
+    }
+
     const cpuIds = visibleWireIds.filter((id) => {
       const wireData = wireDataByIdRef.current.get(id);
       if (!wireData?.isCpuControlSignal) return false;
-      return changedCpuSignals.has(wireData.wire.sourcePortName);
+      return changedCpuSignals.has(wireData.wire.sourcePortName) || cpuValueChanges.has(id);
     });
     const nonCpuIds = visibleWireIds.filter((id) => !wireDataByIdRef.current.get(id)?.isCpuControlSignal);
     if (cpuIds.length === 0 && nonCpuIds.length === 0) return;
@@ -518,7 +530,7 @@ export default function EnhancedBusOverlay({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedWireId, handleDeleteSelection]);
+  }, [selectedWireId, handleDeleteSelection, deselectWire]);
 
   if (!visible) return null;
 

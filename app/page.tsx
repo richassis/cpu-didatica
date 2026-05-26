@@ -209,6 +209,13 @@ export default function Home() {
     const saveState = () => {
       const runtimeWires = getWires();
       const projectWires = useProjectStore.getState().projectData[activeTabId]?.wires ?? [];
+
+      // If runtime wires are empty but project wires exist, skip to avoid wiping wires
+      // during hydration or when a wire restore fails.
+      if (runtimeWires.length === 0 && projectWires.length > 0) {
+        return;
+      }
+
       const nodesById = new Map(projectWires.map((wire) => [wire.id, wire.nodes ?? []]));
 
       const enhancedComponents = layoutComponents.map((component) => {

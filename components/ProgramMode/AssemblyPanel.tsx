@@ -2,9 +2,6 @@
 
 import { useProgramDataStore } from "@/lib/programDataStore";
 import { useExecutionStore } from "@/lib/executionStore";
-import { loadTestProgram } from "@/lib/testProgram";
-import { assemble } from "@/lib/assembler";
-import { useState } from "react";
 
 const PROGRAM_PLACEHOLDER = `; Escreva seu programa assembly aqui
 ; Exemplo:
@@ -26,36 +23,8 @@ export default function AssemblyPanel() {
   const assemblySource = useProgramDataStore((s) => s.assemblySource);
   const setAssemblySource = useProgramDataStore((s) => s.setAssemblySource);
 
-  const loadAndExecute = useExecutionStore((s) => s.loadAndExecute);
   const isLoaded = useExecutionStore((s) => s.isLoaded);
   const totalTicks = useExecutionStore((s) => s.totalTicks);
-  const isTimelineActive = useExecutionStore((s) => s.isTimelineActive);
-  const exitTimeline = useExecutionStore((s) => s.exitTimeline);
-
-  const [isRunning, setIsRunning] = useState(false);
-
-  const handleRun = () => {
-    if (isRunning) return;
-    setIsRunning(true);
-
-    if (isTimelineActive) {
-      exitTimeline();
-    }
-
-    window.setTimeout(() => {
-      try {
-        const words = assemble(assemblySource);
-        if (words === null) {
-          // Fall back to test program while assembler is not implemented
-          loadTestProgram();
-        }
-        // TODO: when assemble() returns words, load into IMEM
-        loadAndExecute();
-      } finally {
-        setIsRunning(false);
-      }
-    }, 0);
-  };
 
   return (
     <aside className="h-full flex flex-col bg-gray-950 border-r border-gray-800 w-full">
@@ -81,18 +50,6 @@ export default function AssemblyPanel() {
           <span aria-hidden>⚠</span>
           <span>Assembler em desenvolvimento — usando programa de teste</span>
         </div>
-
-        {/* Run button */}
-        <button
-          onClick={handleRun}
-          disabled={isRunning}
-          className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-cyan-600 px-3 py-2 text-sm font-semibold text-white hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-60 transition-colors"
-        >
-          {isRunning && (
-            <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-          )}
-          <span>{isRunning ? "Executando..." : "▶ Carregar e Executar"}</span>
-        </button>
 
         {/* Execution result */}
         {isLoaded && (

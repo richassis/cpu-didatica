@@ -3,10 +3,6 @@
 import { useRef } from "react";
 import { useModeStore } from "@/lib/modeStore";
 import { useProgramDataStore } from "@/lib/programDataStore";
-import { useExecutionStore } from "@/lib/executionStore";
-import { loadTestProgram } from "@/lib/testProgram";
-import { assemble } from "@/lib/assembler";
-import { useState } from "react";
 
 /**
  * TopBarProgram — Top bar shown in Program Mode (default/end-user view).
@@ -17,44 +13,17 @@ import { useState } from "react";
  */
 export default function TopBarProgram() {
   const enterEditMode = useModeStore((s) => s.enterEditMode);
-  const loadAndExecute = useExecutionStore((s) => s.loadAndExecute);
-  const isTimelineActive = useExecutionStore((s) => s.isTimelineActive);
-  const exitTimeline = useExecutionStore((s) => s.exitTimeline);
-
-  const assemblySource = useProgramDataStore((s) => s.assemblySource);
   const importAssembly = useProgramDataStore((s) => s.importAssembly);
   const exportAssembly = useProgramDataStore((s) => s.exportAssembly);
   const importData = useProgramDataStore((s) => s.importData);
   const exportData = useProgramDataStore((s) => s.exportData);
-
-  const [isRunning, setIsRunning] = useState(false);
+  const isRunning = useProgramDataStore((s) => s.isRunning);
+  const runProgram = useProgramDataStore((s) => s.runProgram);
 
   const asmFileRef = useRef<HTMLInputElement>(null);
   const dataFileRef = useRef<HTMLInputElement>(null);
 
-  const handleRun = () => {
-    if (isRunning) return;
-    setIsRunning(true);
-
-    // If timeline is already active, exit it first
-    if (isTimelineActive) {
-      exitTimeline();
-    }
-
-    window.setTimeout(() => {
-      try {
-        // Try assembler; fall back to test program
-        const words = assemble(assemblySource);
-        if (words === null) {
-          loadTestProgram();
-        }
-        // TODO: when assembler returns words, load them into IMEM
-        loadAndExecute();
-      } finally {
-        setIsRunning(false);
-      }
-    }, 0);
-  };
+  const handleRun = () => runProgram();
 
   const handleImportAsm = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

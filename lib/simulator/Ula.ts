@@ -65,15 +65,15 @@ export class Ula implements Clockable, Connectable {
       "Computation result"
     );
     this.out_zero = new OutputPort<number>(
-      "zero", "boolean", 1, 1,
+      "zero", "number", 1, 1,
       "Zero flag (result == 0)"
     );
     this.out_carry = new OutputPort<number>(
-      "carry", "boolean", 1, 0,
+      "carry", "number", 1, 0,
       "Carry/overflow flag"
     );
     this.out_negative = new OutputPort<number>(
-      "negative", "boolean", 1, 0,
+      "negative", "number", 1, 0,
       "Negative flag (MSB set)"
     );
   }

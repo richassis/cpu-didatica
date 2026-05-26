@@ -53,7 +53,7 @@ import { Memory } from "@/lib/simulator/Memory";
  *  10   LDAI R0, #0              R0 = 0  (set zero flag via next SUB)
  *  11   SUB  R0, R0 → R0         R0 = 0-0 = 0  → zero flag set
  *  12   JZ   0x0E                should jump to addr 14 (zero flag IS set)
- *  13   HLT                      MUST NOT execute (would signal JZ failure)
+ *  13   JMP  0x0C                MUST NOT execute (would signal JZ failure)
  *
  *  14   LDAI R0, #10             restore R0 = 10 (after successful JZ)
  *
@@ -61,7 +61,7 @@ import { Memory } from "@/lib/simulator/Memory";
  *  15   LDAI R1, #20             R1 = 20
  *  16   SUB  R0, R1 → R0         R0 = 10-20 → raw=-10 → 65526 (0xFFF6); negative flag set
  *  17   JN   0x13                should jump to addr 19 (negative flag IS set)
- *  18   HLT                      MUST NOT execute (would signal JN failure)
+ *  18   JMP  0x11                MUST NOT execute (would signal JN failure)
  *
  *  19   LDAI R0, #10             restore R0 = 10 (after successful JN)
  *  20   LDAI R1, #3              restore R1 = 3
@@ -84,11 +84,11 @@ import { Memory } from "@/lib/simulator/Memory";
  *  23   LDAI R1, #1              R1 = 1
  *  24   ADD  R0, R1 → R0         R0 = 65535+1 = 65536 → result=0, carry=1
  *  25   JC   0x1B                should jump to addr 27 (carry IS set)
- *  26   HLT                      MUST NOT execute (would signal JC failure)
+ *  26   JMP  0x17                MUST NOT execute (would signal JC failure)
  *
  *  -- JMP test --
  *  27   JMP  0x1D                jump to addr 29 (unconditional)
- *  28   HLT                      MUST NOT execute (would signal JMP failure)
+ *  28   JMP  0x19                MUST NOT execute (would signal JMP failure)
  *
  *  29   HLT                      normal program end ← execution stops here
  *
@@ -143,14 +143,14 @@ LDA  R7, 0x00       ; [0x09] R7 = mem[0x00] = 13
 LDAI R0, #0         ; [0x0A] R0 = 0
 SUB  R0, R0, R0     ; [0x0B] R0 = 0-0 = 0  → zero flag set
 JZ   0x0E           ; [0x0C] ✓ jumps to 0x0E
-HLT                 ; [0x0D] ⛔ MUST NOT REACH — JZ failed
+JMP  0x0C           ; [0x0D] ⛔ JZ failed — loop back
 
 ; Phase 5 — JN (jump if negative flag)
 LDAI R0, #10        ; [0x0E] R0 = 10  (restore)
 LDAI R1, #20        ; [0x0F] R1 = 20
 SUB  R0, R1, R0     ; [0x10] R0 = 10-20 = 65526  → negative flag set
 JN   0x13           ; [0x11] ✓ jumps to 0x13
-HLT                 ; [0x12] ⛔ MUST NOT REACH — JN failed
+JMP  0x11           ; [0x12] ⛔ JN failed — loop back
 
 ; Phase 6 — JC (jump if carry flag)
 LDAI R0, #0         ; [0x13] R0 = 0
@@ -158,11 +158,11 @@ NOT  R0,     R0     ; [0x14] R0 = ~0 = 65535 (0xFFFF)
 LDAI R1, #1         ; [0x15] R1 = 1
 ADD  R0, R1, R0     ; [0x16] R0 = 65535+1 → 0  carry flag set
 JC   0x19           ; [0x17] ✓ jumps to 0x19
-HLT                 ; [0x18] ⛔ MUST NOT REACH — JC failed
+JMP  0x17           ; [0x18] ⛔ JC failed — loop back
 
 ; Phase 7 — JMP (unconditional jump)
 JMP  0x1B           ; [0x19] ✓ unconditional jump to 0x1B
-HLT                 ; [0x1A] ⛔ MUST NOT REACH — JMP failed
+JMP  0x19           ; [0x1A] ⛔ JMP failed — loop back
 
 ; All tests passed
 HLT                 ; [0x1B] ✅ Normal end
@@ -201,14 +201,14 @@ export function loadTestProgram(): void {
     /* 10 */ Encoder.assemble("LDAI", { gprAddr: 0, operand: 0 }),    // R0 = 0
     /* 11 */ Encoder.assemble("SUB",  { srcA: 0, srcB: 0, dst: 0 }),  // R0 = 0-0 = 0 (zero flag set)
     /* 12 */ Encoder.assemble("JZ",   { operand: 14 }),               // if ZF: jump to 14
-    /* 13 */ Encoder.assemble("HLT"),                                 // MUST NOT REACH (JZ failure)
+    /* 13 */ Encoder.assemble("JMP",  { operand: 12 }),               // JZ failed → loop back
 
     // ── Phase 5: JN test ───────────────────────────────────────────────────
     /* 14 */ Encoder.assemble("LDAI", { gprAddr: 0, operand: 10 }),   // R0 = 10  (restore)
     /* 15 */ Encoder.assemble("LDAI", { gprAddr: 1, operand: 20 }),   // R1 = 20
     /* 16 */ Encoder.assemble("SUB",  { srcA: 0, srcB: 1, dst: 0 }),  // R0 = 10-20 → 65526 (NF set)
     /* 17 */ Encoder.assemble("JN",   { operand: 19 }),               // if NF: jump to 19
-    /* 18 */ Encoder.assemble("HLT"),                                 // MUST NOT REACH (JN failure)
+    /* 18 */ Encoder.assemble("JMP",  { operand: 17 }),               // JN failed → loop back
 
     // ── Phase 6: JC test ───────────────────────────────────────────────────
     /* 19 */ Encoder.assemble("LDAI", { gprAddr: 0, operand: 0 }),    // R0 = 0
@@ -216,11 +216,11 @@ export function loadTestProgram(): void {
     /* 21 */ Encoder.assemble("LDAI", { gprAddr: 1, operand: 1 }),    // R1 = 1
     /* 22 */ Encoder.assemble("ADD",  { srcA: 0, srcB: 1, dst: 0 }),  // R0 = 65535+1 → 0 (carry set)
     /* 23 */ Encoder.assemble("JC",   { operand: 25 }),               // if CF: jump to 25
-    /* 24 */ Encoder.assemble("HLT"),                                 // MUST NOT REACH (JC failure)
+    /* 24 */ Encoder.assemble("JMP",  { operand: 23 }),               // JC failed → loop back
 
     // ── Phase 7: JMP test ──────────────────────────────────────────────────
     /* 25 */ Encoder.assemble("JMP",  { operand: 27 }),               // unconditional jump to 27
-    /* 26 */ Encoder.assemble("HLT"),                                 // MUST NOT REACH (JMP failure)
+    /* 26 */ Encoder.assemble("JMP",  { operand: 25 }),               // JMP failed → loop back
 
     // ── End ────────────────────────────────────────────────────────────────
     /* 27 */ Encoder.assemble("HLT"),                                 // normal end — ALL TESTS PASSED

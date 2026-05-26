@@ -21,6 +21,7 @@ export default function ExecutionTimeline() {
   const totalTicks = useExecutionStore((s) => s.totalTicks);
   const canGoBack = useExecutionStore((s) => s.canGoBack);
   const canGoForward = useExecutionStore((s) => s.canGoForward);
+  const executionError = useExecutionStore((s) => s.executionError);
   const goToTick = useExecutionStore((s) => s.goToTick);
   const goToStart = useExecutionStore((s) => s.goToStart);
   const goToEnd = useExecutionStore((s) => s.goToEnd);
@@ -117,6 +118,12 @@ export default function ExecutionTimeline() {
             ✕ Sair
           </button>
         </div>
+
+        {executionError && (
+          <div className="mt-3 rounded-lg border border-amber-700/60 bg-amber-900/30 px-3 py-2 text-xs text-amber-200">
+            {executionError}
+          </div>
+        )}
 
         <div className="mt-3">
           <input

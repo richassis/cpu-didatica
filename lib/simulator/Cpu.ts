@@ -273,6 +273,11 @@ export class CPU implements Clockable, Connectable {
   // Track the state that was just executed (whose signals are currently active)
   private _previousState: CpuState = CpuState.RESET;
 
+  // Latched ULA flags (captured on EXECUTE)
+  private _latchedFlagZero: boolean = false;
+  private _latchedFlagCarry: boolean = false;
+  private _latchedFlagNegative: boolean = false;
+
   // Testing mode: force a specific opcode
   private _testingModeOpcode: Opcode | null = null;
   private _testingModeEnabled: boolean = false;
@@ -323,6 +328,7 @@ export class CPU implements Clockable, Connectable {
 
     // Initialize previous signal values
     this.initPrevSignals();
+    this.resetLatchedFlags();
   }
 
   // ── Component Registration ───────────────────────────────────
@@ -511,6 +517,7 @@ export class CPU implements Clockable, Connectable {
     this._totalTicks = 0;
     this._changedControlSignalPorts.clear();
     this.initPrevSignals();
+    this.resetLatchedFlags();
     // Apply RESET state control signals immediately
     this.emitSignals(CpuState.RESET, Opcode.HLT, true);
     this.out_state.set(CpuState.RESET);
@@ -528,6 +535,7 @@ export class CPU implements Clockable, Connectable {
     this._previousState = snapshot.previousState;
     this.out_state.set(snapshot.state);
     this.out_halted.set(snapshot.halted);
+    this.latchFlagsFromInputs();
   }
 
   /** Initialize previous signal values for change detection. */
@@ -590,6 +598,11 @@ export class CPU implements Clockable, Connectable {
     }
 
     this.tickAllComponentsPhased();
+
+    // Latch ULA flags only after EXECUTE completes.
+    if (this._previousState === CpuState.EXECUTE) {
+      this.latchFlagsFromInputs();
+    }
   }
 
   /**
@@ -846,13 +859,14 @@ export class CPU implements Clockable, Connectable {
         // WRITEPC: conditionally update PC based on opcode and flags
         const taken =
           opcode === Opcode.JMP ||
-          (opcode === Opcode.JZ && this.in_flagZero.get()) ||
-          (opcode === Opcode.JC && this.in_flagCarry.get()) ||
-          (opcode === Opcode.JN && this.in_flagNegative.get());
+          (opcode === Opcode.JZ && this._latchedFlagZero) ||
+          (opcode === Opcode.JC && this._latchedFlagCarry) ||
+          (opcode === Opcode.JN && this._latchedFlagNegative);
 
         if (taken) {
+          console.log(`Jump taken for opcode ${Opcode[opcode]} (0b${opcode.toString(2).padStart(5, "0")})`);
           this.setSignalIfChanged(this.out_wrPC, "wrPC", 1);
-          this.setSignalIfChanged(this.out_muxPC, "muxPC", 1); // jump target from operand
+          this.setSignalIfChanged(this.out_muxPC, "muxPC", 0); // jump target from operand
         }
         break;
       }
@@ -870,5 +884,17 @@ export class CPU implements Clockable, Connectable {
 
   private opcodeToUlaOp(opcode: Opcode): UlaOperation {
     return OPCODE_TO_ULA_OP[opcode] ?? UlaOperation.ADD;
+  }
+
+  private resetLatchedFlags(): void {
+    this._latchedFlagZero = false;
+    this._latchedFlagCarry = false;
+    this._latchedFlagNegative = false;
+  }
+
+  private latchFlagsFromInputs(): void {
+    this._latchedFlagZero = Boolean(this.in_flagZero.get());
+    this._latchedFlagCarry = Boolean(this.in_flagCarry.get());
+    this._latchedFlagNegative = Boolean(this.in_flagNegative.get());
   }
 }
