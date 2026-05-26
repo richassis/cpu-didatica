@@ -215,6 +215,7 @@ export default function EnhancedBusOverlay({
 
     const visibleWireIds = currentWireData
       .filter((wireData) => {
+        if (wireData.wire.visible === false) return false;
         if (wireData.isCpuControlSignal && !showCpuSignalWires) return false;
         if (!wireData.isCpuControlSignal && !showDataSignalWires) return false;
 
@@ -559,6 +560,7 @@ export default function EnhancedBusOverlay({
 
       {wireRenderData
         .filter((wireData) => {
+          if (wireData.wire.visible === false) return false;
           if (wireData.isCpuControlSignal && !showCpuSignalWires) return false;
           if (!wireData.isCpuControlSignal && !showDataSignalWires) return false;
           return true;

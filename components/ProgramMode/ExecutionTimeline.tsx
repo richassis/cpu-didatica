@@ -26,7 +26,7 @@ export default function ExecutionTimeline() {
   const goToEnd = useExecutionStore((s) => s.goToEnd);
   const stepBackward = useExecutionStore((s) => s.stepBackward);
   const stepForward = useExecutionStore((s) => s.stepForward);
-  const exitProgramMode = useExecutionStore((s) => s.exitProgramMode);
+  const exitTimeline = useExecutionStore((s) => s.exitTimeline);
 
   const currentSnapshot = snapshots[currentIndex];
 
@@ -110,9 +110,9 @@ export default function ExecutionTimeline() {
           </button>
 
           <button
-            onClick={exitProgramMode}
+            onClick={exitTimeline}
             className="ml-2 h-8 rounded-md border border-red-700/50 bg-red-900/40 px-3 text-xs font-semibold text-red-200 hover:bg-red-900/60"
-            title="Sair do Program Mode"
+            title="Encerrar timeline de execução"
           >
             ✕ Sair
           </button>

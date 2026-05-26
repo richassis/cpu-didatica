@@ -213,6 +213,12 @@ interface SimulatorState {
   pokeMemory: (id: string, addr: number, value: number) => void;
 
   /**
+   * Directly write a word into an InstructionMemory cell, bypassing tick logic.
+   * Immediately persists updated state.
+   */
+  pokeInstructionMemory: (id: string, addr: number, value: number) => void;
+
+  /**
    * Directly write a value into a GPR register, bypassing tick logic.
    * Immediately persists updated state.
    */
@@ -641,6 +647,15 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
   pokeMemory: (id, addr, value) => {
     const obj = get().objects.get(id);
     if (obj instanceof Memory) {
+      obj.poke(addr, value);
+      set((s) => ({ revision: s.revision + 1 }));
+      getLayoutStore().getState().saveState();
+    }
+  },
+
+  pokeInstructionMemory: (id, addr, value) => {
+    const obj = get().objects.get(id);
+    if (obj instanceof InstructionMemory) {
       obj.poke(addr, value);
       set((s) => ({ revision: s.revision + 1 }));
       getLayoutStore().getState().saveState();

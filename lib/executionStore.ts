@@ -34,8 +34,11 @@ export interface ExecutionState extends ExecutionDerivedState {
   currentIndex: number;
   /** True when a program has been executed and snapshots are ready. */
   isLoaded: boolean;
-  /** True when program mode is active. */
-  isProgramMode: boolean;
+  /**
+   * True when a program has been loaded and the timeline is active.
+   * (Renamed from isProgramMode to avoid confusion with the UI mode in modeStore.)
+   */
+  isTimelineActive: boolean;
   /** Safety cap for batch execution. */
   MAX_TICKS: 1000;
 
@@ -45,7 +48,8 @@ export interface ExecutionState extends ExecutionDerivedState {
   stepBackward: () => void;
   goToStart: () => void;
   goToEnd: () => void;
-  exitProgramMode: () => void;
+  /** Exit the timeline and reset to initial state. (Renamed from exitProgramMode.) */
+  exitTimeline: () => void;
 }
 
 function cloneComponentState(state: ComponentState): ComponentState {
@@ -122,7 +126,7 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
   snapshots: [],
   currentIndex: 0,
   isLoaded: false,
-  isProgramMode: false,
+  isTimelineActive: false,
   MAX_TICKS: DEFAULT_MAX_TICKS,
   totalTicks: 0,
   canGoForward: false,
@@ -162,7 +166,7 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
       snapshots,
       currentIndex: 0,
       isLoaded: snapshots.length > 0,
-      isProgramMode: true,
+      isTimelineActive: true,
       ...toDerivedState(snapshots, 0),
     });
   },
@@ -203,7 +207,7 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
     get().goToTick(totalTicks);
   },
 
-  exitProgramMode: () => {
+  exitTimeline: () => {
     const { snapshots } = get();
     if (snapshots.length > 0) {
       applySnapshot(snapshots[0]);
@@ -213,7 +217,7 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
       snapshots: [],
       currentIndex: 0,
       isLoaded: false,
-      isProgramMode: false,
+      isTimelineActive: false,
       MAX_TICKS: DEFAULT_MAX_TICKS,
       totalTicks: 0,
       canGoForward: false,

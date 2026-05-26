@@ -7,7 +7,7 @@ import TopBar from "@/components/TopBar";
 import { useProjectStore } from "@/lib/projectStore";
 import { useLayoutStore } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
-import { useExecutionStore } from "@/lib/executionStore";
+import { useModeStore } from "@/lib/modeStore";
 import { isDefaultProject } from "@/lib/defaultProject";
 import { enforceOrthogonal, simplifyOrthogonalPath } from "@/lib/wireRouting";
 import type { WireDescriptor } from "@/lib/simulator";
@@ -30,7 +30,7 @@ export default function Home() {
   const setComponentTickOrderByState = useSimulatorStore((s) => s.setComponentTickOrderByState);
   const getComponentTickSteps = useSimulatorStore((s) => s.getComponentTickSteps);
   const getComponentTickOrderByState = useSimulatorStore((s) => s.getComponentTickOrderByState);
-  const isProgramMode = useExecutionStore((s) => s.isProgramMode);
+  const mode = useModeStore((s) => s.mode);
 
   const [isHydrated, setIsHydrated] = useState(false);
   const previousActiveTabRef = useRef<string | null>(null);
@@ -254,7 +254,7 @@ export default function Home() {
   return (
     <div className="flex flex-col flex-1 min-h-0">
       <TopBar />
-      {isProgramMode ? <ProgramModeLayout /> : <SimulatorCanvas />}
+      {mode === "edit" ? <SimulatorCanvas /> : <ProgramModeLayout />}
     </div>
   );
 }

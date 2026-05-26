@@ -145,7 +145,7 @@ export const STATE_CONTROL_SIGNALS: Readonly<Partial<Record<CpuState, ControlSig
     muxPC: 1,     // Select PC as source (for next instruction)
     muxAReg: 1,   // Select address for register
     muxDReg: 2,   // Select data for register
-    rdMem: 1,     // Enable memory read (implicit from setting rdMem port)
+    rdMem: 0,     // Enable memory read (implicit from setting rdMem port)
     wrReg: 0,
   },
 
@@ -200,7 +200,7 @@ export const STATE_CONTROL_SIGNALS: Readonly<Partial<Record<CpuState, ControlSig
   // WRITEREG3 state - write ULA result to destination register
   [CpuState.WRITEREG3]: {
     wrReg: 1,
-    opULA: UlaOperation.ADD, // default to ADD for non-ULA ops
+    // opULA: UlaOperation.ADD, // default to ADD for non-ULA ops
   },
 
   // WRITEPC state - update PC for jumps
