@@ -8,7 +8,7 @@ import { useProjectStore } from "@/lib/projectStore";
 import { useLayoutStore } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useModeStore } from "@/lib/modeStore";
-import { isDefaultProject } from "@/lib/defaultProject";
+import { DEFAULT_PROJECT_ID, isDefaultProject } from "@/lib/defaultProject";
 import { enforceOrthogonal, simplifyOrthogonalPath } from "@/lib/wireRouting";
 import type { WireDescriptor } from "@/lib/simulator";
 
@@ -35,6 +35,7 @@ export default function Home() {
   const [isHydrated, setIsHydrated] = useState(false);
   const previousActiveTabRef = useRef<string | null>(null);
   const pendingHydrationTabRef = useRef<string | null>(null);
+  const lastDefaultPersistRef = useRef<string | null>(null);
 
   // Wait for hydration
   useEffect(() => {
@@ -239,6 +240,29 @@ export default function Home() {
         wires,
       });
 
+      if (activeTabId === DEFAULT_PROJECT_ID && mode === "edit") {
+        const currentProject = useProjectStore.getState().projectData[activeTabId];
+        if (currentProject) {
+          const payload = {
+            ...currentProject,
+            components: enhancedComponents,
+            wires,
+            updatedAt: new Date().toISOString(),
+          };
+          const serialized = JSON.stringify(payload);
+          if (lastDefaultPersistRef.current !== serialized) {
+            lastDefaultPersistRef.current = serialized;
+            fetch("/api/default-project", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: serialized,
+            }).catch((error) => {
+              console.warn("Failed to persist default project:", error);
+            });
+          }
+        }
+      }
+
       setLayoutState((state) => ({
         ...state,
         wires,
@@ -248,7 +272,7 @@ export default function Home() {
     // Debounced save
     const timeout = setTimeout(saveState, 500);
     return () => clearTimeout(timeout);
-  }, [layoutComponents, activeTabId, isHydrated, updateProjectData, getWires, setLayoutState, getComponentTickSteps, getComponentTickOrderByState]);
+  }, [layoutComponents, activeTabId, isHydrated, updateProjectData, getWires, setLayoutState, getComponentTickSteps, getComponentTickOrderByState, mode]);
 
   if (!isHydrated) {
     return (

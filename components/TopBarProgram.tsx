@@ -2,6 +2,8 @@
 
 import { useRef } from "react";
 import { useModeStore } from "@/lib/modeStore";
+import { useProjectStore } from "@/lib/projectStore";
+import { DEFAULT_PROJECT_ID, DEFAULT_PROJECT_NAME, isDefaultProject } from "@/lib/defaultProject";
 import { useProgramDataStore } from "@/lib/programDataStore";
 
 /**
@@ -13,6 +15,9 @@ import { useProgramDataStore } from "@/lib/programDataStore";
  */
 export default function TopBarProgram() {
   const enterEditMode = useModeStore((s) => s.enterEditMode);
+  const activeTabId = useProjectStore((s) => s.activeTabId);
+  const setActiveTab = useProjectStore((s) => s.setActiveTab);
+  const loadDefaultProject = useProjectStore((s) => s.loadDefaultProject);
   const importAssembly = useProgramDataStore((s) => s.importAssembly);
   const exportAssembly = useProgramDataStore((s) => s.exportAssembly);
   const importData = useProgramDataStore((s) => s.importData);
@@ -24,6 +29,22 @@ export default function TopBarProgram() {
   const dataFileRef = useRef<HTMLInputElement>(null);
 
   const handleRun = () => runProgram();
+
+  const handleEnterEditMode = async () => {
+    const shouldEditDefault = window.confirm(
+      `Editar o datapath default ("${DEFAULT_PROJECT_NAME}")?\n` +
+        "As alteracoes serao salvas no arquivo default-project.cpud."
+    );
+
+    if (!shouldEditDefault) return;
+
+    if (!isDefaultProject(activeTabId)) {
+      await loadDefaultProject();
+      setActiveTab(DEFAULT_PROJECT_ID);
+    }
+
+    enterEditMode();
+  };
 
   const handleImportAsm = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -122,7 +143,7 @@ export default function TopBarProgram() {
         </button>
 
         <button
-          onClick={enterEditMode}
+          onClick={handleEnterEditMode}
           className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-gray-400 hover:text-white hover:bg-gray-700 border border-gray-700 hover:border-gray-600 transition-colors"
           title="Entrar no modo de edição (desenvolvedor)"
         >
