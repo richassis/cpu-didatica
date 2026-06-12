@@ -34,7 +34,23 @@ interface DisplayState {
   /** Whether data signal wires are visible */
   showDataSignalWires: boolean;
   setShowDataSignalWires: (show: boolean) => void;
-  
+
+  /** Whether animated value dots are shown travelling along / resting at wires */
+  showWireDots: boolean;
+  setShowWireDots: (show: boolean) => void;
+
+  /** Whether wire flow animation plays at all (false = values snap instantly) */
+  animationEnabled: boolean;
+  setAnimationEnabled: (enabled: boolean) => void;
+
+  /** Whether CPU control signal wires that changed animate (flow dots) */
+  animateCpuSignals: boolean;
+  setAnimateCpuSignals: (animate: boolean) => void;
+
+  /** Whether data signal wires animate substep-by-substep */
+  animateDataSignals: boolean;
+  setAnimateDataSignals: (animate: boolean) => void;
+
   /** Animation speed preset */
   animationSpeed: AnimationSpeedPreset;
   setAnimationSpeed: (preset: AnimationSpeedPreset) => void;
@@ -58,7 +74,19 @@ export const useDisplayStore = create<DisplayState>()(
       
       showDataSignalWires: true,
       setShowDataSignalWires: (show) => set({ showDataSignalWires: show }),
-      
+
+      showWireDots: true,
+      setShowWireDots: (show) => set({ showWireDots: show }),
+
+      animationEnabled: true,
+      setAnimationEnabled: (enabled) => set({ animationEnabled: enabled }),
+
+      animateCpuSignals: true,
+      setAnimateCpuSignals: (animate) => set({ animateCpuSignals: animate }),
+
+      animateDataSignals: true,
+      setAnimateDataSignals: (animate) => set({ animateDataSignals: animate }),
+
       animationSpeed: "normal",
       cpuAnimationDuration: ANIMATION_PRESETS.normal.cpu,
       componentAnimationDuration: ANIMATION_PRESETS.normal.component,
@@ -70,13 +98,17 @@ export const useDisplayStore = create<DisplayState>()(
     }),
     {
       name: "simulator-display",
-      version: 2,
+      version: 4,
       migrate: (persistedState) => {
         const state = persistedState as Partial<DisplayState>;
         const preset = state.animationSpeed ?? "normal";
 
         return {
           ...state,
+          showWireDots: state.showWireDots ?? true,
+          animationEnabled: state.animationEnabled ?? true,
+          animateCpuSignals: state.animateCpuSignals ?? true,
+          animateDataSignals: state.animateDataSignals ?? true,
           cpuAnimationDuration: ANIMATION_PRESETS[preset].cpu,
           componentAnimationDuration: ANIMATION_PRESETS[preset].component,
         };

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { Props } from "@/lib/store";
+import { useRevealState, revealStyle } from "@/lib/useRevealState";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayStore, formatNum } from "@/lib/displayStore";
 import React from "react";
@@ -12,6 +13,7 @@ import PortsOverlay from "@/components/PortsOverlay";
 
 export default function RegisterComponent({ component, zoom }: Props) {
   const { id, x, y, w, h, label } = component;
+  const revealStatus = useRevealState(id);
   const [configOpen, setConfigOpen] = useState(false);
 
   // Read value from the data layer
@@ -43,7 +45,7 @@ export default function RegisterComponent({ component, zoom }: Props) {
     <>
       <div
         ref={setNodeRef}
-        style={style}
+        style={{ ...style, ...revealStyle(revealStatus) }}
         {...listeners}
         {...attributes}
         data-draggable

@@ -2,7 +2,7 @@
   "id": "default-full-datapath",
   "name": "Full Datapath",
   "createdAt": "2026-04-07T03:40:44.124Z",
-  "updatedAt": "2026-04-23T17:58:30.574Z",
+  "updatedAt": "2026-06-11T23:26:08.593Z",
   "components": [
     {
       "id": "cpu-1",

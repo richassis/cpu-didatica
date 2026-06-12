@@ -2,6 +2,8 @@
 
 import { useLayoutStore, CANVAS_WIDTH, CANVAS_HEIGHT } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
+import { useDisplayMaskStore } from "@/lib/displayMaskStore";
+import { useExecutionStore } from "@/lib/executionStore";
 import { useDisplayStore, formatNum } from "@/lib/displayStore";
 import { useWireCreationStore } from "@/lib/wireCreationStore";
 import { useWireSelectionStore } from "@/lib/wireSelectionStore";
@@ -54,13 +56,19 @@ export default function EnhancedBusOverlay({
   const zoom = useLayoutStore((s) => s.zoom);
   const objects = useSimulatorStore((s) => s.objects);
   const revision = useSimulatorStore((s) => s.revision);
+  const animationCycle = useSimulatorStore((s) => s.animationCycle);
+  const displayMaskActive = useDisplayMaskStore((s) => s.isActive);
+  const isTimelineActive = useExecutionStore((s) => s.isTimelineActive);
   const getPrimaryCpu = useSimulatorStore((s) => s.getPrimaryCpu);
   const getComponentTickSteps = useSimulatorStore((s) => s.getComponentTickSteps);
   const getComponentTickOrderByState = useSimulatorStore((s) => s.getComponentTickOrderByState);
   const base = useDisplayStore((s) => s.numericBase);
   const showCpuSignalWires = useDisplayStore((s) => s.showCpuSignalWires);
   const showDataSignalWires = useDisplayStore((s) => s.showDataSignalWires);
-  const cpuAnimationDuration = useDisplayStore((s) => s.cpuAnimationDuration);
+  const showWireDots = useDisplayStore((s) => s.showWireDots);
+  const animationEnabled = useDisplayStore((s) => s.animationEnabled);
+  const animateCpuSignals = useDisplayStore((s) => s.animateCpuSignals);
+  const animateDataSignals = useDisplayStore((s) => s.animateDataSignals);
   const componentAnimationDuration = useDisplayStore((s) => s.componentAnimationDuration);
 
   const removeSimulatorWire = useSimulatorStore((s) => s.removeWire);
@@ -90,10 +98,15 @@ export default function EnhancedBusOverlay({
 
   const [animatingWires, setAnimatingWires] = useState<Set<string>>(new Set());
   const [animationProgress, setAnimationProgress] = useState<Map<string, number>>(new Map());
+  /** Wire IDs that have delivered a value at least once — keep a resting dot at
+   *  their target port until they flow again (persistent dots). */
+  const [settledDots, setSettledDots] = useState<Set<string>>(new Set());
   const animationRef = useRef<number | null>(null);
   const wireDataByIdRef = useRef<Map<string, WireRenderData>>(new Map());
-  const lastAnimatedRevisionRef = useRef<number | null>(null);
+  const lastAnimatedCycleRef = useRef<number | null>(null);
   const previousCpuSignalValuesRef = useRef<Map<string, string>>(new Map());
+  /** Substep order values already revealed in the current animation pass. */
+  const revealedGroupsRef = useRef<Set<number>>(new Set());
 
   const projectWires = useMemo(
     () => (activeTabId ? projectData[activeTabId]?.wires ?? [] : []),
@@ -127,12 +140,16 @@ export default function EnhancedBusOverlay({
       const sourceObj = objects.get(wire.sourceComponentId);
       if (!sourceObj || !("getPorts" in sourceObj)) return "?";
 
-      // For Register output ports, use the pre-commit snapshot so the animation
-      // shows the value the register was *driving* when this tick began,
-      // not the newly latched value it received during commit().
-      // This is most visible on PC: PC=0 sends 0 to InstructionMemory in FETCH,
-      // even though PC commits to 1 in the same tick.
-      if (sourceObj instanceof Register && wire.sourcePortName === "value") {
+      // For Register output ports during LIVE ticking, use the pre-commit
+      // snapshot so the animation shows the value the register was *driving*
+      // when this tick began, not the newly latched value from commit().
+      //
+      // In timeline mode the display-mask system has already applied the
+      // pre-tick snapshot to out_value (and holds it there until the register's
+      // incoming wire reveals it), so we read the live port instead — reading
+      // the stale `preCommitValue` here would show the last batch tick's value
+      // (e.g. PC showing 0x001C instead of 0x0000 on the first run).
+      if (!displayMaskActive && sourceObj instanceof Register && wire.sourcePortName === "value") {
         return formatNum(sourceObj.preCommitValue, base, sourceObj.bitWidth);
       }
 
@@ -176,7 +193,7 @@ export default function EnhancedBusOverlay({
     }
 
     return data;
-  }, [projectWires, components, objects, base, revision]);
+  }, [projectWires, components, objects, base, revision, displayMaskActive]);
 
   const wireDataById = useMemo(() => {
     const map = new Map<string, WireRenderData>();
@@ -190,22 +207,40 @@ export default function EnhancedBusOverlay({
     wireDataByIdRef.current = wireDataById;
   }, [wireDataById]);
 
+  // Drop persistent resting dots when leaving the timeline (fresh program run
+  // starts with no settled values).
   useEffect(() => {
-    // Only animate once per simulator tick revision.
-    if (lastAnimatedRevisionRef.current === null) {
-      lastAnimatedRevisionRef.current = revision;
+    if (!isTimelineActive) setSettledDots(new Set());
+  }, [isTimelineActive]);
+
+  useEffect(() => {
+    // Animate once per timeline navigation (animationCycle), NOT per revision.
+    // Per-substep reveals bump `revision` to refresh displayed values; keying on
+    // `animationCycle` here prevents those reveals from restarting this pass.
+    if (lastAnimatedCycleRef.current === null) {
+      lastAnimatedCycleRef.current = animationCycle;
       return;
     }
 
-    if (lastAnimatedRevisionRef.current === revision) {
+    if (lastAnimatedCycleRef.current === animationCycle) {
       return;
     }
 
-    lastAnimatedRevisionRef.current = revision;
+    lastAnimatedCycleRef.current = animationCycle;
+    // Fresh pass: nothing revealed yet.
+    revealedGroupsRef.current = new Set();
 
     if (animationRef.current) {
       cancelAnimationFrame(animationRef.current);
       animationRef.current = null;
+    }
+
+    // Animation disabled: snap straight to the post-tick state, no flow/dots.
+    if (!animationEnabled) {
+      setAnimatingWires(new Set());
+      setAnimationProgress(new Map());
+      useDisplayMaskStore.getState().revealAll();
+      return;
     }
 
     const currentWireData = Array.from(wireDataByIdRef.current.values());
@@ -249,16 +284,28 @@ export default function EnhancedBusOverlay({
       previousCpuSignalValuesRef.current.set(id, wireData.value);
     }
 
-    const cpuIds = visibleWireIds.filter((id) => {
+    // Changed CPU signal wire IDs (those whose source port value changed this tick).
+    const changedCpuIds = visibleWireIds.filter((id) => {
       const wireData = wireDataByIdRef.current.get(id);
       if (!wireData?.isCpuControlSignal) return false;
       return changedCpuSignals.has(wireData.wire.sourcePortName) || cpuValueChanges.has(id);
     });
-    const nonCpuIds = visibleWireIds.filter((id) => !wireDataByIdRef.current.get(id)?.isCpuControlSignal);
-    if (cpuIds.length === 0 && nonCpuIds.length === 0) return;
-    const nonCpuOrderGroups = new Map<number, string[]>();
+    const allNonCpuIds = visibleWireIds.filter((id) => !wireDataByIdRef.current.get(id)?.isCpuControlSignal);
 
-    for (const id of nonCpuIds) {
+    // Apply per-category animation toggles.
+    // Unchanged CPU wires are always static; changed ones obey animateCpuSignals.
+    const animCpuIds = animateCpuSignals ? changedCpuIds : [];
+    // Data wires obey animateDataSignals; if disabled, data reveals happen instantly.
+    const animNonCpuIds = animateDataSignals ? allNonCpuIds : [];
+
+    if (animCpuIds.length === 0 && animNonCpuIds.length === 0) {
+      useDisplayMaskStore.getState().revealAll();
+      return;
+    }
+
+    // Build substep groups only from the wires we're actually animating.
+    const nonCpuOrderGroups = new Map<number, string[]>();
+    for (const id of animNonCpuIds) {
       const wireData = wireDataByIdRef.current.get(id);
       if (!wireData) continue;
 
@@ -276,21 +323,28 @@ export default function EnhancedBusOverlay({
       nonCpuOrderGroups.set(normalizedOrder, group);
     }
 
+    // Keep the order key so each group can trigger the matching substep reveal.
     const sortedNonCpuGroups = Array.from(nonCpuOrderGroups.entries())
-      .sort((a, b) => a[0] - b[0])
-      .map(([, ids]) => ids);
+      .sort((a, b) => a[0] - b[0]);
 
     const startTime = Date.now();
-    const nonCpuGroupCount = sortedNonCpuGroups.length;
-    // Strict sequencing: each substep starts only after the previous one finishes.
+    // CPU changed signals animate concurrently in a single phase before data substeps.
+    const effectiveCpuDuration = animCpuIds.length > 0 ? componentAnimationDuration : 0;
     const nonCpuStaggerStep = componentAnimationDuration;
-    const effectiveCpuDuration = cpuIds.length > 0 ? cpuAnimationDuration : 0;
+    const nonCpuGroupCount = sortedNonCpuGroups.length;
     const nonCpuPhaseDuration = nonCpuGroupCount > 0
       ? componentAnimationDuration * nonCpuGroupCount
       : 0;
     const totalDuration = effectiveCpuDuration + nonCpuPhaseDuration;
 
-    const animatingIds = [...cpuIds, ...nonCpuIds];
+    // If data animation is disabled, reveal all data components immediately so
+    // they show post-tick values; CPU signal animation (if any) runs on top.
+    if (!animateDataSignals) {
+      useDisplayMaskStore.getState().revealAll();
+    }
+
+    // Both changed CPU wires and data wires get animated dots.
+    const animatingIds = [...animCpuIds, ...animNonCpuIds];
 
     const kickoff = window.setTimeout(() => {
       setAnimatingWires(new Set(animatingIds));
@@ -302,27 +356,67 @@ export default function EnhancedBusOverlay({
         setAnimatingWires(new Set());
         setAnimationProgress(new Map());
         animationRef.current = null;
+        // Ensure every component reaches its post-tick value once the pass ends.
+        useDisplayMaskStore.getState().revealAll();
         return;
       }
 
       const progress = new Map<string, number>();
 
-      for (const id of cpuIds) {
-        progress.set(id, Math.min(1, elapsed / Math.max(1, effectiveCpuDuration)));
-      }
-
-      for (const id of nonCpuIds) {
+      // ── CPU phase: changed control-signal wires animate concurrently ──────
+      for (const id of animCpuIds) {
         progress.set(id, 0);
       }
+      if (animCpuIds.length > 0 && effectiveCpuDuration > 0) {
+        const cpuProgress = Math.min(1, elapsed / effectiveCpuDuration);
+        for (const id of animCpuIds) {
+          progress.set(id, cpuProgress);
+        }
+        // Once the CPU phase ends, mark these wires as settled.
+        if (cpuProgress >= 1 && !revealedGroupsRef.current.has(-1)) {
+          revealedGroupsRef.current.add(-1);
+          setSettledDots((prev) => {
+            const next = new Set(prev);
+            for (const wireId of animCpuIds) next.add(wireId);
+            return next;
+          });
+        }
+      }
 
+      // ── Data substep phases: sequential, one group per substep ────────────
+      for (const id of animNonCpuIds) {
+        progress.set(id, 0);
+      }
       if (elapsed > effectiveCpuDuration && componentAnimationDuration > 0 && sortedNonCpuGroups.length > 0) {
         const compElapsed = elapsed - effectiveCpuDuration;
 
-        sortedNonCpuGroups.forEach((groupIds, index) => {
+        sortedNonCpuGroups.forEach(([order, groupIds], index) => {
           const groupStart = index * nonCpuStaggerStep;
           const groupProgress = Math.min(1, Math.max(0, (compElapsed - groupStart) / componentAnimationDuration));
           for (const id of groupIds) {
             progress.set(id, groupProgress);
+          }
+
+          // ENGINE TICK: once this substep's wires finish, reveal the components
+          // those wires TARGET — a component latches its new value only after the
+          // wires feeding into it arrive. This keeps a register (e.g. PC) showing
+          // its old value while it drives an earlier substep, updating only once
+          // its own incoming wire (the last substep) completes.
+          if (groupProgress >= 1 && !revealedGroupsRef.current.has(order)) {
+            revealedGroupsRef.current.add(order);
+            const targetIds: string[] = [];
+            for (const wireId of groupIds) {
+              const targetId = wireDataByIdRef.current.get(wireId)?.wire.targetComponentId;
+              if (targetId) targetIds.push(targetId);
+            }
+            useDisplayMaskStore.getState().revealComponents(targetIds);
+
+            // These wires have now delivered — keep a resting dot at their target.
+            setSettledDots((prev) => {
+              const next = new Set(prev);
+              for (const wireId of groupIds) next.add(wireId);
+              return next;
+            });
           }
         });
       }
@@ -341,13 +435,15 @@ export default function EnhancedBusOverlay({
       }
     };
   }, [
-    revision,
+    animationCycle,
     getPrimaryCpu,
     getComponentTickSteps,
     getComponentTickOrderByState,
     showCpuSignalWires,
     showDataSignalWires,
-    cpuAnimationDuration,
+    animationEnabled,
+    animateCpuSignals,
+    animateDataSignals,
     componentAnimationDuration,
   ]);
 
@@ -703,29 +799,44 @@ export default function EnhancedBusOverlay({
                 );
               })}
 
-              {isAnimating && (
-                (() => {
-                  const progress = animationProgress.get(wire.id) ?? 0;
-                  const point = getPointAlongPath(path, progress);
+              {(() => {
+                // Dots can be disabled globally; CPU wires only show dots when
+                // they're in the current animation set (i.e. their value changed).
+                if (!showWireDots) return null;
+                if (isCpuControlSignal && !animatingWires.has(wire.id)) return null;
 
-                  return (
-                    <g transform={`translate(${point.x}, ${point.y})`} className="pointer-events-none">
-                      <circle r="6" fill={pulseColor} filter="url(#pulseGlow)" opacity="0.9" />
-                      <g transform="translate(0, -16)">
-                        <rect x="-18" y="-8" width="36" height="16" rx="4" fill="#111827" stroke={pulseColor} strokeWidth="1.4" />
-                        <text
-                          textAnchor="middle"
-                          dominantBaseline="middle"
-                          className="font-mono"
-                          style={{ fontSize: "9px", fill: "#f3f4f6" }}
-                        >
-                          {value}
-                        </text>
-                      </g>
+                const liveProgress = animationProgress.get(wire.id);
+                let dotProgress: number | null = null;
+                if (liveProgress !== undefined) {
+                  // Flowing this pass: appear only once its substep starts (#4).
+                  if (liveProgress > 0) dotProgress = liveProgress;
+                } else if (settledDots.has(wire.id)) {
+                  // Not flowing right now but has delivered before — rest at the
+                  // target port until a new value flows (#5).
+                  dotProgress = 1;
+                }
+
+                if (dotProgress === null) return null;
+                const point = getPointAlongPath(path, dotProgress);
+                const isResting = dotProgress >= 1;
+
+                return (
+                  <g transform={`translate(${point.x}, ${point.y})`} className="pointer-events-none">
+                    <circle r={isResting ? 5 : 6} fill={pulseColor} filter="url(#pulseGlow)" opacity={isResting ? 0.85 : 0.9} />
+                    <g transform="translate(0, -16)">
+                      <rect x="-18" y="-8" width="36" height="16" rx="4" fill="#111827" stroke={pulseColor} strokeWidth="1.4" />
+                      <text
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        className="font-mono"
+                        style={{ fontSize: "9px", fill: "#f3f4f6" }}
+                      >
+                        {value}
+                      </text>
                     </g>
-                  );
-                })()
-              )}
+                  </g>
+                );
+              })()}
             </g>
           );
         })}

@@ -597,6 +597,15 @@ export class CPU implements Clockable, Connectable {
       return;
     }
 
+    // GPR has no read-enable signal; gate its read refresh so the read outputs
+    // (registers A/B) only update during READREG2 and hold otherwise.
+    for (const entry of this._registeredComponents.values()) {
+      if (entry.type === "GprComponent") {
+        (entry.component as unknown as { setReadActive?: (a: boolean) => void })
+          .setReadActive?.(this._previousState === CpuState.READREG2);
+      }
+    }
+
     this.tickAllComponentsPhased();
 
     // Latch ULA flags only after EXECUTE completes.

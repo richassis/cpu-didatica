@@ -4,16 +4,19 @@ import { useState, useRef } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { useLayoutStore, Props } from "@/lib/store";
+import { useRevealState, revealStyle } from "@/lib/useRevealState";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayStore, formatNum } from "@/lib/displayStore";
 import React from "react";
 import ConfigModal from "@/components/ConfigModal";
 import PortsOverlay from "@/components/PortsOverlay";
+import FlagSquares from "@/components/widgets/FlagSquares";
 
 type ViewMode = "data" | "ports";
 
 export default function GprComponent({ component, zoom }: Props) {
   const { id, x, y, w, h, label } = component;
+  const revealStatus = useRevealState(id);
   const removeComponent = useLayoutStore((s) => s.removeComponent);
   const [configOpen, setConfigOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
@@ -33,6 +36,10 @@ export default function GprComponent({ component, zoom }: Props) {
   const dataIn   = gpr?.in_writeData?.value ?? 0;
   const wrSignal = gpr?.in_writeEnable?.value ?? 0;
   const dataOut  = gpr?.out_readDataA?.value ?? 0;
+
+  // Negative flag: incoming write value has MSB set (two's-complement negative).
+  // Lit only when write is active so it highlights LOAD bringing a negative value.
+  const writeNegative = wrSignal !== 0 && (dataIn & (1 << (bitWidth - 1))) !== 0;
 
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({ id });
@@ -56,7 +63,7 @@ export default function GprComponent({ component, zoom }: Props) {
     <>
       <div
         ref={setNodeRef}
-        style={style}
+        style={{ ...style, ...revealStyle(revealStatus) }}
         {...listeners}
         {...attributes}
         data-draggable
@@ -67,9 +74,12 @@ export default function GprComponent({ component, zoom }: Props) {
       >
         {/* ── Header ── */}
         <div className="flex items-center justify-between px-2 py-1 bg-teal-800/70 border-b border-teal-700/40">
-          <span className="text-[11px] font-bold text-teal-200 truncate leading-none">
-            {label}
-          </span>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="text-[11px] font-bold text-teal-200 truncate leading-none">
+              {label}
+            </span>
+            <FlagSquares flags={[{ label: "N", on: writeNegative, title: "Negative write value (MSB=1)" }]} />
+          </div>
           <div className="flex items-center gap-1">
             {/* Toggle view mode */}
             <button

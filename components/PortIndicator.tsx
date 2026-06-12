@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useLayoutStore } from "@/lib/store";
 import { useWireCreationStore } from "@/lib/wireCreationStore";
@@ -84,6 +85,8 @@ export default function PortIndicator({
   onPortHoverEnd,
 }: Props) {
   const [hover, setHover] = useState(false);
+  const [tooltipAnchor, setTooltipAnchor] = useState<{ x: number; y: number } | null>(null);
+  const dotRef = useRef<HTMLDivElement>(null);
   const objects = useSimulatorStore((s) => s.objects);
   const revision = useSimulatorStore((s) => s.revision);
   const components = useLayoutStore((s) => s.components);
@@ -162,6 +165,10 @@ export default function PortIndicator({
 
   const handlePointerEnter = useCallback(() => {
     setHover(true);
+    if (dotRef.current) {
+      const r = dotRef.current.getBoundingClientRect();
+      setTooltipAnchor({ x: r.left + r.width / 2, y: r.top });
+    }
     if (isCreating) {
       onPortHoverStart?.(componentId, portName, direction, portSide);
     }
@@ -169,6 +176,7 @@ export default function PortIndicator({
 
   const handlePointerLeave = useCallback(() => {
     setHover(false);
+    setTooltipAnchor(null);
     if (isCreating) {
       onPortHoverEnd?.();
     }
@@ -214,7 +222,7 @@ export default function PortIndicator({
   return (
     <div
       style={positionStyles}
-      className={`pointer-events-auto ${hover ? "z-[100]" : "z-20"}`}
+      className="pointer-events-auto z-20"
       data-port-indicator
       data-port-component-id={componentId}
       data-port-name={portName}
@@ -228,6 +236,7 @@ export default function PortIndicator({
       onPointerLeave={handlePointerLeave}
     >
       <div
+        ref={dotRef}
         className={`
           w-3 h-3 rounded-full border-2 cursor-pointer transition-all
           ${hover ? `${hoverColor} scale-125` : color}
@@ -235,20 +244,32 @@ export default function PortIndicator({
           ${dropTargetClass}
           hover:shadow-lg
         `}
-      >
-        {hover && !isCreating && (
-          <div 
-            className="absolute left-1/2 -translate-x-1/2 mt-1 px-2 py-1 bg-gray-900 border border-gray-700 rounded text-[9px] font-mono text-white whitespace-nowrap pointer-events-none shadow-lg"
-            style={{ 
-              top: "100%",
-              zIndex: 1000,
-            }}
-          >
-            <div className="font-semibold text-gray-300">{portName}</div>
-            <div className={tooltipColor}>{portValue}</div>
-          </div>
-        )}
-      </div>
+      />
+
+      {/* Tooltip portalled into #portal-root — a fixed div at (0,0) with z-index 999999
+          rendered as the last child of <body>, guaranteed above every stacking context. */}
+      {hover && !isCreating && tooltipAnchor && typeof document !== "undefined" &&
+        (() => {
+          const root = document.getElementById("portal-root");
+          if (!root) return null;
+          return createPortal(
+            <div
+              className="px-2 py-1 bg-gray-900 border border-gray-700 rounded text-[9px] font-mono text-white whitespace-nowrap shadow-xl"
+              style={{
+                position: "absolute",
+                left: tooltipAnchor.x,
+                top: tooltipAnchor.y - 6,
+                transform: "translate(-50%, -100%)",
+                pointerEvents: "none",
+              }}
+            >
+              <div className="font-semibold text-gray-300">{portName}</div>
+              <div className={tooltipColor}>{portValue}</div>
+            </div>,
+            root,
+          );
+        })()
+      }
     </div>
   );
 }

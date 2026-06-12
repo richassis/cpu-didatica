@@ -16,7 +16,7 @@ function formatOpcode(opcode: number): string {
 }
 
 export default function ExecutionTimeline() {
-  const snapshots = useExecutionStore((s) => s.snapshots);
+  const frames = useExecutionStore((s) => s.frames);
   const currentIndex = useExecutionStore((s) => s.currentIndex);
   const totalTicks = useExecutionStore((s) => s.totalTicks);
   const canGoBack = useExecutionStore((s) => s.canGoBack);
@@ -29,7 +29,7 @@ export default function ExecutionTimeline() {
   const stepForward = useExecutionStore((s) => s.stepForward);
   const exitTimeline = useExecutionStore((s) => s.exitTimeline);
 
-  const currentSnapshot = snapshots[currentIndex];
+  const currentSnapshot = frames[currentIndex]?.postTick;
 
   const stateLabel = useMemo(() => {
     if (!currentSnapshot) return "--";

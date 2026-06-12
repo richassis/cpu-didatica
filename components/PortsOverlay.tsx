@@ -176,6 +176,9 @@ export default function PortsOverlay({ componentId }: Props) {
   return (
     <>
       {ports.map((port) => {
+        // Skip ports explicitly marked hidden in the widget's portConfig.
+        if (portConfig?.ports?.[port.name]?.hidden) return null;
+
         const { side, offset } = getPortPlacement(port.name, port.direction, ports, portConfig);
 
         // During wire creation, check if this port is a valid drop target

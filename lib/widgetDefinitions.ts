@@ -106,9 +106,9 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
         "b": { side: "left", offset: 67 },        // Data input → left
         "operation": { side: "top", offset: 50 }, // Control signal → top
         "result": { side: "right", offset: 52 },  // Data output → right
-        "zero": { side: "bottom", offset: 25 },    // Status flag → right
-        "carry": { side: "bottom", offset: 50 },   // Status flag → right
-        "negative": { side: "bottom", offset: 75 }, // Status flag → right
+        "zero":     { side: "bottom", offset: 25,  hidden: true },
+        "carry":    { side: "bottom", offset: 50,  hidden: true },
+        "negative": { side: "bottom", offset: 75,  hidden: true },
       },
     },
   },
@@ -124,6 +124,10 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     portConfig: {
       defaultInputSide: "right",
       defaultOutputSide: "left",
+      ports: {
+        "carry": { hidden: true, side: "left", offset: 0 },
+        "result": { hidden: false, side: "left", offset: 50 }
+      },
     },
   },
   {
@@ -203,6 +207,10 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
       defaultInputSide: "left",
       defaultOutputSide: "right",
       ports: {
+        // Flag inputs are displayed as squares inside the widget, not as port dots
+        "in_flagZero":     { side: "left", hidden: true },
+        "in_flagCarry":    { side: "left", hidden: true },
+        "in_flagNegative": { side: "left", hidden: true },
         // All CPU outputs are control signals → go to top
         "out_wrIR": { side: "bottom" },
         "out_wrReg": { side: "bottom" },

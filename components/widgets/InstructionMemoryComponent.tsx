@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { Props } from "@/lib/store";
+import { useRevealState, revealStyle } from "@/lib/useRevealState";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import type { InstructionMemory } from "@/lib/simulator/InstructionMemory";
 import React from "react";
@@ -24,6 +25,7 @@ function dataHex(data: number, bitWidth: number): string {
 
 export default function InstructionMemoryComponent({ component, zoom }: Props) {
   const { id, x, y, w, h, label } = component;
+  const revealStatus = useRevealState(id);
   const [configOpen, setConfigOpen] = useState(false);
   const [builderOpen, setBuilderOpen] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState(0);
@@ -64,7 +66,7 @@ export default function InstructionMemoryComponent({ component, zoom }: Props) {
     <>
       <div
         ref={setNodeRef}
-        style={style}
+        style={{ ...style, ...revealStyle(revealStatus) }}
         {...listeners}
         {...attributes}
         data-draggable

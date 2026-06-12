@@ -5,16 +5,19 @@ import { useState } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { useLayoutStore, Props } from "@/lib/store";
+import { useRevealState, revealStyle } from "@/lib/useRevealState";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayStore, formatNum } from "@/lib/displayStore";
 import { UlaOperation } from "@/lib/simulator/ISA";
 import React from "react";
 import ConfigModal from "@/components/ConfigModal";
 import PortsOverlay from "@/components/PortsOverlay";
+import FlagSquares from "@/components/widgets/FlagSquares";
 import { getSafeDimensions } from "@/lib/componentUtils";
 
 export default function UlaComponent({ component, zoom }: Props) {
   const { id, x, y, w, h, label } = component;
+  const revealStatus = useRevealState(id);
   const removeComponent = useLayoutStore((s) => s.removeComponent);
   const [configOpen, setConfigOpen] = useState(false);
 
@@ -51,7 +54,7 @@ export default function UlaComponent({ component, zoom }: Props) {
     <>
       <div
         ref={setNodeRef}
-        style={style}
+        style={{ ...style, ...revealStyle(revealStatus) }}
         {...listeners}
         {...attributes}
         data-draggable
@@ -95,19 +98,25 @@ export default function UlaComponent({ component, zoom }: Props) {
           </button>
         </div>
 
-        {/* ── Operation badge — always visible, centered vertically below label ── */}
+        {/* ── Operation badge + result + flags ── */}
         <div
           className="absolute inset-x-0 flex flex-col items-center pointer-events-none gap-1"
-          style={{ top: "58%" }}
+          style={{ top: "55%" }}
         >
           <span className="text-sm font-mono font-bold text-white/90 bg-indigo-900/60 rounded px-2 py-0.5 leading-none">
             {operation}
           </span>
 
-          {/* Result — always visible */}
           <span className="text-xs font-mono text-indigo-200 bg-indigo-950/70 rounded px-1.5 py-0.5 leading-none">
             = {resultHex}
           </span>
+          <FlagSquares
+            flags={[
+              { label: "Z", on: ula?.zero ?? false, title: "Zero" },
+              { label: "C", on: ula?.carry ?? false, title: "Carry" },
+              { label: "N", on: ula?.negative ?? false, title: "Negative" },
+            ]}
+          />
         </div>
         
         {/* Port indicators */}
