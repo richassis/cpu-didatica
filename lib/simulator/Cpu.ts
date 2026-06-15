@@ -46,7 +46,7 @@ export const OPCODE_SEQUENCES: Readonly<Partial<Record<Opcode, CpuState[]>>> = {
   [Opcode.SUB]:  [CpuState.READREG2, CpuState.EXECUTE,  CpuState.WRITEREG3],
   [Opcode.AND]:  [CpuState.READREG2, CpuState.EXECUTE,  CpuState.WRITEREG3],
   [Opcode.OR]:   [CpuState.READREG2, CpuState.EXECUTE,  CpuState.WRITEREG3],
-  [Opcode.NOT]:  [CpuState.EXECUTE,  CpuState.WRITEREG3],
+  [Opcode.NOT]:  [CpuState.READREG2, CpuState.EXECUTE,  CpuState.WRITEREG3],
   [Opcode.JZ]:   [CpuState.WRITEPC],
   [Opcode.JC]:   [CpuState.WRITEPC],
   [Opcode.JN]:   [CpuState.WRITEPC],
@@ -145,7 +145,7 @@ export const STATE_CONTROL_SIGNALS: Readonly<Partial<Record<CpuState, ControlSig
     muxPC: 1,     // Select PC as source (for next instruction)
     muxAReg: 1,   // Select address for register
     muxDReg: 2,   // Select data for register
-    rdMem: 0,     // Enable memory read (implicit from setting rdMem port)
+    rdMem: 0,     // Data memory read disabled during FETCH (InstructionMemory is always-on)
     wrReg: 0,
   },
 
@@ -319,8 +319,8 @@ export class CPU implements Clockable, Connectable {
     this.out_wrPC = new OutputPort<number>("out_wrPC", "number", 1, 0);
     this.out_muxPC = new OutputPort<number>("out_muxPC", "number", 1, 1);
     this.out_rdMem = new OutputPort<number>("out_rdMem", "number", 1, 0);
-    this.out_wrMem = new OutputPort<number>("out_wrMem", "number", 1, 1);
-    this.out_muxAMem = new OutputPort<number>("out_muxAMem", "number", 1, 0);
+    this.out_wrMem = new OutputPort<number>("out_wrMem", "number", 1, 0);
+    this.out_muxAMem = new OutputPort<number>("out_muxAMem", "number", 1, 1);
     this.out_wrReg = new OutputPort<number>("out_wrReg", "number", 1, 0);
     this.out_opULA = new OutputPort<number>("out_opULA", "number", 3, UlaOperation.ADD);
     this.out_state = new OutputPort<number>("out_state", "number", 4, CpuState.RESET);
@@ -597,12 +597,15 @@ export class CPU implements Clockable, Connectable {
       return;
     }
 
-    // GPR has no read-enable signal; gate its read refresh so the read outputs
-    // (registers A/B) only update during READREG2 and hold otherwise.
+    // Pipeline registers (A, B) only latch during READREG states.
+    // GPR outputs are always combinational; the latches are what is gated.
+    const isReadReg =
+      this._previousState === CpuState.READREG1 ||
+      this._previousState === CpuState.READREG2;
     for (const entry of this._registeredComponents.values()) {
-      if (entry.type === "GprComponent") {
-        (entry.component as unknown as { setReadActive?: (a: boolean) => void })
-          .setReadActive?.(this._previousState === CpuState.READREG2);
+      if (entry.type === "PipelineRegister") {
+        (entry.component as unknown as { setWriteActive?: (a: boolean) => void })
+          .setWriteActive?.(isReadReg);
       }
     }
 

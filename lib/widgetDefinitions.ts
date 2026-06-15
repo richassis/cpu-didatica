@@ -155,12 +155,27 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     defaultWidth: 144,  // 9 grid cells
     defaultHeight: 48,  // 3 grid cells
     description: "A single register showing its label and value on hover",
-    // Register: data on left, output on right, control signals on top
     portConfig: {
       defaultInputSide: "left",
       defaultOutputSide: "right",
       ports: {
-        "writeEnable": { side: "top", offset: 50 },  // Control signal → top
+        "writeEnable": { side: "top", offset: 50 },
+      },
+    },
+  },
+  {
+    type: "PipelineRegister",
+    label: "Pipeline Register",
+    namePrefix: "PREG",
+    icon: "\u{1F4C1}",
+    defaultWidth: 144,
+    defaultHeight: 48,
+    description: "Pipeline latch (A/B) — only captures GPR output during READREG states",
+    portConfig: {
+      defaultInputSide: "left",
+      defaultOutputSide: "right",
+      ports: {
+        "writeEnable": { side: "top", offset: 50 },
       },
     },
   },

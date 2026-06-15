@@ -249,7 +249,8 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
     let newObj: SimulatorObject | null = null;
 
     switch (type) {
-      case "Register": {
+      case "Register":
+      case "PipelineRegister": {
         const bitWidth = typeof meta?.bitWidth === "number" ? meta.bitWidth : 16;
         const hasWriteEnable = typeof meta?.hasWriteEnable === "boolean" ? meta.hasWriteEnable : true;
         newObj = new Register(id, label, bitWidth, 0, hasWriteEnable);
@@ -314,10 +315,11 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
           if (existingObj instanceof CPU) continue;
           if (!isClockable(existingObj)) continue;
 
-          const inferredType = inferComponentType(existingObj);
-          const customSteps = layoutById.get(existingId)?.tickSteps as CpuState[] | undefined;
-          const customOrder = layoutById.get(existingId)?.tickOrderByState as Partial<Record<CpuState, number>> | undefined;
-          newObj.registerComponent(existingId, inferredType, existingObj, customSteps, customOrder);
+          const layoutComp = layoutById.get(existingId);
+          const resolvedType = layoutComp?.type ?? inferComponentType(existingObj);
+          const customSteps = layoutComp?.tickSteps as CpuState[] | undefined;
+          const customOrder = layoutComp?.tickOrderByState as Partial<Record<CpuState, number>> | undefined;
+          newObj.registerComponent(existingId, resolvedType, existingObj, customSteps, customOrder);
         }
       }
       

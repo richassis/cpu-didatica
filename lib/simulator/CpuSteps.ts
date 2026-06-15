@@ -24,6 +24,12 @@ export const DEFAULT_TICK_STEPS: Record<string, CpuState[]> = {
     CpuState.WRITEPC,  // PC updated on jumps
   ],
 
+  // Pipeline registers (A, B) latch GPR outputs only during READREG states
+  PipelineRegister: [
+    CpuState.READREG1,
+    CpuState.READREG2,
+  ],
+
   // GPR ticks on read and write operations
   GprComponent: [
     CpuState.READREG1,

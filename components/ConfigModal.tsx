@@ -185,7 +185,7 @@ export default function ConfigModal({ component, onClose }: Props) {
       config.numInputs !== currentNumInputs;
 
     const registerNeedsRecreate =
-      component.type === "Register" &&
+      (component.type === "Register" || component.type === "PipelineRegister") &&
       nextHasWriteEnable !== currentHasWriteEnable;
 
     const needsRecreate = muxNeedsRecreate || registerNeedsRecreate;

@@ -70,7 +70,7 @@ export default function MuxComponent({ component, zoom }: Props) {
     H * (i + 1) / (numInputs + 1)
   );
 
-  const clampedSel = Math.min(sel, numInputs - 1);
+  const clampedSel = Math.max(0, Math.min(sel, numInputs - 1));
   const selY = inputYs[clampedSel] ?? outputY;
 
   // ── Colors ──────────────────────────────────────────────────────

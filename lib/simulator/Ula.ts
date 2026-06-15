@@ -175,7 +175,8 @@ export class Ula implements Clockable, Connectable {
 
     // Mask to bitWidth and update flags
     const result = this.clamp(raw & this.max);
-    const carry = raw > this.max || raw < 0 ? 1 : 0;
+    // Carry only applies to arithmetic operations — bitwise ops (AND, OR, NOT) never overflow
+    const carry = (op === UlaOperation.ADD || op === UlaOperation.SUB) && (raw > this.max || raw < 0) ? 1 : 0;
     const zero = result === 0 ? 1 : 0;
     const negative = (result & (1 << (this.bitWidth - 1))) !== 0 ? 1 : 0;
 

@@ -17,6 +17,14 @@ export class Register implements Clockable, Connectable {
   /** Whether this register exposes a write-enable input port */
   readonly hasWriteEnable: boolean;
 
+  /**
+   * When false, commit() is a no-op — the register holds its last value.
+   * Set by the CPU on pipeline registers (A, B) so they only latch during
+   * READREG states instead of on every tick.
+   * Defaults to true so all other registers work without change.
+   */
+  private _writeActive = true;
+
   // ── Ports ────────────────────────────────────────────────────
 
   /** Input: value to latch into the register. */
@@ -58,6 +66,10 @@ export class Register implements Clockable, Connectable {
       "value", "number", bitWidth, this.clamp(initialValue),
       "Current register value"
     );
+  }
+
+  setWriteActive(active: boolean): void {
+    this._writeActive = active;
   }
 
   // ── Connectable interface ────────────────────────────────────
@@ -119,9 +131,10 @@ export class Register implements Clockable, Connectable {
   }
 
   /**
-   * Sequential phase: latch data when write-enable is high.
+   * Sequential phase: latch data when write-enable is high and write is active.
    */
   commit(): void {
+    if (!this._writeActive) return;
     if (!this.in_writeEnable || this.in_writeEnable.value !== 0) {
       this.out_value.set(this.clamp(this.in_data.value));
     }

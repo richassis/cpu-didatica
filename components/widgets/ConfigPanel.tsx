@@ -207,6 +207,7 @@ export function ConfigPanelForType({
     case "UlaComponent":
       return <UlaComponentConfigPanel {...props} />;
     case "Register":
+    case "PipelineRegister":
       return <RegisterComponentConfigPanel {...props} />;
     case "MuxComponent":
       return <MuxComponentConfigPanel {...props} />;
