@@ -1,322 +1,215 @@
 "use client";
-
 import { useState, useRef } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { useLayoutStore, Props } from "@/lib/store";
+import type { CSSProperties } from "react";
+import { Props } from "@/lib/store";
 import { useRevealState, revealStyle } from "@/lib/useRevealState";
 import { useSimulatorStore } from "@/lib/simulatorStore";
-import { useDisplayStore, formatNum } from "@/lib/displayStore";
-import React from "react";
+import { useDisplayStore, formatNum, type NumericBase } from "@/lib/displayStore";
 import ConfigModal from "@/components/ConfigModal";
 import PortsOverlay from "@/components/PortsOverlay";
 
-function addrHex(addr: number, addrBits: number): string {
-  const digits = Math.ceil(addrBits / 4);
-  return "0x" + addr.toString(16).toUpperCase().padStart(digits, "0");
-}
+const WINDOW = 3; // rows above and below active address
 
-type ViewMode = "data" | "ports";
+function fmtAddr(addr: number, addrBits: number) {
+  return "0x" + addr.toString(16).toUpperCase().padStart(Math.ceil(addrBits / 4), "0");
+}
 
 export default function MemoryComponent({ component, zoom }: Props) {
   const { id, x, y, w, h, label } = component;
   const revealStatus = useRevealState(id);
-  const removeComponent = useLayoutStore((s) => s.removeComponent);
   const [configOpen, setConfigOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>("data");
 
-  const revision  = useSimulatorStore((s) => s.revision);
-  const mem       = useSimulatorStore((s) => s.getMemory(id));
+  const revision = useSimulatorStore((s) => s.revision);
+  const mem = useSimulatorStore((s) => s.getMemory(id));
   const pokeMemory = useSimulatorStore((s) => s.pokeMemory);
-  const base      = useDisplayStore((s) => s.numericBase);
+  const base = useDisplayStore((s) => s.numericBase);
   void revision;
 
-  const wordCount  = mem?.wordCount ?? 256;
-  const bitWidth   = mem?.bitWidth  ?? 16;
-  const addrBits   = Math.max(1, Math.ceil(Math.log2(wordCount)));
-  const addr       = mem ? mem.in_addr.value  : 0;
-  const rdMem      = mem ? mem.in_rdMem.value : 0;
-  const wrMem      = mem ? mem.in_wrMem.value : 0;
-  const dataIn     = mem ? mem.in_data.value  : 0;
-  const dataOut    = mem ? mem.output         : 0;
+  const wordCount = mem?.wordCount ?? 256;
+  const bitWidth = mem?.bitWidth ?? 16;
+  const addrBits = Math.max(1, Math.ceil(Math.log2(wordCount)));
+  const addr = mem?.in_addr.value ?? 0;
+  const rdMem = (mem?.in_rdMem.value ?? 0) !== 0;
+  const wrMem = (mem?.in_wrMem.value ?? 0) !== 0;
+  const dataIn = mem?.in_data.value ?? 0;
+  const dataOut = mem?.output ?? 0;
+  const accessing = rdMem || wrMem;
+  const isRevealed = revealStatus === "revealed";
 
-  const addrFmt   = addrHex(addr, addrBits);
-  const dataInFmt = formatNum(dataIn,  base, bitWidth);
-  const dataOutFmt= formatNum(dataOut, base, bitWidth);
+  // Sliding window indices
+  const startIdx = Math.max(0, addr - WINDOW);
+  const endIdx = Math.min(wordCount - 1, addr + WINDOW);
+  const windowRows = Array.from({ length: endIdx - startIdx + 1 }, (_, i) => startIdx + i);
 
-  const { attributes, listeners, setNodeRef, transform, isDragging } =
-    useDraggable({ id });
-
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id });
   const correctedTransform = transform
     ? { ...transform, x: transform.x / zoom, y: transform.y / zoom }
     : null;
-
-  const style: React.CSSProperties = {
-    position: "absolute",
-    left: x,
-    top: y,
-    width: w,
-    height: h,
+  const style: CSSProperties = {
+    position: "absolute", left: x, top: y, width: w, height: h,
     transform: CSS.Translate.toString(correctedTransform),
-    zIndex: isDragging ? 50 : 10,
-    touchAction: "none",
+    zIndex: isDragging ? 50 : 10, touchAction: "none",
   };
 
-  // Active-access highlight colour
-  const accessing = rdMem !== 0 || wrMem !== 0;
-  const borderCls = isDragging
-    ? "border-amber-400"
-    : wrMem !== 0
-    ? "border-orange-500"
-    : rdMem !== 0
-    ? "border-amber-400"
-    : "border-amber-700/60";
+  const borderCls = isDragging ? "border-amber-400"
+    : isRevealed && accessing ? "border-amber-500/80"
+    : isRevealed ? "border-amber-700/60"
+    : "border-amber-900/40";
 
   return (
     <>
       <div
         ref={setNodeRef}
         style={{ ...style, ...revealStyle(revealStatus) }}
-        {...listeners}
-        {...attributes}
+        {...listeners} {...attributes}
         data-draggable
-        className={`select-none cursor-grab active:cursor-grabbing relative rounded-xl border-2 ${
-          accessing ? "shadow-lg shadow-amber-900/40" : ""
-        } ${borderCls} bg-gray-950/90`}
+        className={`select-none cursor-grab active:cursor-grabbing relative rounded-xl overflow-hidden flex flex-col
+          border transition-all duration-200 bg-[#0a0a14] ${borderCls}`}
         onDoubleClick={(e) => { e.stopPropagation(); setConfigOpen(true); }}
       >
-        {/* ── Header ── */}
-        <div className="flex items-center justify-between px-2 py-1 bg-amber-900/70 border-b border-amber-700/40">
-          <span className="text-[11px] font-bold text-amber-200 truncate leading-none">
-            {label}
-          </span>
+        {/* Header */}
+        <div className={`shrink-0 flex items-center justify-between px-2 py-1.5 border-b
+          ${isRevealed && accessing ? "bg-amber-900/50 border-amber-700/40" : "bg-amber-950/50 border-amber-900/20"}`}
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold text-amber-400/80 tracking-widest uppercase font-mono">{label}</span>
+            {rdMem && <span className="text-[9px] font-bold text-amber-300 bg-amber-800/60 border border-amber-600/40 rounded px-1.5 leading-4">RD</span>}
+            {wrMem && <span className="text-[9px] font-bold text-orange-200 bg-orange-800/60 border border-orange-600/40 rounded px-1.5 leading-4">WR</span>}
+          </div>
           <div className="flex items-center gap-1">
-            {/* Toggle view mode */}
             <button
               onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => { e.stopPropagation(); setViewMode(viewMode === "data" ? "ports" : "data"); }}
-              className={`text-[9px] leading-none px-1.5 py-0.5 rounded transition-colors ${
-                viewMode === "ports"
-                  ? "bg-amber-500 text-black"
-                  : "text-amber-300/60 hover:text-amber-100"
-              }`}
-              title={viewMode === "data" ? "Show I/O ports" : "Show memory data"}
-            >
-              {viewMode === "data" ? "I/O" : "MEM"}
-            </button>
-            {/* Edit mode button - only show in data view */}
-            {viewMode === "data" && (
-              <button
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={(e) => { e.stopPropagation(); setEditMode((v) => !v); }}
-                className={`text-[10px] leading-none px-1 rounded transition-colors ${
-                  editMode
-                    ? "bg-amber-500 text-black"
-                    : "text-amber-300/50 hover:text-amber-100"
-                }`}
-                aria-label={editMode ? "Exit edit mode" : "Edit memory cells"}
-                title={editMode ? "Exit edit mode" : "Edit memory cells"}
-              >✏</button>
-            )}
+              onClick={(e) => { e.stopPropagation(); setEditMode((v) => !v); }}
+              className={`text-[10px] leading-none px-1 rounded transition-colors ${editMode ? "bg-amber-500 text-black" : "text-amber-400/40 hover:text-amber-200"}`}
+              title={editMode ? "Exit edit" : "Edit all cells"}
+            >✏</button>
             <button
               onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => { e.stopPropagation(); removeComponent(id); }}
-              className="text-amber-300/50 hover:text-white text-[10px] leading-none ml-1"
-              aria-label="Remove"
-            >✕</button>
+              onClick={(e) => { e.stopPropagation(); setConfigOpen(true); }}
+              className="text-amber-600/40 hover:text-amber-300 text-[9px] leading-none"
+            >⚙</button>
           </div>
         </div>
 
-        {/* ── Body ── */}
-        {viewMode === "ports" ? (
-          /* Port I/O view */
-          <div className="flex flex-col gap-1.5 px-2 py-2 text-[10px] font-mono" style={{ height: Math.max(0, (h || 192) - 28) }}>
-            {/* RD/WR badges */}
-            <div className="flex items-center justify-center gap-2 mb-1">
-              <span className={`text-[9px] font-mono px-2 py-0.5 rounded ${
-                rdMem ? "bg-amber-500 text-black font-bold" : "bg-gray-700 text-gray-400"
-              }`}>RD</span>
-              <span className={`text-[9px] font-mono px-2 py-0.5 rounded ${
-                wrMem ? "bg-orange-500 text-black font-bold" : "bg-gray-700 text-gray-400"
-              }`}>WR</span>
-            </div>
-
-            {/* Address */}
-            <div className="flex items-center justify-between">
-              <span className="text-amber-400/70 uppercase tracking-wide text-[9px]">addr</span>
-              <span className="text-amber-100 bg-amber-900/50 rounded px-1 py-px">
-                {addrFmt}
-              </span>
-            </div>
-
-            {/* Data-in */}
-            <div className="flex items-center justify-between">
-              <span className="text-orange-400/70 uppercase tracking-wide text-[9px]">data in</span>
-              <span className={`rounded px-1 py-px ${
-                wrMem ? "text-orange-100 bg-orange-900/60" : "text-gray-500 bg-gray-800/60"
-              }`}>
-                {dataInFmt}
-              </span>
-            </div>
-
-            {/* Data-out */}
-            <div className="flex items-center justify-between">
-              <span className="text-amber-300/70 uppercase tracking-wide text-[9px]">data out</span>
-              <span className={`rounded px-1 py-px ${
-                rdMem ? "text-amber-100 bg-amber-800/70 font-bold" : "text-gray-500 bg-gray-800/60"
-              }`}>
-                {dataOutFmt}
-              </span>
-            </div>
-
-            {/* Current cell preview */}
-            <div className="flex-1 flex flex-col justify-center">
-              <div className="text-[9px] text-gray-500 text-center mb-1">Cell @ {addrFmt}</div>
-              <div className={`text-center text-sm font-mono rounded py-1 ${
-                accessing ? "bg-amber-900/50 text-amber-100" : "bg-gray-800/50 text-gray-400"
-              }`}>
-                {formatNum(mem?.peek(addr) ?? 0, base, bitWidth)}
-              </div>
-            </div>
-
-            {/* Capacity footer */}
-            <div className="flex justify-between text-[8px] text-gray-600 border-t border-gray-800 pt-1">
-              <span>{wordCount} words</span>
-              <span>{bitWidth}b</span>
-            </div>
-          </div>
-        ) : editMode ? (
-          /* Edit mode: scrollable table of all cells */
+        {editMode ? (
+          /* Full edit table */
           <div
-            className="overflow-y-auto px-2 py-1.5 text-[10px] font-mono"
-            style={{ height: Math.max(0, (h || 192) - 28) }}
+            className="flex-1 overflow-y-auto px-1.5 py-1"
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex flex-col gap-px">
-              {Array.from({ length: wordCount }).map((_, a) => (
-                <MemoryCellRow
-                  key={a}
-                  addr={a}
-                  value={mem?.peek(a) ?? 0}
-                  bitWidth={bitWidth}
-                  addrBits={addrBits}
-                  base={base}
-                  isActive={a === addr}
-                  onPoke={(a2, v) => pokeMemory(id, a2, v)}
-                />
-              ))}
-            </div>
+            {Array.from({ length: wordCount }).map((_, a) => (
+              <EditRow
+                key={a}
+                addr={a}
+                value={mem?.peek(a) ?? 0}
+                bitWidth={bitWidth}
+                addrBits={addrBits}
+                base={base}
+                isActive={a === addr}
+                onPoke={(a2, v) => pokeMemory(id, a2, v)}
+              />
+            ))}
           </div>
         ) : (
-          /* Default data view: GPR-like layout showing addresses and values */
-          <div className="flex flex-col overflow-y-auto" style={{ height: Math.max(0, (h || 192) - 28) }}>
-            <div className="flex flex-col gap-px px-2 py-1.5">
-              {Array.from({ length: wordCount }).map((_, a) => (
-                <MemoryDataRow
-                  key={a}
-                  addr={a}
-                  value={mem?.peek(a) ?? 0}
-                  bitWidth={bitWidth}
-                  addrBits={addrBits}
-                  base={base}
-                  isActive={a === addr && accessing}
-                />
-              ))}
+          <>
+            {/* Sliding window table */}
+            <div className="flex-1 flex flex-col justify-center px-1.5 py-1 gap-px">
+              {startIdx > 0 && (
+                <div className="text-center text-[8px] text-gray-700 font-mono py-0.5">↑ {startIdx} above</div>
+              )}
+              {windowRows.map((a) => {
+                const isActive = a === addr;
+                const val = mem?.peek(a) ?? 0;
+                return (
+                  <div
+                    key={a}
+                    className={`flex items-center gap-2 px-1.5 rounded transition-colors duration-100
+                      ${isActive
+                        ? wrMem
+                          ? "bg-orange-900/40 py-[5px]"
+                          : rdMem
+                          ? "bg-amber-900/40 py-[5px]"
+                          : "bg-amber-900/20 py-[5px]"
+                        : "py-[2px]"
+                      }`}
+                  >
+                    {isActive && (
+                      <span className={`text-[9px] font-bold leading-none shrink-0 ${wrMem ? "text-orange-400" : "text-amber-400"}`}>▶</span>
+                    )}
+                    <span className={`font-mono shrink-0 ${isActive ? "text-[11px] text-amber-300 font-semibold" : "text-[10px] text-gray-600"}`}>
+                      {fmtAddr(a, addrBits)}
+                    </span>
+                    <span className={`flex-1 text-right font-mono ${isActive ? "text-[13px] font-bold text-amber-100" : "text-[10px] text-gray-500"}`}>
+                      {formatNum(val, base, bitWidth)}
+                    </span>
+                  </div>
+                );
+              })}
+              {endIdx < wordCount - 1 && (
+                <div className="text-center text-[8px] text-gray-700 font-mono py-0.5">↓ {wordCount - 1 - endIdx} below</div>
+              )}
             </div>
-          </div>
+
+            {/* Data flow footer */}
+            <div className={`shrink-0 border-t px-2 py-1.5 flex items-center gap-1.5
+              ${isRevealed && accessing ? "border-amber-800/50 bg-amber-950/40" : "border-gray-800/50"}`}
+            >
+              <span className="text-[9px] font-mono text-gray-600 uppercase tracking-wide shrink-0">
+                {wrMem ? "IN" : "OUT"}
+              </span>
+              <span className={`text-[12px] font-mono font-bold flex-1 text-right
+                ${wrMem ? "text-orange-200" : rdMem ? "text-amber-200" : "text-gray-500"}`}>
+                {wrMem ? formatNum(dataIn, base, bitWidth) : formatNum(dataOut, base, bitWidth)}
+              </span>
+            </div>
+          </>
         )}
-        
-        {/* Port indicators */}
+
         <PortsOverlay componentId={id} />
       </div>
-
-      {configOpen && (
-        <ConfigModal component={component} onClose={() => setConfigOpen(false)} />
-      )}
+      {configOpen && <ConfigModal component={component} onClose={() => setConfigOpen(false)} />}
     </>
   );
 }
 
-/* ─── Memory data row (read-only display) ──────────────────────────────────── */
-
-interface DataRowProps {
-  addr: number;
-  value: number;
-  bitWidth: number;
-  addrBits: number;
-  base: import("@/lib/displayStore").NumericBase;
-  isActive: boolean;
-}
-
-function MemoryDataRow({ addr, value, bitWidth, addrBits, base, isActive }: DataRowProps) {
+// Edit row (full table)
+function EditRow({ addr, value, bitWidth, addrBits, base, isActive, onPoke }: {
+  addr: number; value: number; bitWidth: number; addrBits: number;
+  base: NumericBase; isActive: boolean; onPoke: (a: number, v: number) => void;
+}) {
   const displayed = formatNum(value, base, bitWidth);
-  
-  return (
-    <div className={`flex items-center justify-between py-0.5 px-0.5 rounded ${
-      isActive ? "bg-amber-700/40" : ""
-    }`}>
-      <span className={`text-[9px] font-mono ${isActive ? "text-amber-300 font-semibold" : "text-gray-600"}`}>
-        {addrHex(addr, addrBits)}
-      </span>
-      <span className={`text-[10px] font-mono ${isActive ? "text-amber-100" : "text-gray-400"}`}>
-        {displayed}
-      </span>
-    </div>
-  );
-}
-
-/* ─── Memory cell row for edit mode ──────────────────────────────────── */
-
-interface CellRowProps {
-  addr: number;
-  value: number;
-  bitWidth: number;
-  addrBits: number;
-  base: import("@/lib/displayStore").NumericBase;
-  isActive: boolean;
-  onPoke: (addr: number, value: number) => void;
-}
-
-function MemoryCellRow({ addr, value, bitWidth, addrBits, base, isActive, onPoke }: CellRowProps) {
-  const displayed = formatNum(value, base, bitWidth);
-  const inputRef  = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const [draft, setDraft] = useState<string | null>(null);
 
   function commit(raw: string) {
-    const trimmed = raw.trim();
-    let parsed: number;
-    if (/^0x/i.test(trimmed))      parsed = parseInt(trimmed, 16);
-    else if (/^0b/i.test(trimmed)) parsed = parseInt(trimmed.slice(2), 2);
-    else if (/^0o/i.test(trimmed)) parsed = parseInt(trimmed.slice(2), 8);
-    else                           parsed = parseInt(trimmed, 10);
-    if (!isNaN(parsed)) onPoke(addr, parsed);
+    const t = raw.trim();
+    let p = /^0x/i.test(t) ? parseInt(t, 16) : /^0b/i.test(t) ? parseInt(t.slice(2), 2) : /^0o/i.test(t) ? parseInt(t.slice(2), 8) : parseInt(t, 10);
+    if (!isNaN(p)) onPoke(addr, p);
     setDraft(null);
   }
 
   return (
-    <div className={`flex items-center gap-1 py-px px-0.5 rounded ${
-      isActive ? "bg-amber-700/40" : ""
-    }`}>
-      <span className={`shrink-0 text-[9px] ${isActive ? "text-amber-300" : "text-gray-600"}`}>
-        {addrHex(addr, addrBits)}
+    <div className={`flex items-center gap-1 py-px px-0.5 rounded ${isActive ? "bg-amber-900/30" : ""}`}>
+      <span className={`shrink-0 text-[9px] font-mono w-10 ${isActive ? "text-amber-300" : "text-gray-600"}`}>
+        {fmtAddr(addr, addrBits)}
       </span>
       <input
         ref={inputRef}
         type="text"
-        className={`flex-1 min-w-0 rounded text-[9px] font-mono px-1 py-px focus:outline-none
-                    border ${isActive
-                      ? "bg-amber-900/60 border-amber-600/60 text-amber-100 focus:border-amber-400"
-                      : "bg-gray-800/60 border-gray-700/40 text-gray-300 focus:border-gray-500"
-                    }`}
+        className={`flex-1 min-w-0 rounded text-[10px] font-mono px-1 py-px focus:outline-none border
+          ${isActive ? "bg-amber-900/50 border-amber-600/50 text-amber-100 focus:border-amber-400"
+            : "bg-gray-800/50 border-gray-700/30 text-gray-300 focus:border-gray-500"}`}
         value={draft ?? displayed}
         onFocus={() => setDraft(draft ?? displayed)}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={(e) => commit(e.target.value)}
         onKeyDown={(e) => {
           e.stopPropagation();
-          if (e.key === "Enter")  { commit((e.target as HTMLInputElement).value); inputRef.current?.blur(); }
+          if (e.key === "Enter") { commit((e.target as HTMLInputElement).value); inputRef.current?.blur(); }
           if (e.key === "Escape") { setDraft(null); inputRef.current?.blur(); }
         }}
       />

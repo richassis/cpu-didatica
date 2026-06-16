@@ -64,8 +64,6 @@ export default function MuxComponent({ component, zoom }: Props) {
   const outputY = H * 0.5;
 
   // Match getPortOffset exactly: (i + 1) / (count + 1) * H
-  // `sel` is on the top side, so only in_0…in_N sit on the left —
-  // this ensures routing lines originate from the exact port dot positions.
   const inputYs: number[] = Array.from({ length: numInputs }, (_, i) =>
     H * (i + 1) / (numInputs + 1)
   );
@@ -75,11 +73,10 @@ export default function MuxComponent({ component, zoom }: Props) {
 
   // ── Colors ──────────────────────────────────────────────────────
   const ACTIVE  = "#22d3ee"; // cyan-400
-  const DIM     = "#1f2937"; // gray-800 — very dim inactive lines
+  const DIM     = "#1f2937"; // gray-800
   const RAIL_C  = "#374151"; // gray-700
 
   const glowId  = `mux-glow-${id}`;
-  const bgId    = `mux-bg-${id}`;
   const clipId  = `mux-clip-${id}`;
 
   return (
@@ -107,12 +104,10 @@ export default function MuxComponent({ component, zoom }: Props) {
           style={{ overflow: "visible" }}
         >
           <defs>
-            {/* Glow for active elements */}
             <filter id={glowId} x="-80%" y="-80%" width="260%" height="260%">
               <feGaussianBlur stdDeviation="3" result="blur" />
               <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
             </filter>
-            {/* Strong glow for the selector dot */}
             <filter id={`${glowId}-dot`} x="-150%" y="-150%" width="400%" height="400%">
               <feGaussianBlur stdDeviation="4" result="blur" />
               <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
@@ -120,14 +115,10 @@ export default function MuxComponent({ component, zoom }: Props) {
             <clipPath id={clipId}>
               <polygon points={trapPoints} />
             </clipPath>
-            <linearGradient id={bgId} x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#0f172a" />
-              <stop offset="100%" stopColor="#1e1b4b" />
-            </linearGradient>
           </defs>
 
           <g clipPath={`url(#${clipId})`}>
-            {/* Subtle grid / panel lines for depth */}
+            {/* Subtle panel lines */}
             {inputYs.map((iy, i) => (
               <line key={`panel-${i}`}
                 x1={0} y1={iy} x2={railX - 2} y2={iy}
@@ -141,7 +132,6 @@ export default function MuxComponent({ component, zoom }: Props) {
               x2={railX} y2={inputYs[numInputs - 1] + 2}
               stroke={RAIL_C} strokeWidth={2} strokeLinecap="round"
             />
-            {/* Rail end caps */}
             <circle cx={railX} cy={inputYs[0]}             r={3} fill={RAIL_C} />
             <circle cx={railX} cy={inputYs[numInputs - 1]} r={3} fill={RAIL_C} />
 
@@ -159,7 +149,7 @@ export default function MuxComponent({ component, zoom }: Props) {
               );
             })}
 
-            {/* ── Active output path: rail junction → output ── */}
+            {/* ── Active output path ── */}
             <line
               x1={railX} y1={selY}
               x2={W - 2} y2={outputY}
@@ -167,7 +157,7 @@ export default function MuxComponent({ component, zoom }: Props) {
               filter={`url(#${glowId})`}
             />
 
-            {/* ── Selector dot on rail (CSS-animated y-position) ── */}
+            {/* ── Selector dot on rail ── */}
             <circle
               cx={railX} cy={0} r={6}
               fill={ACTIVE}
@@ -178,7 +168,6 @@ export default function MuxComponent({ component, zoom }: Props) {
                 transition: "transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)",
               }}
             />
-            {/* Inner highlight on selector dot */}
             <circle
               cx={railX} cy={0} r={2.5}
               fill="white" opacity={0.7}
@@ -196,7 +185,6 @@ export default function MuxComponent({ component, zoom }: Props) {
             stroke={isDragging ? "#818cf8" : "#4338ca"}
             strokeWidth={isDragging ? 2 : 1.5}
           />
-          {/* Subtle inner bevel */}
           <polygon
             points={`2,2 ${W - 1},${inset + 2} ${W - 1},${H - inset - 2} 2,${H - 2}`}
             fill="none"
@@ -206,54 +194,34 @@ export default function MuxComponent({ component, zoom }: Props) {
           />
         </svg>
 
-        {/* ── Input value labels (HTML, left side) ── */}
-        {inputYs.map((iy, i) => {
-          const active = clampedSel === i;
-          const val = formatNum(inputValues[i] ?? 0, base, bitWidth);
-          return (
-            <div
-              key={`lbl-${i}`}
-              className="absolute pointer-events-none select-none"
-              style={{ top: iy, left: 5, transform: "translateY(-50%)" }}
-            >
-              <span className={`text-[7px] font-mono leading-none block ${
-                active ? "text-cyan-300 font-semibold" : "text-gray-600"
-              }`}>
-                {val}
-              </span>
-            </div>
-          );
-        })}
-
-        {/* ── Output value badge (right side) ── */}
+        {/* ── Output value badge (inside trapezoid, above output wire) ── */}
         <div
           className="absolute pointer-events-none"
-          style={{ top: "50%", right: 5, transform: "translateY(-50%)" }}
+          style={{ top: "14%", right: 6, transform: "translateY(-50%)" }}
         >
-          <span className="text-[7px] font-mono font-semibold text-cyan-100 bg-indigo-900/80 border border-indigo-500/40 rounded px-1 py-px leading-none whitespace-nowrap">
+          <span className="text-[10px] font-mono font-semibold text-cyan-100 bg-indigo-900/80 border border-indigo-500/40 rounded px-1 py-px leading-none whitespace-nowrap">
             {resultFmt}
           </span>
         </div>
 
         {/* ── Header: label + SEL + remove ── */}
         <div className="absolute top-0 left-0 right-0 flex items-start justify-between px-1 pt-0.5 pointer-events-none z-10">
-          <span className="text-[7px] font-bold text-indigo-300/70 uppercase tracking-wider leading-none">
+          <span className="text-[10px] font-bold text-indigo-300/70 uppercase tracking-wider leading-none">
             {label || "MUX"}
           </span>
           <div className="flex items-center gap-1">
-            <span className="text-[7px] font-mono text-indigo-400/60 leading-none">
+            <span className="text-[10px] font-mono text-indigo-400/60 leading-none">
               s={clampedSel}
             </span>
             <button
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => { e.stopPropagation(); removeComponent(id); }}
-              className="pointer-events-auto text-indigo-400/40 hover:text-white text-[8px] leading-none"
+              className="pointer-events-auto text-indigo-400/40 hover:text-white text-[10px] leading-none"
               aria-label="Remove"
             >✕</button>
           </div>
         </div>
 
-        {/* Port indicators */}
         <PortsOverlay componentId={id} />
       </div>
 
