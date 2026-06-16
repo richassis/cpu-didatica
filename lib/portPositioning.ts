@@ -11,6 +11,8 @@ export interface PortConfig {
   side: PortSide;
   /** Position offset percentage (0-100). If undefined, will be auto-calculated based on port index */
   offset?: number;
+  /** When true, the port dot is not rendered (wire connections still work). */
+  hidden?: boolean;
 }
 
 /**

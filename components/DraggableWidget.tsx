@@ -2,8 +2,8 @@
 
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { useLayoutStore, ComponentInstance } from "@/lib/store";
-import React, { useState, useEffect } from "react";
+import { ComponentInstance } from "@/lib/store";
+import { useState } from "react";
 import ConfigModal from "@/components/ConfigModal";
 
 
@@ -22,8 +22,7 @@ export default function DraggableWidget({
   title,
   children,
 }: Props) {
-  const { id, x, y, w, h, label } = component;
-  const removeComponent = useLayoutStore((s) => s.removeComponent);
+  const { id, x, y, w, h } = component;
   const [configOpen, setConfigOpen] = useState(false);
 
   const { attributes, listeners, setNodeRef, transform, isDragging } =
@@ -54,6 +53,7 @@ export default function DraggableWidget({
         {...listeners}
         {...attributes}
         data-draggable
+        title={title}
         className={`
           select-none rounded-xl border-2 flex flex-col overflow-hidden
           ${isDragging ? "border-indigo-400 shadow-2xl opacity-90" : "border-indigo-600 shadow-lg"}
@@ -68,6 +68,7 @@ export default function DraggableWidget({
           e.stopPropagation();
         }}
       >
+        <div className={`h-1 ${accentClass}`} />
         <div className="flex-1 overflow-hidden">
           {children}
         </div>

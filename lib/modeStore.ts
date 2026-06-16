@@ -1,127 +1,85 @@
 /**
  * modeStore.ts
  *
- * Manages the Edit/Simulation mode state for the CPU simulator.
+ * Manages the Program/Edit mode state for the CPU simulator.
  *
- * EDIT MODE: Full editing capabilities
+ * PROGRAM MODE (default): End-user experience
+ * - Read-only canvas (components cannot be moved, added, or removed)
+ * - Assembly editor active
+ * - Data I/O available
+ * - Execution timeline shown after Run
+ *
+ * EDIT MODE: Developer/instructor experience
+ * - Full editing capabilities
  * - Add, remove, and move components
  * - Create and delete wires
  * - Modify memory and register values
- *
- * SIMULATION MODE: Execution-focused
- * - Cannot add, remove, or move components
- * - Cannot create or delete wires
- * - Can only tick, reset, and observe
- * - Captures state snapshot when entering for reset purposes
  */
 
 import { create } from "zustand";
-import type { ComponentState } from "@/lib/store";
 
-export type SimulatorMode = "edit" | "simulation";
-
-/**
- * Snapshot of all object states at the moment simulation mode was entered.
- * Used for "reset to initial state" functionality.
- */
-export interface SimulationSnapshot {
-  /** Timestamp when snapshot was captured */
-  capturedAt: string;
-  /** Map of object ID → serialized state */
-  objectStates: Record<string, ComponentState>;
-}
+export type SimulatorMode = "program" | "edit";
 
 interface ModeState {
   /** Current simulator mode */
   mode: SimulatorMode;
 
-  /**
-   * Snapshot captured when entering simulation mode.
-   * Used by the reset button to restore initial state.
-   */
-  snapshot: SimulationSnapshot | null;
-
   // ── Actions ──────────────────────────────────────────────────
 
   /**
-   * Enter edit mode.
-   * Clears any stored snapshot since we're back to editing.
+   * Enter program mode (default/end-user view).
+   */
+  enterProgramMode: () => void;
+
+  /**
+   * Enter edit mode (developer/instructor view).
    */
   enterEditMode: () => void;
 
   /**
-   * Enter simulation mode.
-   * Captures a snapshot of current state for reset purposes.
-   *
-   * @param captureSnapshot Function that returns current object states (from simulatorStore)
+   * Check if we're in program mode (convenience helper).
    */
-  enterSimulationMode: (captureSnapshot: () => Map<string, ComponentState>) => void;
-
-  /**
-   * Get the stored snapshot for reset purposes.
-   */
-  getSnapshot: () => SimulationSnapshot | null;
+  isProgramMode: () => boolean;
 
   /**
    * Check if we're in edit mode (convenience helper).
    */
   isEditMode: () => boolean;
-
-  /**
-   * Check if we're in simulation mode (convenience helper).
-   */
-  isSimulationMode: () => boolean;
 }
 
 export const useModeStore = create<ModeState>()((set, get) => ({
-  mode: "edit",
-  snapshot: null,
+  mode: "program",
+
+  enterProgramMode: () => {
+    set({ mode: "program" });
+  },
 
   enterEditMode: () => {
-    set({
-      mode: "edit",
-      snapshot: null,
-    });
+    set({ mode: "edit" });
   },
 
-  enterSimulationMode: (captureSnapshot) => {
-    // Capture current state as the reset point
-    const stateMap = captureSnapshot();
-    const objectStates: Record<string, ComponentState> = {};
-
-    for (const [id, state] of stateMap) {
-      objectStates[id] = state;
-    }
-
-    const snapshot: SimulationSnapshot = {
-      capturedAt: new Date().toISOString(),
-      objectStates,
-    };
-
-    set({
-      mode: "simulation",
-      snapshot,
-    });
-  },
-
-  getSnapshot: () => get().snapshot,
+  isProgramMode: () => get().mode === "program",
 
   isEditMode: () => get().mode === "edit",
-
-  isSimulationMode: () => get().mode === "simulation",
 }));
 
 /**
- * Hook to check if the current mode allows editing.
- * Useful for UI components to conditionally enable/disable features.
+ * Hook to check if the current mode is program mode.
  */
-export function useCanEdit(): boolean {
+export function useIsProgramMode(): boolean {
+  return useModeStore((s) => s.mode === "program");
+}
+
+/**
+ * Hook to check if the current mode allows editing.
+ */
+export function useIsEditMode(): boolean {
   return useModeStore((s) => s.mode === "edit");
 }
 
 /**
- * Hook to check if the current mode allows simulation controls.
+ * @deprecated Use useIsEditMode() instead.
  */
-export function useCanSimulate(): boolean {
-  return useModeStore((s) => s.mode === "simulation");
+export function useCanEdit(): boolean {
+  return useIsEditMode();
 }

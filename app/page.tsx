@@ -7,8 +7,8 @@ import TopBar from "@/components/TopBar";
 import { useProjectStore } from "@/lib/projectStore";
 import { useLayoutStore } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
-import { useExecutionStore } from "@/lib/executionStore";
-import { isDefaultProject } from "@/lib/defaultProject";
+import { useModeStore } from "@/lib/modeStore";
+import { DEFAULT_PROJECT_ID, isDefaultProject } from "@/lib/defaultProject";
 import { enforceOrthogonal, simplifyOrthogonalPath } from "@/lib/wireRouting";
 import type { WireDescriptor } from "@/lib/simulator";
 
@@ -30,11 +30,12 @@ export default function Home() {
   const setComponentTickOrderByState = useSimulatorStore((s) => s.setComponentTickOrderByState);
   const getComponentTickSteps = useSimulatorStore((s) => s.getComponentTickSteps);
   const getComponentTickOrderByState = useSimulatorStore((s) => s.getComponentTickOrderByState);
-  const isProgramMode = useExecutionStore((s) => s.isProgramMode);
+  const mode = useModeStore((s) => s.mode);
 
   const [isHydrated, setIsHydrated] = useState(false);
   const previousActiveTabRef = useRef<string | null>(null);
   const pendingHydrationTabRef = useRef<string | null>(null);
+  const lastDefaultPersistRef = useRef<string | null>(null);
 
   // Wait for hydration
   useEffect(() => {
@@ -209,6 +210,13 @@ export default function Home() {
     const saveState = () => {
       const runtimeWires = getWires();
       const projectWires = useProjectStore.getState().projectData[activeTabId]?.wires ?? [];
+
+      // If runtime wires are empty but project wires exist, skip to avoid wiping wires
+      // during hydration or when a wire restore fails.
+      if (runtimeWires.length === 0 && projectWires.length > 0) {
+        return;
+      }
+
       const nodesById = new Map(projectWires.map((wire) => [wire.id, wire.nodes ?? []]));
 
       const enhancedComponents = layoutComponents.map((component) => {
@@ -232,6 +240,29 @@ export default function Home() {
         wires,
       });
 
+      if (activeTabId === DEFAULT_PROJECT_ID && mode === "edit") {
+        const currentProject = useProjectStore.getState().projectData[activeTabId];
+        if (currentProject) {
+          const payload = {
+            ...currentProject,
+            components: enhancedComponents,
+            wires,
+            updatedAt: new Date().toISOString(),
+          };
+          const serialized = JSON.stringify(payload);
+          if (lastDefaultPersistRef.current !== serialized) {
+            lastDefaultPersistRef.current = serialized;
+            fetch("/api/default-project", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: serialized,
+            }).catch((error) => {
+              console.warn("Failed to persist default project:", error);
+            });
+          }
+        }
+      }
+
       setLayoutState((state) => ({
         ...state,
         wires,
@@ -241,7 +272,7 @@ export default function Home() {
     // Debounced save
     const timeout = setTimeout(saveState, 500);
     return () => clearTimeout(timeout);
-  }, [layoutComponents, activeTabId, isHydrated, updateProjectData, getWires, setLayoutState, getComponentTickSteps, getComponentTickOrderByState]);
+  }, [layoutComponents, activeTabId, isHydrated, updateProjectData, getWires, setLayoutState, getComponentTickSteps, getComponentTickOrderByState, mode]);
 
   if (!isHydrated) {
     return (
@@ -254,7 +285,7 @@ export default function Home() {
   return (
     <div className="flex flex-col flex-1 min-h-0">
       <TopBar />
-      {isProgramMode ? <ProgramModeLayout /> : <SimulatorCanvas />}
+      {mode === "edit" ? <SimulatorCanvas /> : <ProgramModeLayout />}
     </div>
   );
 }

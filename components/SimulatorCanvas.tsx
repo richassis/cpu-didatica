@@ -56,14 +56,12 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
   // Mode state - determines what actions are allowed
   const mode = useModeStore((s) => s.mode);
   const isEditMode = mode === "edit" && !isReadOnly;
-  const getSnapshot = useModeStore((s) => s.getSnapshot);
 
   const executionTick = useExecutionStore((s) => s.currentIndex);
 
   // Clock state
   const tickClock = useSimulatorStore((s) => s.tickClock);
   const resetClock = useSimulatorStore((s) => s.resetClock);
-  const applyObjectStates = useSimulatorStore((s) => s.applyObjectStates);
   const getPrimaryCpu = useSimulatorStore((s) => s.getPrimaryCpu);
   const revision = useSimulatorStore((s) => s.revision);
   void revision;
@@ -401,21 +399,10 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
   };
 
   /**
-   * Handle reset based on current mode:
-   * - Edit mode: Full reset (clear all state)
-   * - Simulation mode: Reset to captured snapshot
+   * Reset the simulation clock.
    */
   const handleReset = () => {
-    if (mode === "simulation") {
-      const snapshot = getSnapshot();
-      if (snapshot) {
-        const stateMap = new Map(Object.entries(snapshot.objectStates));
-        applyObjectStates(stateMap);
-        resetClock();
-      }
-    } else {
-      resetClock();
-    }
+    resetClock();
   };
 
   const handleClear = () => {
@@ -735,7 +722,7 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
             <button
               onClick={handleReset}
               className="w-7 h-7 flex items-center justify-center rounded-full text-gray-400 hover:bg-gray-700 hover:text-white transition-colors"
-              title={mode === "simulation" ? "Reset to initial state" : "Reset clock"}
+              title="Reset clock"
             >↺</button>
             {isHalted && (
               <span className="flex items-center gap-1 text-xs text-red-400 font-semibold">

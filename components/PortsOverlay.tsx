@@ -7,7 +7,6 @@ import { useWireCreationStore } from "@/lib/wireCreationStore";
 import type { HoveredPort } from "@/lib/wireCreationStore";
 import { useDisplayStore } from "@/lib/displayStore";
 import { useModeStore } from "@/lib/modeStore";
-import { useExecutionStore } from "@/lib/executionStore";
 import { getWidgetDefinition } from "@/lib/widgetDefinitions";
 import { findPortPosition, getPortPlacement } from "@/lib/portPositioning";
 import type { PortSide } from "@/lib/portPositioning";
@@ -43,8 +42,8 @@ export default function PortsOverlay({ componentId }: Props) {
 
   const showWiresAndPorts = useDisplayStore((s) => s.showWiresAndPorts);
   const isEditMode = useModeStore((s) => s.mode === "edit");
-  const isProgramMode = useExecutionStore((s) => s.isProgramMode);
-  const isEditableCanvas = isEditMode && !isProgramMode;
+  // Port drag-to-connect is only available in Edit Mode on a non-read-only canvas
+  const isEditableCanvas = isEditMode;
 
   const isCreating = phase === "dragging";
 
@@ -177,6 +176,9 @@ export default function PortsOverlay({ componentId }: Props) {
   return (
     <>
       {ports.map((port) => {
+        // Skip ports explicitly marked hidden in the widget's portConfig.
+        if (portConfig?.ports?.[port.name]?.hidden) return null;
+
         const { side, offset } = getPortPlacement(port.name, port.direction, ports, portConfig);
 
         // During wire creation, check if this port is a valid drop target

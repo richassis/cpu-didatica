@@ -16,19 +16,20 @@ function formatOpcode(opcode: number): string {
 }
 
 export default function ExecutionTimeline() {
-  const snapshots = useExecutionStore((s) => s.snapshots);
+  const frames = useExecutionStore((s) => s.frames);
   const currentIndex = useExecutionStore((s) => s.currentIndex);
   const totalTicks = useExecutionStore((s) => s.totalTicks);
   const canGoBack = useExecutionStore((s) => s.canGoBack);
   const canGoForward = useExecutionStore((s) => s.canGoForward);
+  const executionError = useExecutionStore((s) => s.executionError);
   const goToTick = useExecutionStore((s) => s.goToTick);
   const goToStart = useExecutionStore((s) => s.goToStart);
   const goToEnd = useExecutionStore((s) => s.goToEnd);
   const stepBackward = useExecutionStore((s) => s.stepBackward);
   const stepForward = useExecutionStore((s) => s.stepForward);
-  const exitProgramMode = useExecutionStore((s) => s.exitProgramMode);
+  const exitTimeline = useExecutionStore((s) => s.exitTimeline);
 
-  const currentSnapshot = snapshots[currentIndex];
+  const currentSnapshot = frames[currentIndex]?.postTick;
 
   const stateLabel = useMemo(() => {
     if (!currentSnapshot) return "--";
@@ -110,13 +111,19 @@ export default function ExecutionTimeline() {
           </button>
 
           <button
-            onClick={exitProgramMode}
+            onClick={exitTimeline}
             className="ml-2 h-8 rounded-md border border-red-700/50 bg-red-900/40 px-3 text-xs font-semibold text-red-200 hover:bg-red-900/60"
-            title="Sair do Program Mode"
+            title="Encerrar timeline de execução"
           >
             ✕ Sair
           </button>
         </div>
+
+        {executionError && (
+          <div className="mt-3 rounded-lg border border-amber-700/60 bg-amber-900/30 px-3 py-2 text-xs text-amber-200">
+            {executionError}
+          </div>
+        )}
 
         <div className="mt-3">
           <input

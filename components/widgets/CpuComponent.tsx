@@ -9,6 +9,7 @@ import { useDisplayStore, formatNum } from "@/lib/displayStore";
 import React from "react";
 import ConfigModal from "@/components/ConfigModal";
 import PortsOverlay from "@/components/PortsOverlay";
+import FlagSquares from "@/components/widgets/FlagSquares";
 import { CpuState, CONTROL_SIGNAL_DEFS } from "@/lib/simulator/Cpu";
 import type { CPU } from "@/lib/simulator/Cpu";
 
@@ -245,6 +246,18 @@ export default function CpuComponent({ component, zoom }: Props) {
               ⚙
             </button>
           </div>
+        </div>
+
+        {/* ── Flag inputs (Z/C/N) — inside card, between header and state badges ── */}
+        <div className="shrink-0 px-3 py-1 border-b border-gray-800 flex items-center justify-between gap-2">
+          <span className="text-[9px] text-gray-500 font-mono uppercase">Flags in</span>
+          <FlagSquares
+            flags={[
+              { label: "Z", on: !!cpu && cpu.in_flagZero.value !== 0, title: "Zero flag in" },
+              { label: "C", on: !!cpu && cpu.in_flagCarry.value !== 0, title: "Carry flag in" },
+              { label: "N", on: !!cpu && cpu.in_flagNegative.value !== 0, title: "Negative flag in" },
+            ]}
+          />
         </div>
 
         {/* ── FSM state badges ── */}

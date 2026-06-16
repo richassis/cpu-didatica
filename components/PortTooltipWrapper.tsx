@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 
@@ -24,26 +24,20 @@ export default function PortTooltipWrapper({ componentId, componentLabel, childr
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const objects = useSimulatorStore((s) => s.objects);
   const revision = useSimulatorStore((s) => s.revision);
-  void revision;
-
-  const [ports, setPorts] = useState<PortInfo[]>([]);
-
-  useEffect(() => {
+  const ports = useMemo<PortInfo[]>(() => {
+    void revision;
     const obj = objects.get(componentId);
     if (obj && "getPorts" in obj) {
       const portMap = (obj as { getPorts: () => Record<string, { name: string; direction: string; value: unknown; dataType: string; bitWidth: number | null }> }).getPorts();
-      setPorts(
-        Object.entries(portMap).map(([key, p]) => ({
-          name: key,
-          direction: p.direction as "input" | "output",
-          value: p.value,
-          dataType: p.dataType,
-          bitWidth: p.bitWidth,
-        }))
-      );
-    } else {
-      setPorts([]);
+      return Object.entries(portMap).map(([key, p]) => ({
+        name: key,
+        direction: p.direction as "input" | "output",
+        value: p.value,
+        dataType: p.dataType,
+        bitWidth: p.bitWidth,
+      }));
     }
+    return [];
   }, [componentId, objects, revision]);
 
   const handleMouseEnter = (e: React.MouseEvent) => {

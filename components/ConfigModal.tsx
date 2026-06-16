@@ -65,12 +65,15 @@ export default function ConfigModal({ component, onClose }: Props) {
   const imem = isInstructionMemory ? useSimulatorStore.getState().getInstructionMemory(component.id) : undefined;
   
   // Animation step configuration (kept in tickSteps for backward compatibility)
-  const currentTickSteps = useMemo(() => getComponentTickSteps(component.id) ?? [], [component.id, getComponentTickSteps, revision]);
+  const currentTickSteps = useMemo(() => {
+    void revision;
+    return getComponentTickSteps(component.id) ?? [];
+  }, [component.id, getComponentTickSteps, revision]);
   const [tickSteps, setTickSteps] = useState<CpuState[]>(currentTickSteps);
-  const currentTickOrderByState = useMemo(
-    () => getComponentTickOrderByState(component.id) ?? {},
-    [component.id, getComponentTickOrderByState, revision]
-  );
+  const currentTickOrderByState = useMemo(() => {
+    void revision;
+    return getComponentTickOrderByState(component.id) ?? {};
+  }, [component.id, getComponentTickOrderByState, revision]);
   const [tickOrderByState, setTickOrderByState] = useState<Partial<Record<CpuState, number>>>(currentTickOrderByState);
   
   // Update tickSteps when currentTickSteps changes
@@ -84,6 +87,7 @@ export default function ConfigModal({ component, onClose }: Props) {
   }, [currentTickOrderByState]);
   
   const ports = useMemo(() => {
+    void revision;
     if (!isConnectable) return [];
     const portMap = (obj as { getPorts: () => Record<string, { name: string; direction: string; value: unknown; dataType: string; bitWidth: number | null }> }).getPorts();
     // Use the map KEY (not port.name) so lookups in applyPortValue and Bus stay consistent.

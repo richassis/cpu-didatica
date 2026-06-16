@@ -30,6 +30,20 @@ export default function RootLayout({
         <div className="flex h-screen w-screen overflow-hidden bg-gray-950">
           <main className="flex flex-col flex-1 min-h-0 min-w-0">{children}</main>
         </div>
+        {/* Portal root for tooltips — rendered last in body, paints above every stacking context */}
+        <div
+          id="portal-root"
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: 0,
+            height: 0,
+            overflow: "visible",
+            zIndex: 999999,
+            pointerEvents: "none",
+          }}
+        />
       </body>
     </html>
   );

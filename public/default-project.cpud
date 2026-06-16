@@ -2,7 +2,7 @@
   "id": "default-full-datapath",
   "name": "Full Datapath",
   "createdAt": "2026-04-07T03:40:44.124Z",
-  "updatedAt": "2026-04-23T17:58:30.574Z",
+  "updatedAt": "2026-06-11T23:26:08.593Z",
   "components": [
     {
       "id": "cpu-1",
@@ -398,10 +398,12 @@
         ]
       },
       "tickSteps": [
+        4,
         5,
         6
       ],
       "tickOrderByState": {
+        "4": 1,
         "5": 1,
         "6": 1
       }
@@ -523,34 +525,34 @@
           "out": 2048
         },
         "cells": [
-          2048,
-          2305,
-          6406,
-          2819,
-          3076,
-          3333,
-          8231,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
+          4106,
+          4355,
+          8226,
+          10275,
+          12324,
+          14373,
+          16390,
+          6656,
+          6913,
+          3840,
+          4096,
+          10240,
+          18446,
+          26624,
+          4106,
+          4372,
+          10272,
+          22547,
+          26624,
+          4096,
+          16384,
+          4353,
+          8224,
+          20505,
+          26624,
+          24603,
+          26624,
+          26624,
           0,
           0,
           0,
@@ -912,7 +914,8 @@
         }
       },
       "tickSteps": [
-        2
+        2,
+        4
       ]
     },
     {
@@ -1535,6 +1538,36 @@
       "label": "",
       "visible": true,
       "nodes": []
+    },
+    {
+      "id": "hidden-ula-zero-cpu",
+      "sourceComponentId": "ula-1",
+      "sourcePortName": "zero",
+      "targetComponentId": "cpu-1",
+      "targetPortName": "in_flagZero",
+      "label": "",
+      "visible": false,
+      "nodes": []
+    },
+    {
+      "id": "hidden-ula-carry-cpu",
+      "sourceComponentId": "ula-1",
+      "sourcePortName": "carry",
+      "targetComponentId": "cpu-1",
+      "targetPortName": "in_flagCarry",
+      "label": "",
+      "visible": false,
+      "nodes": []
+    },
+    {
+      "id": "hidden-ula-negative-cpu",
+      "sourceComponentId": "ula-1",
+      "sourcePortName": "negative",
+      "targetComponentId": "cpu-1",
+      "targetPortName": "in_flagNegative",
+      "label": "",
+      "visible": false,
+      "nodes": []
     }
   ],
   "canvasSize": {
@@ -1589,10 +1622,12 @@
       "type": "GprComponent",
       "name": "GPR",
       "tickSteps": [
+        4,
         5,
         6
       ],
       "tickOrderByState": {
+        "4": 1,
         "5": 1,
         "6": 1
       },

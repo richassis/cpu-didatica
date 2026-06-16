@@ -111,6 +111,17 @@ interface SimulatorState {
   /** Monotonically increasing counter bumped by `touch` — forces selector updates. */
   revision: number;
 
+  /**
+   * Monotonically increasing counter bumped once per timeline navigation
+   * (goToTick / displayMask.init). The wire-animation driver keys on this
+   * instead of `revision`, so per-substep reveals (which bump `revision` to
+   * refresh displayed values) do NOT restart the in-flight wire animation.
+   */
+  animationCycle: number;
+
+  /** Bump `animationCycle` to (re)start a single wire-animation pass. */
+  bumpAnimationCycle: () => void;
+
   /** True while a bulk execution loop is running (skip persistence churn). */
   isBatchExecuting: boolean;
 
@@ -213,6 +224,12 @@ interface SimulatorState {
   pokeMemory: (id: string, addr: number, value: number) => void;
 
   /**
+   * Directly write a word into an InstructionMemory cell, bypassing tick logic.
+   * Immediately persists updated state.
+   */
+  pokeInstructionMemory: (id: string, addr: number, value: number) => void;
+
+  /**
    * Directly write a value into a GPR register, bypassing tick logic.
    * Immediately persists updated state.
    */
@@ -223,6 +240,7 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
   objects: new Map<string, SimulatorObject>(),
   bus: new Bus(),
   revision: 0,
+  animationCycle: 0,
   isBatchExecuting: false,
 
   createObject: (id, type, label, meta) => {
@@ -426,6 +444,10 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
 
   touch: () => {
     set((s) => ({ revision: s.revision + 1 }));
+  },
+
+  bumpAnimationCycle: () => {
+    set((s) => ({ animationCycle: s.animationCycle + 1 }));
   },
 
   // ── Clock / CPU-based ticking ──────────────────────────────────
@@ -641,6 +663,15 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
   pokeMemory: (id, addr, value) => {
     const obj = get().objects.get(id);
     if (obj instanceof Memory) {
+      obj.poke(addr, value);
+      set((s) => ({ revision: s.revision + 1 }));
+      getLayoutStore().getState().saveState();
+    }
+  },
+
+  pokeInstructionMemory: (id, addr, value) => {
+    const obj = get().objects.get(id);
+    if (obj instanceof InstructionMemory) {
       obj.poke(addr, value);
       set((s) => ({ revision: s.revision + 1 }));
       getLayoutStore().getState().saveState();

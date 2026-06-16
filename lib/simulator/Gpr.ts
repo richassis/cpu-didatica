@@ -25,6 +25,16 @@ export class Gpr implements Clockable, Connectable {
   readonly bitWidth: number;
   /** Internal register storage */
   private readonly _registers: number[];
+  /**
+   * When false, CPU-driven reads (evaluate / address onChange / write-through)
+   * do NOT refresh out_readDataA/B — the outputs hold their last value.
+   *
+   * The GPR has no real read-enable signal; the CPU sets this true only during
+   * READREG2 so that, visually, the read outputs (and thus registers A and B)
+   * update once per instruction read phase and stay stable in every other state.
+   * Defaults to true so standalone / edit-mode usage reads normally.
+   */
+  private _readActive = true;
 
   // ── Input Ports ──────────────────────────────────────────────
   readonly in_readAddrA: InputPort<number>;
@@ -63,14 +73,25 @@ export class Gpr implements Clockable, Connectable {
     this.out_readDataB = new OutputPort<number>("out_readDataB", "number", bitWidth, 0);
 
     // Wire up combinational read: when address changes, output updates
+    // (only while reads are active — see `_readActive`).
     this.in_readAddrA.onChange = (addr) => {
+      if (!this._readActive) return;
       const idx = this.clampIndex(addr);
       this.out_readDataA.set(this._registers[idx]);
     };
     this.in_readAddrB.onChange = (addr) => {
+      if (!this._readActive) return;
       const idx = this.clampIndex(addr);
       this.out_readDataB.set(this._registers[idx]);
     };
+  }
+
+  /**
+   * Enable/disable CPU-driven read refresh. Set by the CPU each tick so reads
+   * only land during READREG2 (see `_readActive`).
+   */
+  setReadActive(active: boolean): void {
+    this._readActive = active;
   }
 
   // ── Connectable interface ────────────────────────────────────
@@ -156,8 +177,10 @@ export class Gpr implements Clockable, Connectable {
 
   /**
    * Combinational phase: refresh read outputs for current addresses.
+   * No-op while reads are inactive so the outputs hold their last value.
    */
   evaluate(): void {
+    if (!this._readActive) return;
     const readAddrA = this.clampIndex(this.in_readAddrA.get());
     const readAddrB = this.clampIndex(this.in_readAddrB.get());
     this.out_readDataA.set(this._registers[readAddrA]);
@@ -173,11 +196,13 @@ export class Gpr implements Clockable, Connectable {
       const mask = (1 << this.bitWidth) - 1;
       this._registers[addr] = this.in_writeData.get() & mask;
 
-      // Keep outputs coherent when writing into currently selected read registers.
-      if (addr === this.in_readAddrA.get()) {
+      // Keep outputs coherent when writing into currently selected read
+      // registers — but only while reads are active, so A/B stay stable
+      // outside READREG2.
+      if (this._readActive && addr === this.in_readAddrA.get()) {
         this.out_readDataA.set(this._registers[addr]);
       }
-      if (addr === this.in_readAddrB.get()) {
+      if (this._readActive && addr === this.in_readAddrB.get()) {
         this.out_readDataB.set(this._registers[addr]);
       }
     }

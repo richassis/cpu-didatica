@@ -593,7 +593,7 @@ export async function loadProjectFromFile(file: File): Promise<ProjectData> {
         }
         
         resolve(data);
-      } catch (err) {
+      } catch {
         reject(new Error("Failed to parse project file"));
       }
     };
