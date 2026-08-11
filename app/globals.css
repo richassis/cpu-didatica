@@ -471,6 +471,26 @@ body {
   display: none;
 }
 
+/* The tick slider draws no track of its own — the panel paints the rules
+   underneath so they follow the theme. Only the knob is left. */
+.timeline-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--st-active);
+  cursor: pointer;
+}
+.timeline-slider::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border: none;
+  border-radius: 50%;
+  background: var(--st-active);
+  cursor: pointer;
+}
+
 /* Hide scrollbars but keep functionality */
 .scrollbar-hide {
   -ms-overflow-style: none;  /* IE and Edge */

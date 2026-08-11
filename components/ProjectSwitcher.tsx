@@ -135,7 +135,7 @@ export default function ProjectSwitcher() {
       {/* New Project Input Dialog */}
       {showNewProjectInput && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-gray-800 border border-gray-600 rounded-lg p-6 w-96">
+          <div className="w-[420px] rounded-2xl border border-line bg-surface p-6">
             <h3 className="text-lg font-semibold text-white mb-4">Create New Project</h3>
             <input
               type="text"
@@ -146,20 +146,20 @@ export default function ProjectSwitcher() {
                 if (e.key === "Escape") handleCancelNewProject();
               }}
               placeholder="Project name..."
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white mb-4"
+              className="mb-4 h-9 w-full rounded-lg border border-line bg-sunken px-3 text-fg focus:border-line-strong focus:outline-none"
               autoFocus
             />
             <div className="flex gap-2 justify-end">
               <button
                 onClick={handleCancelNewProject}
-                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors"
+                className="rounded-lg border border-line px-3 py-1.5 text-xs text-fg-muted transition-colors hover:border-line-strong hover:text-fg"
               >
                 Cancel
               </button>
               <button
                 onClick={handleConfirmNewProject}
                 disabled={!newProjectName.trim()}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="rounded-lg border border-line-strong bg-raised px-3 py-1.5 text-xs text-fg transition-colors hover:border-st-active disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Create
               </button>
@@ -171,11 +171,11 @@ export default function ProjectSwitcher() {
       {/* Main Dropdown Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded text-white transition-colors"
+        className="flex h-8 items-center gap-2 rounded-lg border border-line px-3 text-xs text-fg-muted transition-colors hover:border-line-strong hover:text-fg"
       >
-        {isDefault && <Star className="w-4 h-4 text-yellow-400" />}
+        {isDefault && <Star className="h-3.5 w-3.5 text-st-warn" />}
         <span className="font-medium">{currentProjectName}</span>
-        {isDirty && <span className="w-2 h-2 bg-orange-400 rounded-full" title="Unsaved changes" />}
+        {isDirty && <span className="h-1.5 w-1.5 rounded-full bg-st-warn" title="Unsaved changes" />}
         <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`} />
       </button>
 
@@ -188,40 +188,40 @@ export default function ProjectSwitcher() {
             onClick={() => setIsOpen(false)}
           />
           
-          <div className="absolute top-full left-0 mt-1 w-64 bg-gray-800 border border-gray-600 rounded-lg shadow-xl z-20 overflow-hidden">
+          <div className="absolute left-0 top-full z-20 mt-1 w-64 overflow-hidden rounded-xl border border-line bg-surface">
             {/* Project List */}
             <div className="max-h-64 overflow-y-auto">
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => handleSwitchProject(tab.id)}
-                  className={`w-full flex items-center gap-2 px-4 py-2 text-left hover:bg-gray-700 transition-colors ${
-                    tab.id === activeTabId ? "bg-gray-700" : ""
+                  className={`w-full flex items-center gap-2 px-4 py-2 text-left hover:bg-raised transition-colors ${
+                    tab.id === activeTabId ? "bg-raised" : ""
                   }`}
                 >
                   {tab.isDefaultProject && (
-                    <Star className="w-4 h-4 text-yellow-400 flex-shrink-0" />
+                    <Star className="h-3.5 w-3.5 flex-shrink-0 text-st-warn" />
                   )}
                   <span className="flex-1 text-white truncate">{tab.name}</span>
                   {tab.id === activeTabId && (
-                    <Check className="w-4 h-4 text-green-400 flex-shrink-0" />
+                    <Check className="h-3.5 w-3.5 flex-shrink-0 text-st-active" />
                   )}
                   {tab.isDirty && (
-                    <span className="w-2 h-2 bg-orange-400 rounded-full flex-shrink-0" />
+                    <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-st-warn" />
                   )}
                 </button>
               ))}
             </div>
 
             {/* Divider */}
-            <div className="border-t border-gray-600" />
+            <div className="border-t border-line" />
 
             {/* Actions */}
             <div className="p-1">
               <button
                 onClick={handleExport}
                 disabled={!activeTabId}
-                className="w-full flex items-center gap-2 px-3 py-2 text-left text-white hover:bg-gray-700 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-fg-muted transition-colors hover:bg-raised hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Save className="w-4 h-4" />
                 <span>Save Project</span>
@@ -229,7 +229,7 @@ export default function ProjectSwitcher() {
 
               <button
                 onClick={handleCreateNew}
-                className="w-full flex items-center gap-2 px-3 py-2 text-left text-white hover:bg-gray-700 rounded transition-colors"
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-fg-muted transition-colors hover:bg-raised hover:text-fg"
               >
                 <Plus className="w-4 h-4" />
                 <span>New Project...</span>
@@ -237,7 +237,7 @@ export default function ProjectSwitcher() {
 
               <button
                 onClick={handleImport}
-                className="w-full flex items-center gap-2 px-3 py-2 text-left text-white hover:bg-gray-700 rounded transition-colors"
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-fg-muted transition-colors hover:bg-raised hover:text-fg"
               >
                 <Upload className="w-4 h-4" />
                 <span>Import Project...</span>
@@ -246,7 +246,7 @@ export default function ProjectSwitcher() {
               <button
                 onClick={handleExport}
                 disabled={!activeTabId}
-                className="w-full flex items-center gap-2 px-3 py-2 text-left text-white hover:bg-gray-700 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-fg-muted transition-colors hover:bg-raised hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Download className="w-4 h-4" />
                 <span>Export Current</span>
@@ -256,7 +256,7 @@ export default function ProjectSwitcher() {
                 <button
                   onClick={handleDelete}
                   disabled={!activeTabId || isDefault}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-left text-red-400 hover:bg-red-900/20 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-st-error transition-colors hover:bg-raised disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Trash2 className="w-4 h-4" />
                   <span>Delete Project</span>

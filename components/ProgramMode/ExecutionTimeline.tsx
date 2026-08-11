@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { ChevronLeft, ChevronRight, SkipBack, SkipForward, X } from "lucide-react";
 import { CpuState, CPU_STATE_LABELS, Opcode, opcodeToMnemonic } from "@/lib/simulator";
 import { useExecutionStore } from "@/lib/executionStore";
 
@@ -12,6 +13,37 @@ function formatOpcode(opcode: number): string {
   }
 }
 
+function TransportButton({
+  onClick,
+  disabled,
+  title,
+  children,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      aria-label={title}
+      className="flex h-8 w-8 items-center justify-center rounded-lg border border-line text-fg-muted transition-colors hover:border-line-strong hover:text-fg disabled:opacity-30 disabled:hover:border-line disabled:hover:text-fg-muted"
+    >
+      {children}
+    </button>
+  );
+}
+
+/**
+ * The tick scrubber.
+ *
+ * The tick counter is the one place on screen entitled to a large number, so
+ * it gets the 32/300 metric size with the total in muted text — the reader is
+ * tracking one figure, not two.
+ */
 export default function ExecutionTimeline() {
   const frames = useExecutionStore((s) => s.frames);
   const currentIndex = useExecutionStore((s) => s.currentIndex);
@@ -40,6 +72,21 @@ export default function ExecutionTimeline() {
 
   const progress = totalTicks > 0 ? (currentIndex / totalTicks) * 100 : 0;
 
+  /**
+   * Phase boundaries as 1px ticks on the track — where the instruction being
+   * executed changes. Without them the slider is an undifferentiated bar and
+   * there is no way to aim at the start of an instruction.
+   */
+  const phaseMarks = useMemo(() => {
+    const marks: number[] = [];
+    for (let i = 1; i < frames.length; i++) {
+      if (frames[i]?.postTick?.opcode !== frames[i - 1]?.postTick?.opcode) {
+        marks.push((i / Math.max(1, totalTicks)) * 100);
+      }
+    }
+    return marks;
+  }, [frames, totalTicks]);
+
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 px-4 pb-3">
       <div
@@ -54,83 +101,83 @@ export default function ExecutionTimeline() {
             stepForward();
           }
         }}
-        className="mx-auto w-full max-w-[1400px] rounded-2xl border border-gray-700 bg-gray-900/95 px-4 py-3 shadow-2xl backdrop-blur focus:outline-none focus:ring-2 focus:ring-cyan-500"
+        className="mx-auto w-full max-w-[1400px] rounded-2xl border border-line bg-surface px-4 py-3 focus:outline-none focus:ring-2 focus:ring-st-active focus:ring-offset-2 focus:ring-offset-canvas"
       >
         <div className="flex items-center gap-2">
-          <button
-            onClick={goToStart}
-            disabled={!canGoBack}
-            className="h-8 rounded-md border border-gray-700 bg-gray-800 px-2 text-xs text-gray-200 hover:bg-gray-700 disabled:opacity-40"
-            title="Ir para o inicio"
-          >
-            |◀
-          </button>
-          <button
-            onClick={stepBackward}
-            disabled={!canGoBack}
-            className="h-8 rounded-md border border-gray-700 bg-gray-800 px-2 text-xs text-gray-200 hover:bg-gray-700 disabled:opacity-40"
-            title="Voltar 1 tick"
-          >
-            ◀
-          </button>
+          <TransportButton onClick={goToStart} disabled={!canGoBack} title="Go to start">
+            <SkipBack size={14} strokeWidth={1.5} />
+          </TransportButton>
+          <TransportButton onClick={stepBackward} disabled={!canGoBack} title="Back one tick">
+            <ChevronLeft size={16} strokeWidth={1.5} />
+          </TransportButton>
 
-          <div className="ml-1 text-sm font-semibold text-gray-100 min-w-[140px] text-center">
-            Tick {currentIndex} / {totalTicks}
+          <div className="ml-2 flex items-baseline gap-1.5">
+            <span className="t-metric num leading-none text-fg">{currentIndex}</span>
+            <span className="num text-fg-muted">/ {totalTicks}</span>
           </div>
 
-          <span className="rounded-md border border-st-active px-2 py-1 text-[11px] font-mono text-st-active">
+          <span className="ml-3 rounded-md border border-st-active px-2 py-1 font-mono text-[11px] text-st-active">
             {stateLabel}
           </span>
 
-          <span className="rounded-md border border-gray-700 bg-gray-800 px-2 py-1 text-[11px] font-mono text-cyan-200">
+          <span className="rounded-md border border-line px-2 py-1 font-mono text-[11px] text-fg-muted">
             {opcodeLabel}
           </span>
 
-          <button
-            onClick={stepForward}
-            disabled={!canGoForward}
-            className="ml-auto h-8 rounded-md border border-gray-700 bg-gray-800 px-2 text-xs text-gray-200 hover:bg-gray-700 disabled:opacity-40"
-            title="Avancar 1 tick"
-          >
-            ▶
-          </button>
-          <button
-            onClick={goToEnd}
-            disabled={!canGoForward}
-            className="h-8 rounded-md border border-gray-700 bg-gray-800 px-2 text-xs text-gray-200 hover:bg-gray-700 disabled:opacity-40"
-            title="Ir para o fim"
-          >
-            ▶|
-          </button>
+          <div className="ml-auto flex items-center gap-2">
+            <TransportButton onClick={stepForward} disabled={!canGoForward} title="Forward one tick">
+              <ChevronRight size={16} strokeWidth={1.5} />
+            </TransportButton>
+            <TransportButton onClick={goToEnd} disabled={!canGoForward} title="Go to end">
+              <SkipForward size={14} strokeWidth={1.5} />
+            </TransportButton>
 
-          <button
-            onClick={exitTimeline}
-            className="ml-2 h-8 rounded-md border border-red-700/50 bg-red-900/40 px-3 text-xs font-semibold text-red-200 hover:bg-red-900/60"
-            title="Encerrar timeline de execução"
-          >
-            ✕ Sair
-          </button>
+            <button
+              onClick={exitTimeline}
+              title="End the execution timeline"
+              className="ml-1 flex h-8 items-center gap-1.5 rounded-lg border border-st-error px-3 text-xs text-st-error transition-colors hover:bg-st-error/10"
+            >
+              <X size={13} strokeWidth={1.5} />
+              Exit
+            </button>
+          </div>
         </div>
 
         {executionError && (
-          <div className="mt-3 rounded-lg border border-amber-700/60 bg-amber-900/30 px-3 py-2 text-xs text-amber-200">
+          <div className="mt-3 rounded-lg border border-st-error px-3 py-2 text-xs text-st-error">
             {executionError}
           </div>
         )}
 
         <div className="mt-3">
-          <input
-            type="range"
-            min={0}
-            max={Math.max(0, totalTicks)}
-            value={Math.min(currentIndex, Math.max(0, totalTicks))}
-            onChange={(event) => goToTick(Number(event.target.value))}
-            className="h-2 w-full cursor-pointer appearance-none rounded-lg bg-gray-700 accent-cyan-500"
-            style={{
-              background: `linear-gradient(to right, rgb(6 182 212) ${progress}%, rgb(55 65 81) ${progress}%)`,
-            }}
-          />
-          <div className="mt-1 flex items-center justify-between text-[10px] text-gray-500">
+          {/* The native range input is transparent and sits on top; the track it
+              would draw is replaced by the two 2px rules underneath, so the
+              filled portion follows the theme instead of a hardcoded gradient. */}
+          <div className="relative h-4">
+            <div className="pointer-events-none absolute inset-x-0 top-1/2 h-0.5 -translate-y-1/2 bg-line" />
+            <div
+              className="pointer-events-none absolute left-0 top-1/2 h-0.5 -translate-y-1/2 bg-st-active"
+              style={{ width: `${progress}%` }}
+            />
+            {phaseMarks.map((left, i) => (
+              <div
+                key={i}
+                className="pointer-events-none absolute top-1/2 h-2 w-px -translate-y-1/2 bg-line-strong"
+                style={{ left: `${left}%` }}
+              />
+            ))}
+            <input
+              type="range"
+              min={0}
+              max={Math.max(0, totalTicks)}
+              value={Math.min(currentIndex, Math.max(0, totalTicks))}
+              onChange={(event) => goToTick(Number(event.target.value))}
+              aria-label="Tick"
+              className="timeline-slider absolute inset-0 w-full cursor-pointer appearance-none bg-transparent"
+            />
+          </div>
+
+          <div className="mt-1 flex items-center justify-between font-mono text-[10px] text-fg-faint">
             <span>0</span>
             <span>{totalTicks}</span>
           </div>

@@ -72,9 +72,9 @@ export default function ProgramModeLayout() {
             aria-orientation="vertical"
             aria-label="Resize assembly panel"
             onPointerDown={handleDragStart}
-            className="absolute right-0 top-0 h-full w-2 cursor-col-resize bg-transparent hover:bg-cyan-500/20"
+            className="absolute right-0 top-0 h-full w-2 cursor-col-resize bg-transparent hover:bg-line-strong"
           >
-            <div className="absolute right-0 top-1/2 h-12 w-[2px] -translate-y-1/2 rounded bg-gray-700" />
+            <div className="absolute right-0 top-1/2 h-12 w-[2px] -translate-y-1/2 rounded bg-line-strong" />
           </div>
         </div>
 

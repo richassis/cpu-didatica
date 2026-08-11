@@ -9,9 +9,30 @@ import { PRESET_PROGRAMS } from "@/lib/presetPrograms";
 // Splits a source line into segments, preserving every character so that the
 // concatenation of all segment.text === rawLine (required for cursor alignment).
 
-type TokenType = "ws" | "label" | "directive" | "mnemonic" | "operand" | "comment";
+type TokenType = "ws" | "label" | "directive" | "mnemonic" | "register" | "literal" | "comment";
 
 interface Token { text: string; type: TokenType }
+
+/**
+ * Canonical register spelling, kept identical to `parseRegister` in
+ * lib/assembler.ts. If the two ever disagree, the editor paints something the
+ * assembler will not accept.
+ */
+const REGISTER_RE = /^[Rr][0-7]$/;
+
+/**
+ * Split the operand run into registers, literals and the punctuation between
+ * them. Every character is preserved, including separators, because the
+ * overlay has to stay glyph-for-glyph aligned with the textarea underneath it.
+ */
+function pushOperands(text: string, tokens: Token[]) {
+  for (const piece of text.split(/([^A-Za-z0-9_]+)/)) {
+    if (!piece) continue;
+    if (/^[^A-Za-z0-9_]+$/.test(piece)) tokens.push({ text: piece, type: "ws" });
+    else if (REGISTER_RE.test(piece)) tokens.push({ text: piece, type: "register" });
+    else tokens.push({ text: piece, type: "literal" });
+  }
+}
 
 function tokenizeLine(line: string): Token[] {
   const tokens: Token[] = [];
@@ -56,7 +77,10 @@ function tokenizeLine(line: string): Token[] {
         while (oe < codeEnd && (line[oe] === " " || line[oe] === "\t")) oe++;
         push(oe, "ws");
         // Operands
-        push(codeEnd, "operand");
+        if (codeEnd > p) {
+          pushOperands(line.slice(p, codeEnd), tokens);
+          p = codeEnd;
+        }
       }
     }
   }
@@ -69,12 +93,13 @@ function tokenizeLine(line: string): Token[] {
 
 // CSS class per token type
 const TOKEN_CLASS: Record<TokenType, string> = {
-  ws:        "",                               // invisible — just whitespace
-  label:     "text-amber-400 font-semibold",
-  directive: "text-violet-400 italic",
-  mnemonic:  "text-cyan-300 font-bold",
-  operand:   "text-gray-200",
-  comment:   "text-emerald-400/80",
+  ws:        "",                    // invisible — whitespace and separators
+  label:     "text-st-warn",
+  directive: "text-fg-muted",
+  mnemonic:  "text-st-data",
+  register:  "text-fg",
+  literal:   "text-st-active",
+  comment:   "text-fg-faint italic",
 };
 
 // ── Highlighted line renderer ─────────────────────────────────────────────────
@@ -98,7 +123,7 @@ function HighlightedLine({ line }: { line: string }) {
 // ── Assembly Panel ────────────────────────────────────────────────────────────
 
 // Shared font / spacing constants — must match between textarea and overlay.
-const FONT_CLASS  = "font-mono text-[11.5px] leading-[1.6]";
+const FONT_CLASS  = "font-mono text-[13px] leading-[1.6]";
 const PAD_CLASS   = "px-2 pt-1 pb-4";
 const GUTTER_W    = 36; // px
 
@@ -141,32 +166,32 @@ export default function AssemblyPanel() {
   const lineCount = lines.length;
 
   return (
-    <aside className="h-full flex flex-col bg-[var(--widget-surface-alt)] border-r border-gray-800 w-full overflow-hidden">
+    <aside className="flex h-full w-full flex-col overflow-hidden border-r border-line bg-surface">
 
       {/* ── Header ── */}
-      <div className="px-4 py-2 border-b border-gray-800 shrink-0 flex items-center justify-between">
-        <h2 className="text-[12px] font-bold text-gray-200 tracking-wide uppercase">Assembly</h2>
+      <div className="flex shrink-0 items-center justify-between border-b border-line px-4 py-2">
+        <h2 className="t-panel text-fg">Assembly</h2>
         {isLocked && (
-          <span className="text-[9px] font-mono text-amber-400/80 border border-amber-500/30 bg-amber-900/20 rounded px-1.5 py-0.5 tracking-wider uppercase">
-            bloqueado
+          <span className="rounded-md border border-st-warn px-1.5 py-0.5 font-mono text-[10px] text-st-warn">
+            locked
           </span>
         )}
       </div>
 
       {/* ── Preset selector ── */}
-      <div className="px-3 py-2 border-b border-gray-800/80 shrink-0">
+      <div className="shrink-0 border-b border-line px-3 py-2">
         <div className="flex items-center gap-2">
-          <label className="text-[10px] text-gray-500 shrink-0 font-mono">Programa:</label>
+          <label className="t-section shrink-0">Program</label>
           <select
             value={activePreset?.id ?? "__custom"}
             onChange={(e) => {
               if (e.target.value !== "__custom") handlePresetChange(e.target.value);
             }}
             disabled={isLocked}
-            className="flex-1 text-[11px] font-mono bg-[var(--widget-surface-alt)] border border-gray-700 rounded px-2 py-0.5 text-gray-200 focus:outline-none focus:border-gray-500 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            className="h-9 flex-1 cursor-pointer rounded-lg border border-line bg-sunken px-2 font-mono text-[11px] text-fg focus:border-line-strong focus:outline-none disabled:cursor-not-allowed disabled:opacity-40"
           >
             {!activePreset && (
-              <option value="__custom" disabled className="text-gray-500">✎ Personalizado</option>
+              <option value="__custom" disabled>Custom</option>
             )}
             {PRESET_PROGRAMS.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
@@ -174,24 +199,24 @@ export default function AssemblyPanel() {
           </select>
         </div>
         {activePreset && (
-          <p className="mt-0.5 text-[10px] text-gray-600 font-mono leading-snug pl-[4.5rem]">
+          <p className="mt-1 text-[11px] leading-snug text-fg-faint">
             {activePreset.description}
           </p>
         )}
       </div>
 
       {/* ── Code Editor (flex-1) ── */}
-      <div className={`flex-1 min-h-0 flex overflow-hidden relative bg-[var(--widget-surface)] transition-opacity duration-200 ${isLocked ? "opacity-60" : ""}`}>
+      <div className={`relative flex min-h-0 flex-1 overflow-hidden bg-sunken transition-opacity duration-200 ${isLocked ? "opacity-60" : ""}`}>
 
         {/* Line number gutter */}
         <div
           ref={gutterRef}
-          className={`shrink-0 overflow-hidden bg-[var(--widget-surface)] border-r border-gray-800/60 text-right select-none ${FONT_CLASS}`}
+          className={`shrink-0 select-none overflow-hidden border-r border-line text-right ${FONT_CLASS}`}
           style={{ width: GUTTER_W, paddingTop: "4px", paddingBottom: "16px", paddingRight: 6 }}
           aria-hidden
         >
           {Array.from({ length: lineCount }, (_, i) => (
-            <div key={i} className="text-gray-600" style={{ lineHeight: "inherit" }}>
+            <div key={i} className="num text-fg-faint" style={{ lineHeight: "inherit" }}>
               {i + 1}
             </div>
           ))}
@@ -225,7 +250,7 @@ export default function AssemblyPanel() {
             autoComplete="off"
             autoCorrect="off"
             className={`absolute inset-0 w-full h-full bg-transparent resize-none focus:outline-none
-              caret-amber-300 overflow-auto whitespace-pre ${FONT_CLASS} ${PAD_CLASS}
+              caret-st-active overflow-auto whitespace-pre ${FONT_CLASS} ${PAD_CLASS}
               ${isLocked ? "cursor-not-allowed" : ""}`}
             style={{ color: "transparent" }}
             aria-label="Assembly source code"
@@ -235,27 +260,27 @@ export default function AssemblyPanel() {
 
       {/* ── Status / errors ── */}
       {(assemblyErrors.length > 0 || isLoaded || !assemblySource.trim()) && (
-        <div className="px-3 py-2 space-y-1.5 shrink-0 border-t border-gray-800/60 bg-[var(--widget-surface)]">
+        <div className="shrink-0 space-y-1.5 border-t border-line px-3 py-2">
           {assemblyErrors.length > 0 && (
-            <div className="rounded border border-red-700/50 bg-red-900/20 px-2 py-1.5 space-y-0.5">
-              <p className="text-[9px] font-bold text-red-400 uppercase tracking-widest font-mono">
-                Erros de montagem ({assemblyErrors.length})
+            <div className="space-y-0.5 rounded-lg border border-st-error px-2 py-1.5">
+              <p className="font-mono text-[11px] text-st-error">
+                Assembly errors ({assemblyErrors.length})
               </p>
               {assemblyErrors.map((err, i) => (
-                <div key={i} className="text-[10px] font-mono text-red-300">
-                  <span className="text-red-500">L{err.line}:</span> {err.message}
+                <div key={i} className="font-mono text-[11px] text-fg-muted">
+                  <span className="text-st-error">L{err.line}:</span> {err.message}
                 </div>
               ))}
             </div>
           )}
           {isLoaded && assemblyErrors.length === 0 && (
-            <div className="rounded border border-emerald-700/50 bg-emerald-900/20 px-2 py-1 text-[10px] font-mono text-emerald-300">
-              ✓ {totalTicks} ticks capturados.
+            <div className="rounded-lg border border-st-active px-2 py-1 font-mono text-[11px] text-st-active">
+              {totalTicks} ticks captured
             </div>
           )}
           {!assemblySource.trim() && (
-            <div className="rounded border border-amber-600/40 bg-amber-900/20 px-2 py-1 text-[10px] font-mono text-amber-400">
-              ⚠ Fonte vazia — usando programa de teste padrão
+            <div className="rounded-lg border border-st-warn px-2 py-1 font-mono text-[11px] text-st-warn">
+              Empty source — falling back to the default test program
             </div>
           )}
         </div>

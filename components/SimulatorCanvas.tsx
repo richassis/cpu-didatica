@@ -8,6 +8,17 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
+import {
+  Plus,
+  Minus,
+  Spline,
+  Cpu,
+  Database,
+  Settings2,
+  Maximize2,
+  Trash2,
+  RotateCcw,
+} from "lucide-react";
 import { useLayoutStore, ZOOM_STEP, ZOOM_MIN, ZOOM_MAX, CANVAS_WIDTH, CANVAS_HEIGHT } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayStore } from "@/lib/displayStore";
@@ -462,100 +473,64 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
           className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2"
           onMouseDown={(e) => e.stopPropagation()} // prevent outside-click handler
         >
-        {/* Action items — slide up when open */}
+        {/* Action items — slide up when open. Every item is neutral: these are
+            commands, not states, so none of them is entitled to an accent. The
+            only exception is the second press of Clear canvas, which is
+            destructive and says so. */}
         {fabOpen && (
-          <div className="flex flex-col items-end gap-2 mb-1">
-            {/* Add component - Edit mode only */}
+          <div className="mb-1 flex flex-col items-end gap-2">
             {isEditMode && (
               <FabItem
                 label="Add component"
-                icon={
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                }
-                color="bg-cyan-600 hover:bg-cyan-500"
+                icon={<Plus size={16} strokeWidth={1.5} />}
                 onClick={() => { setShowAddModal(true); setFabOpen(false); }}
               />
             )}
 
-            {/* Toggle wires */}
             <FabItem
               label={showWiresAndPorts ? "Hide wires" : "Show wires"}
-              icon={
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-              }
-              color={showWiresAndPorts ? "bg-indigo-600 hover:bg-indigo-500" : "bg-gray-600 hover:bg-gray-500"}
+              icon={<Spline size={16} strokeWidth={1.5} />}
+              on={showWiresAndPorts}
               onClick={() => { setShowWiresAndPorts(!showWiresAndPorts); setFabOpen(false); }}
             />
 
-            {/* Toggle CPU signal wires */}
             {showWiresAndPorts && (
               <FabItem
                 label={showCpuSignalWires ? "Hide CPU signals" : "Show CPU signals"}
-                icon={
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-                  </svg>
-                }
-                color={showCpuSignalWires ? "bg-blue-600 hover:bg-blue-500" : "bg-gray-600 hover:bg-gray-500"}
+                icon={<Cpu size={16} strokeWidth={1.5} />}
+                on={showCpuSignalWires}
                 onClick={() => { setShowCpuSignalWires(!showCpuSignalWires); setFabOpen(false); }}
               />
             )}
 
-            {/* Toggle data signal wires */}
             {showWiresAndPorts && (
               <FabItem
                 label={showDataSignalWires ? "Hide data signals" : "Show data signals"}
-                icon={
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
-                  </svg>
-                }
-                color={showDataSignalWires ? "bg-amber-600 hover:bg-amber-500" : "bg-gray-600 hover:bg-gray-500"}
+                icon={<Database size={16} strokeWidth={1.5} />}
+                on={showDataSignalWires}
                 onClick={() => { setShowDataSignalWires(!showDataSignalWires); setFabOpen(false); }}
               />
             )}
 
-            {/* Display settings */}
             <FabItem
               label="Display settings"
-              icon={
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.573-1.066z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-              }
-              color="bg-gray-700 hover:bg-gray-600"
+              icon={<Settings2 size={16} strokeWidth={1.5} />}
               onClick={() => { setShowDisplaySettings(true); setFabOpen(false); }}
             />
 
-            {/* Fit the datapath back into the viewport */}
             {components.length > 0 && (
               <FabItem
                 label="Fit to screen"
-                icon={
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                }
-                color="bg-emerald-600 hover:bg-emerald-500"
+                icon={<Maximize2 size={16} strokeWidth={1.5} />}
                 onClick={() => { fitToScreen(); setFabOpen(false); }}
               />
             )}
 
-            {/* Clear canvas - Edit mode only */}
             {isEditMode && components.length > 0 && (
               <FabItem
                 label={confirmClear ? `Confirm clear (${components.length})` : "Clear canvas"}
-                icon={
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                }
-                color={confirmClear ? "bg-red-600 hover:bg-red-500" : "bg-gray-700 hover:bg-red-700"}
+                icon={<Trash2 size={16} strokeWidth={1.5} />}
+                destructive={confirmClear}
                 onClick={handleClear}
               />
             )}
@@ -565,45 +540,31 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
         {/* Display Settings Panel — shown when triggered from FAB */}
         {showDisplaySettings && (
           <div
-            className="bg-gray-900/95 border border-gray-700 rounded-2xl shadow-2xl backdrop-blur-sm p-4 w-64 mb-2"
+            className="mb-2 w-64 rounded-2xl border border-line bg-surface p-4"
             onMouseDown={(e) => e.stopPropagation()}
           >
-            {/* Numeric Base */}
             <div className="mb-4">
-              <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Numeric Base</div>
+              <div className="t-section mb-2">Numeric base</div>
               <div className="flex items-center gap-1">
                 {(["hex", "dec", "bin", "oct"] as const).map((b) => (
-                  <button
-                    key={b}
-                    onClick={() => setNumericBase(b)}
-                    className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-mono font-semibold transition-colors ${
-                      numericBase === b
-                        ? "bg-cyan-600 text-white"
-                        : "bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700"
-                    }`}
-                  >
-                    {b.toUpperCase()}
-                  </button>
+                  <SegmentButton key={b} selected={numericBase === b} onClick={() => setNumericBase(b)}>
+                    {b}
+                  </SegmentButton>
                 ))}
               </div>
             </div>
 
-            {/* Animation Speed */}
             <div>
-              <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Animation Speed</div>
+              <div className="t-section mb-2">Animation speed</div>
               <div className="flex items-center gap-1">
                 {(["fast", "normal", "slow"] as const).map((preset) => (
-                  <button
+                  <SegmentButton
                     key={preset}
+                    selected={animationSpeed === preset}
                     onClick={() => setAnimationSpeed(preset)}
-                    className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-colors capitalize ${
-                      animationSpeed === preset
-                        ? "bg-indigo-600 text-white"
-                        : "bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700"
-                    }`}
                   >
                     {preset}
-                  </button>
+                  </SegmentButton>
                 ))}
               </div>
             </div>
@@ -613,67 +574,66 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
         {/* Zoom controls — the only way to zoom. Wheel zoom and drag-to-pan are
             gone on purpose: they used to fire by accident all the time. */}
         <div
-          className="flex items-center gap-1 bg-gray-900/90 border border-gray-700 rounded-full shadow-xl backdrop-blur-sm overflow-hidden px-1"
+          className="flex items-center gap-1 overflow-hidden rounded-full border border-line bg-surface px-1"
           onMouseDown={(e) => e.stopPropagation()}
         >
           <button
             onClick={() => recentre(Math.max(ZOOM_MIN, zoom - ZOOM_STEP))}
             disabled={zoom <= ZOOM_MIN}
-            className="w-8 h-8 flex items-center justify-center rounded-full text-gray-300 hover:bg-gray-700 disabled:opacity-30 transition-colors text-lg leading-none"
+            className="flex h-8 w-8 items-center justify-center rounded-full text-fg-muted transition-colors hover:text-fg disabled:opacity-30"
             title="Diminuir zoom"
             aria-label="Zoom out"
-          >−</button>
+          ><Minus size={14} strokeWidth={1.5} /></button>
           <button
             onClick={fitToScreen}
-            className="min-w-[3.5rem] text-center text-sm font-mono text-gray-300 hover:text-white transition-colors"
+            className="num min-w-[3.5rem] text-center font-mono text-xs text-fg-muted transition-colors hover:text-fg"
             title="Ajustar à tela"
             aria-label="Fit to screen"
           >{Math.round(zoom * 100)}%</button>
           <button
             onClick={() => recentre(Math.min(ZOOM_MAX, zoom + ZOOM_STEP))}
             disabled={zoom >= ZOOM_MAX}
-            className="w-8 h-8 flex items-center justify-center rounded-full text-gray-300 hover:bg-gray-700 disabled:opacity-30 transition-colors text-lg leading-none"
+            className="flex h-8 w-8 items-center justify-center rounded-full text-fg-muted transition-colors hover:text-fg disabled:opacity-30"
             title="Aumentar zoom"
             aria-label="Zoom in"
-          >＋</button>
+          ><Plus size={14} strokeWidth={1.5} /></button>
         </div>
 
         {/* Main FAB button */}
         <button
           onClick={() => { setFabOpen((v) => !v); setConfirmClear(false); setShowDisplaySettings(false); }}
-          className={`w-12 h-12 rounded-full shadow-xl flex items-center justify-center text-white text-xl font-bold transition-all ${
-            fabOpen ? "bg-gray-600 rotate-45" : "bg-gray-800 hover:bg-gray-700 border border-gray-600"
+          className={`flex h-12 w-12 items-center justify-center rounded-full border border-line-strong bg-surface text-fg transition-transform ${
+            fabOpen ? "rotate-45" : ""
           }`}
           aria-label="Actions"
         >
-          {fabOpen ? "✕" : "⋯"}
+          <Plus size={20} strokeWidth={1.5} />
         </button>
         </div>
       )}
 
       {/* ── Clock toolbar (bottom-left) ───────────────────── */}
       <div
-        className="fixed bottom-6 left-6 z-40 flex items-center gap-2 bg-gray-900/90 border border-gray-700 rounded-full px-3 py-1.5 shadow-xl backdrop-blur-sm"
+        className="fixed bottom-6 left-6 z-40 flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1.5"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <span className="text-xs font-mono text-gray-400 min-w-[4rem] text-center">T{displayedTick}</span>
+        <span className="num min-w-[4rem] text-center font-mono text-xs text-fg-muted">T{displayedTick}</span>
 
         {!isReadOnly && (
           <>
             <button
               onClick={tickClock}
               disabled={isHalted}
-              className="px-2.5 py-1 rounded-full text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="rounded-full border border-line-strong px-2.5 py-1 text-xs text-fg transition-colors hover:border-st-active disabled:cursor-not-allowed disabled:opacity-50"
               title="Advance clock by one tick"
             >Tick</button>
             <button
               onClick={handleReset}
-              className="w-7 h-7 flex items-center justify-center rounded-full text-gray-400 hover:bg-gray-700 hover:text-white transition-colors"
+              className="flex h-7 w-7 items-center justify-center rounded-full text-fg-muted transition-colors hover:text-fg"
               title="Reset clock"
-            >↺</button>
+            ><RotateCcw size={14} strokeWidth={1.5} /></button>
             {isHalted && (
-              <span className="flex items-center gap-1 text-xs text-red-400 font-semibold">
-                <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+              <span className="flex items-center gap-1.5 rounded-full border border-st-error px-2 py-0.5 text-xs text-st-error">
                 Halted
               </span>
             )}
@@ -688,20 +648,48 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
 
 // ── FAB menu item ─────────────────────────────────────────────
 function FabItem({
-  label, icon, color, onClick,
+  label, icon, onClick, on = false, destructive = false,
 }: {
   label: string;
   icon: React.ReactNode;
-  color: string;
   onClick: () => void;
+  /** Toggle that is currently on — marked by the accent on the icon only. */
+  on?: boolean;
+  destructive?: boolean;
 }) {
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-2 pl-3 pr-4 py-2 rounded-full text-sm font-medium text-white shadow-lg transition-all ${color}`}
+      className={`flex items-center gap-2 rounded-full border py-2 pl-3 pr-4 text-sm transition-colors ${
+        destructive
+          ? "border-st-error bg-surface text-st-error"
+          : "border-line bg-surface text-fg-muted hover:border-line-strong hover:text-fg"
+      }`}
     >
-      {icon}
+      <span className={on ? "text-st-active" : undefined}>{icon}</span>
       {label}
+    </button>
+  );
+}
+
+/** One option in a small segmented control. Outlined when selected. */
+function SegmentButton({
+  selected, onClick, children,
+}: {
+  selected: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex-1 rounded-lg border px-2 py-1.5 font-mono text-xs capitalize transition-colors ${
+        selected
+          ? "border-st-active text-st-active"
+          : "border-line text-fg-muted hover:border-line-strong hover:text-fg"
+      }`}
+    >
+      {children}
     </button>
   );
 }

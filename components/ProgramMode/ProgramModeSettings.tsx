@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Settings2 } from "lucide-react";
 import { useDisplayStore, type AnimationSpeedPreset } from "@/lib/displayStore";
 
 /**
@@ -42,18 +43,18 @@ export default function ProgramModeSettings() {
     <div ref={rootRef} className="absolute bottom-4 right-4 z-30 flex flex-col items-end gap-2">
       {open && (
         <div
-          className="bg-gray-900/95 border border-gray-700 rounded-2xl shadow-2xl backdrop-blur-sm p-4 w-60"
+          className="w-60 rounded-2xl border border-line bg-surface p-4"
           onMouseDown={(e) => e.stopPropagation()}
         >
-          <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Wires</div>
-          <div className="space-y-1.5 mb-4">
+          <div className="t-section mb-2">Wires</div>
+          <div className="mb-4 space-y-1">
             <Toggle label="CPU control signals" on={showCpuSignalWires} onClick={() => setShowCpuSignalWires(!showCpuSignalWires)} />
             <Toggle label="Data signals" on={showDataSignalWires} onClick={() => setShowDataSignalWires(!showDataSignalWires)} />
             <Toggle label="Value dots" on={showWireDots} onClick={() => setShowWireDots(!showWireDots)} />
           </div>
 
-          <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Animation</div>
-          <div className="space-y-1.5 mb-4">
+          <div className="t-section mb-2 border-t border-line pt-3">Animation</div>
+          <div className="mb-4 space-y-1">
             <Toggle label="Enabled" on={animationEnabled} onClick={() => setAnimationEnabled(!animationEnabled)} />
             <Toggle
               label="CPU signals"
@@ -69,17 +70,17 @@ export default function ProgramModeSettings() {
             />
           </div>
 
-          <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Speed</div>
+          <div className="t-section mb-2 border-t border-line pt-3">Speed</div>
           <div className="flex items-center gap-1">
             {(["fast", "normal", "slow"] as AnimationSpeedPreset[]).map((preset) => (
               <button
                 key={preset}
                 onClick={() => setAnimationSpeed(preset)}
                 disabled={!animationEnabled}
-                className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-colors capitalize disabled:opacity-40 ${
+                className={`flex-1 rounded-lg border px-2 py-1.5 text-xs capitalize transition-colors disabled:opacity-40 ${
                   animationSpeed === preset
-                    ? "bg-indigo-600 text-white"
-                    : "bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700"
+                    ? "border-st-active text-st-active"
+                    : "border-line text-fg-muted hover:border-line-strong hover:text-fg"
                 }`}
               >
                 {preset}
@@ -91,35 +92,50 @@ export default function ProgramModeSettings() {
 
       <button
         onClick={() => setOpen((v) => !v)}
-        className={`w-11 h-11 rounded-full shadow-xl flex items-center justify-center text-white text-lg transition-all ${
-          open ? "bg-indigo-600" : "bg-gray-800 hover:bg-gray-700 border border-gray-600"
+        className={`flex h-11 w-11 items-center justify-center rounded-full border bg-surface transition-colors ${
+          open ? "border-line-strong text-fg" : "border-line text-fg-muted hover:text-fg"
         }`}
         aria-label="Visual settings"
         title="Visual settings"
       >
-        ⚙
+        <Settings2 size={18} strokeWidth={1.5} />
       </button>
     </div>
   );
 }
 
-function Toggle({ label, on, onClick, disabled }: { label: string; on: boolean; onClick: () => void; disabled?: boolean }) {
+/**
+ * A row toggle. The track is outlined and the knob carries the accent when on,
+ * so an enabled switch reads as a state without filling a 28px block with
+ * saturated colour.
+ */
+function Toggle({
+  label,
+  on,
+  onClick,
+  disabled,
+}: {
+  label: string;
+  on: boolean;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
   return (
     <button
       onClick={disabled ? undefined : onClick}
-      className={`w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg transition-colors ${
-        disabled ? "opacity-40 cursor-not-allowed bg-gray-800/40" : "bg-gray-800/70 hover:bg-gray-800"
+      className={`flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 transition-colors ${
+        disabled ? "cursor-not-allowed opacity-40" : "hover:bg-raised"
       }`}
     >
-      <span className="text-xs text-gray-200">{label}</span>
+      <span className="text-xs text-fg-muted">{label}</span>
       <span
-        className={`relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors ${
-          on ? "bg-emerald-500" : "bg-gray-600"
+        className={`relative inline-flex h-4 w-7 shrink-0 items-center rounded-full border transition-colors ${
+          on ? "border-st-active" : "border-line-strong"
         }`}
       >
         <span
-          className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
-            on ? "translate-x-3.5" : "translate-x-0.5"
+          className={`inline-block h-2.5 w-2.5 transform rounded-full transition-transform ${
+            on ? "translate-x-3.5 bg-st-active" : "translate-x-0.5 bg-line-strong"
           }`}
         />
       </span>
