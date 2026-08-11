@@ -141,7 +141,7 @@ export default function AssemblyPanel() {
   const lineCount = lines.length;
 
   return (
-    <aside className="h-full flex flex-col bg-[#1a1a2e] border-r border-gray-800 w-full overflow-hidden">
+    <aside className="h-full flex flex-col bg-[var(--widget-surface-alt)] border-r border-gray-800 w-full overflow-hidden">
 
       {/* ── Header ── */}
       <div className="px-4 py-2 border-b border-gray-800 shrink-0 flex items-center justify-between">
@@ -163,7 +163,7 @@ export default function AssemblyPanel() {
               if (e.target.value !== "__custom") handlePresetChange(e.target.value);
             }}
             disabled={isLocked}
-            className="flex-1 text-[11px] font-mono bg-[#0f0f1a] border border-gray-700 rounded px-2 py-0.5 text-gray-200 focus:outline-none focus:border-gray-500 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex-1 text-[11px] font-mono bg-[var(--widget-surface-alt)] border border-gray-700 rounded px-2 py-0.5 text-gray-200 focus:outline-none focus:border-gray-500 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {!activePreset && (
               <option value="__custom" disabled className="text-gray-500">✎ Personalizado</option>
@@ -181,12 +181,12 @@ export default function AssemblyPanel() {
       </div>
 
       {/* ── Code Editor (flex-1) ── */}
-      <div className={`flex-1 min-h-0 flex overflow-hidden relative bg-[#0d0d1a] transition-opacity duration-200 ${isLocked ? "opacity-60" : ""}`}>
+      <div className={`flex-1 min-h-0 flex overflow-hidden relative bg-[var(--widget-surface)] transition-opacity duration-200 ${isLocked ? "opacity-60" : ""}`}>
 
         {/* Line number gutter */}
         <div
           ref={gutterRef}
-          className={`shrink-0 overflow-hidden bg-[#0d0d1a] border-r border-gray-800/60 text-right select-none ${FONT_CLASS}`}
+          className={`shrink-0 overflow-hidden bg-[var(--widget-surface)] border-r border-gray-800/60 text-right select-none ${FONT_CLASS}`}
           style={{ width: GUTTER_W, paddingTop: "4px", paddingBottom: "16px", paddingRight: 6 }}
           aria-hidden
         >
@@ -235,7 +235,7 @@ export default function AssemblyPanel() {
 
       {/* ── Status / errors ── */}
       {(assemblyErrors.length > 0 || isLoaded || !assemblySource.trim()) && (
-        <div className="px-3 py-2 space-y-1.5 shrink-0 border-t border-gray-800/60 bg-[#0d0d1a]">
+        <div className="px-3 py-2 space-y-1.5 shrink-0 border-t border-gray-800/60 bg-[var(--widget-surface)]">
           {assemblyErrors.length > 0 && (
             <div className="rounded border border-red-700/50 bg-red-900/20 px-2 py-1.5 space-y-0.5">
               <p className="text-[9px] font-bold text-red-400 uppercase tracking-widest font-mono">

@@ -391,6 +391,133 @@ export function autoRoute(
 }
 
 /**
+ * Builds the polyline actually drawn for a wire.
+ *
+ * Centralises what used to be assembled ad hoc in the overlay: port escape
+ * stubs, waypoint normalisation, orthogonality, and corner reduction.
+ *
+ * When a wire has no hand-placed waypoints, several Z/L variants are considered
+ * and the first one that clears every component is used — preferring the variant
+ * whose turn sits midway between the two ports, which reads far better than a
+ * corner hugging the widget it just left.
+ */
+export function buildWirePath(
+  source: Point,
+  sourceSide: PortSide,
+  target: Point,
+  targetSide: PortSide,
+  nodes: Point[] = [],
+  obstacles: AABB[] = [],
+  endpointBoxes: AABB[] = [],
+): Point[] {
+  const sourceEscape = escapePort(source, sourceSide)[1] ?? source;
+  const targetEscape = escapePort(target, targetSide)[1] ?? target;
+
+  const assemble = (middle: Point[]) =>
+    simplifyOrthogonalPath(
+      enforceOrthogonal([source, sourceEscape, ...middle, targetEscape, target]),
+    );
+
+  if (nodes.length > 0) {
+    return smoothOrthogonalPath(assemble(simplifyOrthogonalPath(enforceOrthogonal(nodes))), obstacles);
+  }
+
+  // The two components this wire connects are scored too, but only over the run
+  // between the escape stubs — otherwise a variant is free to route straight
+  // across the widget it is about to plug into, which is what "the turn sits
+  // inside the MUX" looked like.
+  const scored = [...obstacles, ...endpointBoxes].map((box) => inflateBounds(box, 8));
+  const hits = (middle: Point[]) => {
+    const chain = enforceOrthogonal([sourceEscape, ...middle, targetEscape]);
+    return scored.reduce((n, box) => n + (pathIntersectsAABB(chain, box) ? 1 : 0), 0);
+  };
+
+  // Preference order: balanced turn first, then the two widget-hugging fallbacks.
+  const middles = [
+    routeBetweenEscapes(sourceEscape, sourceSide, targetEscape, targetSide),
+    [{ x: targetEscape.x, y: sourceEscape.y }],
+    [{ x: sourceEscape.x, y: targetEscape.y }],
+  ];
+
+  let best = middles[0];
+  let bestScore = [hits(middles[0]), assemble(middles[0]).length] as const;
+
+  for (const middle of middles.slice(1)) {
+    const score = [hits(middle), assemble(middle).length] as const;
+    if (score[0] < bestScore[0] || (score[0] === bestScore[0] && score[1] < bestScore[1])) {
+      best = middle;
+      bestScore = score;
+    }
+  }
+
+  return smoothOrthogonalPath(assemble(best), obstacles);
+}
+
+/**
+ * Removes corners that a straight line or a single L-bend can replace.
+ *
+ * `simplifyOrthogonalPath` only drops collinear points, so hand-placed waypoints
+ * leave visible staircases. This pass repeatedly looks for the furthest pair of
+ * points that can be reconnected with at most one corner, and collapses
+ * everything in between — as long as the shortcut does not cut through a
+ * component.
+ *
+ * The first and last segments are never touched: they are the port escape stubs,
+ * and rewriting them would make a wire leave its port sideways through the
+ * widget body.
+ */
+export function smoothOrthogonalPath(
+  points: Point[],
+  obstacles: AABB[] = [],
+  margin = 8,
+): Point[] {
+  let path = simplifyOrthogonalPath(points);
+  if (path.length <= 3) return path;
+
+  const boxes = obstacles.map((box) => inflateBounds(box, margin));
+  const isClear = (segment: Point[]) => boxes.every((box) => !pathIntersectsAABB(segment, box));
+
+  let improved = true;
+  while (improved) {
+    improved = false;
+
+    search:
+    for (let i = 1; i < path.length - 2; i++) {
+      // Longest shortcut first, so one pass removes as much as possible.
+      for (let j = path.length - 2; j > i + 1; j--) {
+        const from = path[i];
+        const to = path[j];
+
+        const candidates: Point[][] =
+          from.x === to.x || from.y === to.y
+            ? [[from, to]]
+            : [
+                [from, { x: to.x, y: from.y }, to],
+                [from, { x: from.x, y: to.y }, to],
+              ];
+
+        for (const shortcut of candidates) {
+          const rebuilt = simplifyOrthogonalPath([
+            ...path.slice(0, i),
+            ...shortcut,
+            ...path.slice(j + 1),
+          ]);
+
+          if (rebuilt.length >= path.length) continue;
+          if (!isClear(shortcut)) continue;
+
+          path = rebuilt;
+          improved = true;
+          break search;
+        }
+      }
+    }
+  }
+
+  return path;
+}
+
+/**
  * Removes duplicate points, zero-length segments and redundant collinear corners.
  */
 export function simplifyOrthogonalPath(points: Point[]): Point[] {

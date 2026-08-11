@@ -184,7 +184,7 @@ export default function CpuComponent({ component, zoom }: Props) {
         {...attributes}
         data-draggable
         className={`select-none cursor-grab active:cursor-grabbing relative rounded-xl border flex flex-col
-          bg-[#0a0a14] transition-colors
+          bg-[var(--widget-surface)] transition-colors
           ${isDragging
             ? "border-indigo-400 shadow-2xl"
             : halted

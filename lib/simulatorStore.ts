@@ -12,7 +12,7 @@
  */
 
 import { create } from "zustand";
-import { Register, Constant, Gpr, Ula, Adder, Mux, Memory, InstructionMemory, CPU, Decoder, Bus, isClockable, CpuState } from "@/lib/simulator";
+import { Register, Constant, Gpr, Ula, Adder, Incrementer, Mux, Memory, InstructionMemory, CPU, Decoder, Bus, isClockable, CpuState } from "@/lib/simulator";
 import type { Connectable, WireDescriptor } from "@/lib/simulator";
 import type { ComponentState } from "@/lib/store";
 // Lazy import via getter to avoid circular initialisation (store.ts imports simulatorStore).
@@ -21,7 +21,7 @@ const getLayoutStore = () =>
   (require("@/lib/store") as typeof import("@/lib/store")).useLayoutStore;
 
 /** Union of every data-layer object type */
-export type SimulatorObject = Register | Constant | Gpr | Ula | Adder | Mux | Memory | InstructionMemory | CPU | Decoder;
+export type SimulatorObject = Register | Constant | Gpr | Ula | Adder | Incrementer | Mux | Memory | InstructionMemory | CPU | Decoder;
 
 /** Type guard to check if an object is Connectable */
 function isConnectable(obj: unknown): obj is Connectable {
@@ -40,6 +40,7 @@ function inferComponentType(obj: SimulatorObject): string {
   if (obj instanceof Gpr) return "GprComponent";
   if (obj instanceof Ula) return "UlaComponent";
   if (obj instanceof Adder) return "AdderComponent";
+  if (obj instanceof Incrementer) return "IncrementerComponent";
   if (obj instanceof Mux) return "MuxComponent";
   if (obj instanceof Memory) return "MemoryComponent";
   if (obj instanceof InstructionMemory) return "InstructionMemoryComponent";
@@ -89,6 +90,7 @@ interface SimulatorState {
   getGpr: (id: string) => Gpr | undefined;
   getUla: (id: string) => Ula | undefined;
   getAdder: (id: string) => Adder | undefined;
+  getIncrementer: (id: string) => Incrementer | undefined;
   getMux: (id: string) => Mux | undefined;
   getMemory: (id: string) => Memory | undefined;
   getInstructionMemory: (id: string) => InstructionMemory | undefined;
@@ -253,7 +255,9 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
       case "PipelineRegister": {
         const bitWidth = typeof meta?.bitWidth === "number" ? meta.bitWidth : 16;
         const hasWriteEnable = typeof meta?.hasWriteEnable === "boolean" ? meta.hasWriteEnable : true;
-        newObj = new Register(id, label, bitWidth, 0, hasWriteEnable);
+        const holdOutputUntilFetch =
+          typeof meta?.holdOutputUntilFetch === "boolean" ? meta.holdOutputUntilFetch : false;
+        newObj = new Register(id, label, bitWidth, 0, hasWriteEnable, holdOutputUntilFetch);
         break;
       }
       case "ConstantComponent": {
@@ -271,6 +275,12 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
       case "AdderComponent":
         newObj = new Adder(id, label);
         break;
+      case "IncrementerComponent": {
+        const bitWidth = typeof meta?.bitWidth === "number" ? meta.bitWidth : 16;
+        const step = typeof meta?.step === "number" ? meta.step : 1;
+        newObj = new Incrementer(id, label, bitWidth, step);
+        break;
+      }
       case "MuxComponent": {
         const bitWidth  = typeof meta?.bitWidth  === "number" ? meta.bitWidth  : 16;
         const numInputs = (meta?.numInputs === 3 ? 3 : 2) as 2 | 3;
@@ -400,6 +410,11 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
   getAdder: (id) => {
     const obj = get().objects.get(id);
     return obj instanceof Adder ? obj : undefined;
+  },
+
+  getIncrementer: (id) => {
+    const obj = get().objects.get(id);
+    return obj instanceof Incrementer ? obj : undefined;
   },
 
   getMux: (id) => {
@@ -630,6 +645,10 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
       if (obj instanceof Memory || obj instanceof InstructionMemory) {
         entry.cells = obj.dump();
       }
+      // Register: also save a value held back from the output port (the PC)
+      if (obj instanceof Register && obj.pendingValue !== null) {
+        entry.pending = obj.pendingValue;
+      }
       result.set(id, entry);
     }
     return result;
@@ -646,6 +665,9 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
       }
       if ((obj instanceof Memory || obj instanceof InstructionMemory) && state.cells) {
         obj.load(state.cells);
+      }
+      if (obj instanceof Register) {
+        obj.setPendingValue(state.pending ?? null);
       }
       // Restore port values (output ports only — inputs are driven by wires)
       if (isConnectable(obj)) {

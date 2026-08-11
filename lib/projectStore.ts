@@ -49,6 +49,23 @@ export interface ProjectData {
   version?: number;
 }
 
+/**
+ * Current project schema version.
+ *
+ * v4 — the PC+1 adder shrank from the ULA's 128x176 to 64x96, and the PC gained
+ *      `holdOutputUntilFetch` so the next address does not appear mid-instruction.
+ * v5 — PC+1 became a dedicated IncrementerComponent (one input, one output), so
+ *      the constant-1 register that fed the adder is gone from the datapath.
+ */
+const CURRENT_PROJECT_VERSION = 5;
+
+/** Adder dimensions before v4, used to recognise instances that need shrinking. */
+const LEGACY_ADDER_SIZE = { w: 128, h: 176 } as const;
+const ADDER_SIZE = { w: 64, h: 96 } as const;
+const GRID_SIZE = 16;
+
+const snapToGridSize = (v: number) => Math.round(v / GRID_SIZE) * GRID_SIZE;
+
 /** Tab metadata (project reference) */
 export interface ProjectTab {
   id: string;
@@ -467,7 +484,7 @@ export const useProjectStore = create<ProjectState>()(
           ...basicProject,
           components: enhancedComponents,
           componentConfigs,
-          version: 3,
+          version: CURRENT_PROJECT_VERSION,
         };
       },
 
@@ -504,13 +521,57 @@ export const useProjectStore = create<ProjectState>()(
       }),
       onRehydrateStorage: () => (state) => {
         if (state) {
-          // Ensure default project exists
+          // Bring cached projects up to the current schema, then ensure default exists
+          migrateProjectData(state);
           ensureDefaultProject(state);
         }
       },
     }
   )
 );
+
+/**
+ * Bring cached projects up to `CURRENT_PROJECT_VERSION`.
+ *
+ * Projects live in localStorage and the default project is only re-fetched from
+ * `/default-project.cpud` when it is absent, so shipping a new .cpud is not
+ * enough on its own — without this, existing users would keep the old geometry
+ * and would even write it back over the file.
+ */
+function migrateProjectData(state: ProjectState): void {
+  for (const [projectId, project] of Object.entries(state.projectData)) {
+    if (!project || (project.version ?? 1) >= CURRENT_PROJECT_VERSION) continue;
+
+    // The default project is a reference datapath, not user content: its
+    // structure changed (PC holds its output, the adder became a +1 unit, the
+    // constant-1 source is gone). Patching a stale cached copy component by
+    // component is how it ends up in a half-migrated, subtly broken state, so
+    // drop it instead and let `loadDefaultProject()` fetch the shipped file.
+    // Edits made in edit mode are written back to that file, so nothing that was
+    // saved is lost.
+    if (projectId === DEFAULT_PROJECT_ID) {
+      delete state.projectData[projectId];
+      continue;
+    }
+
+    // User projects only get the cosmetic change: adders still sitting at the
+    // old ULA-sized default shrink, keeping their centre.
+    for (const component of project.components ?? []) {
+      if (
+        component.type === "AdderComponent" &&
+        component.w === LEGACY_ADDER_SIZE.w &&
+        component.h === LEGACY_ADDER_SIZE.h
+      ) {
+        component.x = snapToGridSize(component.x + (LEGACY_ADDER_SIZE.w - ADDER_SIZE.w) / 2);
+        component.y = snapToGridSize(component.y + (LEGACY_ADDER_SIZE.h - ADDER_SIZE.h) / 2);
+        component.w = ADDER_SIZE.w;
+        component.h = ADDER_SIZE.h;
+      }
+    }
+
+    project.version = CURRENT_PROJECT_VERSION;
+  }
+}
 
 /**
  * Ensure the default project exists in the store.

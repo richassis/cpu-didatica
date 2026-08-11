@@ -5,6 +5,7 @@ import { useModeStore } from "@/lib/modeStore";
 import { useProjectStore } from "@/lib/projectStore";
 import { DEFAULT_PROJECT_ID, DEFAULT_PROJECT_NAME, isDefaultProject } from "@/lib/defaultProject";
 import { useProgramDataStore } from "@/lib/programDataStore";
+import ThemeToggle from "./ThemeToggle";
 
 /**
  * TopBarProgram — Top bar shown in Program Mode (default/end-user view).
@@ -128,6 +129,8 @@ export default function TopBarProgram() {
 
       {/* Right: Run + Edit Mode */}
       <div className="flex items-center gap-2">
+        <ThemeToggle />
+
         <button
           onClick={handleRun}
           disabled={isRunning}

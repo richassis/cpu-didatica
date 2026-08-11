@@ -6,27 +6,26 @@ import { CSS } from "@dnd-kit/utilities";
 import type { CSSProperties } from "react";
 import { useLayoutStore, Props } from "@/lib/store";
 import { useRevealState, revealStyle } from "@/lib/useRevealState";
-import { useSimulatorStore } from "@/lib/simulatorStore";
-import { useDisplayStore, formatNum } from "@/lib/displayStore";
+import { getSafeDimensions } from "@/lib/componentUtils";
 import ConfigModal from "@/components/ConfigModal";
 import PortsOverlay from "@/components/PortsOverlay";
 
+/**
+ * PC+1 style adder.
+ *
+ * Renders as a small mirrored trapezoid with no numbers inside: the adder is
+ * secondary hardware, and showing its operands next to the ULA made it look as
+ * important as the ALU. Port values are still readable from the wire labels and
+ * port tooltips.
+ */
 export default function AdderComponent({ component, zoom }: Props) {
   const { id, x, y, w, h, label } = component;
   const revealStatus = useRevealState(id);
   const removeComponent = useLayoutStore((s) => s.removeComponent);
   const [configOpen, setConfigOpen] = useState(false);
 
-  const revision = useSimulatorStore((s) => s.revision);
-  const adder = useSimulatorStore((s) => s.getAdder(id));
-  void revision;
-  const base = useDisplayStore((s) => s.numericBase);
   const isRevealed = revealStatus === "revealed";
-
-  const inA = adder?.in_a?.value ?? 0;
-  const inB = adder?.in_b?.value ?? 0;
-  const result = adder?.result ?? 0;
-  const bw = adder?.bitWidth ?? 16;
+  const { width, height } = getSafeDimensions("AdderComponent", w, h);
 
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id });
   const correctedTransform = transform
@@ -51,8 +50,8 @@ export default function AdderComponent({ component, zoom }: Props) {
         <Image
           src="/images/ula_white.svg"
           alt="Adder"
-          width={!w || isNaN(w) ? 128 : w}
-          height={!h || isNaN(h) ? 176 : h}
+          width={width}
+          height={height}
           priority
           draggable={false}
           style={{
@@ -68,32 +67,20 @@ export default function AdderComponent({ component, zoom }: Props) {
         />
 
         {/* Label + remove */}
-        <div className="absolute top-1 inset-x-0 flex items-center justify-between px-3 pointer-events-none">
-          <span className="text-[10px] font-bold text-white/70 font-mono tracking-wider uppercase">{label}</span>
+        <div className="absolute top-0.5 inset-x-0 flex items-center justify-between px-1.5 pointer-events-none">
+          <span className="text-[9px] font-bold text-white/70 font-mono tracking-wide uppercase truncate">{label}</span>
           <button
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => { e.stopPropagation(); removeComponent(id); }}
-            className="pointer-events-auto text-rose-300/50 hover:text-white text-[10px] leading-none"
+            className="pointer-events-auto shrink-0 text-rose-300/50 hover:text-white text-[9px] leading-none"
           >✕</button>
         </div>
 
-        {/* Equation overlay */}
-        <div
-          className="absolute inset-x-0 flex flex-col items-center pointer-events-none gap-[2px]"
-          style={{ top: "28%" }}
-        >
-          <span className={`font-mono text-[12px] font-semibold ${isRevealed ? "text-rose-100" : "text-rose-300/40"}`}>
-            {formatNum(inA, base, bw)}
+        {/* Symbol only — the adder never displays its operands or result. */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <span className={`font-mono font-bold leading-none text-[22px] ${isRevealed ? "text-rose-100" : "text-rose-300/50"}`}>
+            +
           </span>
-          <span className={`text-[16px] font-bold leading-none font-mono ${isRevealed ? "text-rose-300" : "text-rose-500/30"}`}>+</span>
-          <span className={`font-mono text-[12px] font-semibold ${isRevealed ? "text-rose-100" : "text-rose-300/40"}`}>
-            {formatNum(inB, base, bw)}
-          </span>
-          <div className="mt-0.5 border-t border-rose-600/40 w-full px-3 pt-1 flex justify-center">
-            <span className={`font-mono font-bold ${isRevealed ? "text-[14px] text-white bg-rose-900/60 rounded px-1.5 py-0.5" : "text-[12px] text-rose-400/40"}`}>
-              = {formatNum(result, base, bw)}
-            </span>
-          </div>
         </div>
 
         <PortsOverlay componentId={id} />

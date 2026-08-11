@@ -49,9 +49,6 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
   const [fabOpen, setFabOpen] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const [showDisplaySettings, setShowDisplaySettings] = useState(false);
-  const [zoomExpanded, setZoomExpanded] = useState(false);
-  const [isPanning, setIsPanning] = useState(false);
-  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
 
   // Mode state - determines what actions are allowed
   const mode = useModeStore((s) => s.mode);
@@ -106,40 +103,7 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
     );
   }, [setViewport]);
 
-  // Scroll to components or canvas centre on first mount
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    
-    // If there are components, center on them; otherwise center on canvas
-    if (components.length > 0) {
-      // Calculate bounding box of all components
-      let minX = Infinity, minY = Infinity;
-      let maxX = -Infinity, maxY = -Infinity;
-      
-      for (const c of components) {
-        minX = Math.min(minX, c.x);
-        minY = Math.min(minY, c.y);
-        maxX = Math.max(maxX, c.x + c.w);
-        maxY = Math.max(maxY, c.y + c.h);
-      }
-
-      const centerX = (minX + maxX) / 2;
-      const centerY = (minY + maxY) / 2;
-      
-      el.scrollLeft = centerX * zoom - el.clientWidth / 2;
-      el.scrollTop = centerY * zoom - el.clientHeight / 2;
-    } else {
-      // Center on canvas origin area for new projects
-      el.scrollLeft = 0;
-      el.scrollTop = 0;
-    }
-    syncViewport();
-  // Run once on mount only
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Keep viewport in sync on scroll
+  // Keep viewport in sync on scroll/resize
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -152,84 +116,14 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
     };
   }, [syncViewport]);
 
-  // Scroll wheel to zoom (Google Maps style)
+  // Close FAB / display settings when clicking outside
   useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      const delta = e.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP;
-      const newZoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoom + delta));
-      
-      // Zoom towards cursor position
-      const rect = el.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left;
-      const mouseY = e.clientY - rect.top;
-      
-      // Calculate scroll position to keep zoom centered on cursor
-      const scrollX = (el.scrollLeft + mouseX) / zoom * newZoom - mouseX;
-      const scrollY = (el.scrollTop + mouseY) / zoom * newZoom - mouseY;
-      
-      setZoom(newZoom);
-      
-      // Apply new scroll position after zoom
-      requestAnimationFrame(() => {
-        if (scrollRef.current) {
-          scrollRef.current.scrollLeft = scrollX;
-          scrollRef.current.scrollTop = scrollY;
-        }
-      });
-    };
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
-  }, [zoom, setZoom]);
-
-  // Close FAB / display settings / zoom when clicking outside
-  useEffect(() => {
-    if (!fabOpen && !showDisplaySettings && !zoomExpanded) return;
-    const handler = () => { setFabOpen(false); setShowDisplaySettings(false); setZoomExpanded(false); };
+    if (!fabOpen && !showDisplaySettings) return;
+    const handler = () => { setFabOpen(false); setShowDisplaySettings(false); };
     window.addEventListener("mousedown", handler);
     return () => window.removeEventListener("mousedown", handler);
-  }, [fabOpen, showDisplaySettings, zoomExpanded]);
+  }, [fabOpen, showDisplaySettings]);
 
-  // Click and drag to pan (Google Maps style)
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-
-    const onMouseDown = (e: MouseEvent) => {
-      if (isCreatingWire) return;
-      // Only pan on primary button and not on interactive elements
-      if (e.button !== 0) return;
-      const target = e.target as HTMLElement;
-      // Don't pan if clicking on widgets, ports, or interactive elements
-      if (target.closest('[data-draggable], [data-port-indicator], button, input, select, textarea, svg')) return;
-      
-      setIsPanning(true);
-      setPanStart({ x: e.clientX + el.scrollLeft, y: e.clientY + el.scrollTop });
-      e.preventDefault();
-    };
-
-    const onMouseMove = (e: MouseEvent) => {
-      if (!isPanning) return;
-      el.scrollLeft = panStart.x - e.clientX;
-      el.scrollTop = panStart.y - e.clientY;
-    };
-
-    const onMouseUp = () => {
-      setIsPanning(false);
-    };
-
-    el.addEventListener("mousedown", onMouseDown);
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseUp);
-
-    return () => {
-      el.removeEventListener("mousedown", onMouseDown);
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("mouseup", onMouseUp);
-    };
-  }, [isPanning, panStart, isCreatingWire]);
 
   // Drag-based wire creation: track mouse and complete on mouseup.
   useEffect(() => {
@@ -418,15 +312,20 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
     }
   };
 
-  // Find and center viewport on all components
-  const handleFindComponents = useCallback(() => {
+  /**
+   * Zoom and centre so the whole datapath fits the viewport.
+   *
+   * The canvas cannot be panned or wheel-zoomed any more, so this is the only
+   * thing that positions the view: it runs on mount, whenever the set of
+   * components changes (project switch) and on resize.
+   */
+  const fitToScreen = useCallback(() => {
     const el = scrollRef.current;
     if (!el || components.length === 0) return;
 
-    // Calculate bounding box of all components
     let minX = Infinity, minY = Infinity;
     let maxX = -Infinity, maxY = -Infinity;
-    
+
     for (const c of components) {
       minX = Math.min(minX, c.x);
       minY = Math.min(minY, c.y);
@@ -434,46 +333,92 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
       maxY = Math.max(maxY, c.y + c.h);
     }
 
-    // Add some padding
-    const padding = 100;
+    const padding = 48;
     minX -= padding;
     minY -= padding;
     maxX += padding;
     maxY += padding;
 
-    // Calculate the center of the bounding box
     const centerX = (minX + maxX) / 2;
     const centerY = (minY + maxY) / 2;
 
-    // Calculate zoom to fit all components with some margin
-    const boundingWidth = maxX - minX;
-    const boundingHeight = maxY - minY;
-    const viewportWidth = el.clientWidth;
-    const viewportHeight = el.clientHeight;
-    
-    const fitZoomX = viewportWidth / boundingWidth;
-    const fitZoomY = viewportHeight / boundingHeight;
-    const fitZoom = Math.min(fitZoomX, fitZoomY, 1); // Don't zoom in more than 100%
+    const fitZoom = Math.min(
+      el.clientWidth / (maxX - minX),
+      el.clientHeight / (maxY - minY),
+      1, // never magnify past 100%
+    );
     const clampedZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, fitZoom));
-    
+
     setZoom(clampedZoom);
-    
-    // Center viewport on components after zoom is applied
+
     requestAnimationFrame(() => {
-      if (scrollRef.current) {
-        const newEl = scrollRef.current;
-        newEl.scrollLeft = centerX * clampedZoom - newEl.clientWidth / 2;
-        newEl.scrollTop = centerY * clampedZoom - newEl.clientHeight / 2;
-        syncViewport();
-      }
+      const newEl = scrollRef.current;
+      if (!newEl) return;
+      newEl.scrollLeft = centerX * clampedZoom - newEl.clientWidth / 2;
+      newEl.scrollTop = centerY * clampedZoom - newEl.clientHeight / 2;
+      syncViewport();
     });
   }, [components, setZoom, syncViewport]);
 
+  /** Re-centre at the current zoom, used by the +/- buttons. */
+  const recentre = useCallback((nextZoom: number) => {
+    const el = scrollRef.current;
+    if (!el || components.length === 0) return;
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const c of components) {
+      minX = Math.min(minX, c.x);
+      minY = Math.min(minY, c.y);
+      maxX = Math.max(maxX, c.x + c.w);
+      maxY = Math.max(maxY, c.y + c.h);
+    }
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+
+    setZoom(nextZoom);
+    requestAnimationFrame(() => {
+      const newEl = scrollRef.current;
+      if (!newEl) return;
+      newEl.scrollLeft = centerX * nextZoom - newEl.clientWidth / 2;
+      newEl.scrollTop = centerY * nextZoom - newEl.clientHeight / 2;
+      syncViewport();
+    });
+  }, [components, setZoom, syncViewport]);
+
+  // Fit on mount and whenever the datapath changes (e.g. switching projects).
+  const componentSignature = components.map((c) => c.id).join("|");
+  useEffect(() => {
+    if (components.length === 0) return;
+    // Wait a frame so the scroll container has its final size.
+    const raf = requestAnimationFrame(fitToScreen);
+    return () => cancelAnimationFrame(raf);
+  // Deliberately keyed on the component set, not on fitToScreen's identity,
+  // so dragging a widget in edit mode does not snap the view back.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [componentSignature]);
+
+  // Keep the datapath fitted when the window changes size.
+  useEffect(() => {
+    const onResize = () => fitToScreen();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [fitToScreen]);
+
   return (
-    <div 
-      ref={scrollRef} 
-      className="flex-1 min-h-0 overflow-auto bg-gray-950 relative scrollbar-hide"
-      style={{ cursor: isCreatingWire ? 'crosshair' : isPanning ? 'grabbing' : 'grab' }}
+    <div
+      ref={scrollRef}
+      // Program mode locks the view: it is positioned only by fitToScreen and the
+      // zoom buttons, so the datapath can no longer be lost by an accidental
+      // scroll, wheel-zoom or background drag. Edit mode keeps normal scrolling,
+      // otherwise there would be no way to reach canvas outside the fitted area
+      // while authoring.
+      className={`flex-1 min-h-0 relative ${
+        isEditMode ? "overflow-auto" : "overflow-hidden scrollbar-hide"
+      }`}
+      style={{
+        cursor: isCreatingWire ? "crosshair" : "default",
+        background: "var(--canvas-bg)",
+      }}
       data-canvas
       onClick={(e) => {
         // Click on empty canvas deselects wires
@@ -484,12 +429,17 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
       <DndContext sensors={isReadOnly ? [] : sensors} onDragEnd={handleDragEnd}>
         <div style={{ width: CANVAS_WIDTH * zoom, height: CANVAS_HEIGHT * zoom }}>
           <div
-            className="relative bg-gray-900 origin-top-left"
+            className="relative origin-top-left"
             style={{
               width: CANVAS_WIDTH,
               height: CANVAS_HEIGHT,
               transform: `scale(${zoom})`,
-              backgroundImage: "radial-gradient(circle, #374151 1px, transparent 1px)",
+              background: "var(--canvas-bg)",
+              // The grid is an authoring aid: it only helps when placing widgets,
+              // so it stays out of the way in program mode.
+              backgroundImage: isEditMode
+                ? "radial-gradient(circle, var(--canvas-grid) 1px, transparent 1px)"
+                : undefined,
               backgroundSize: `${GRID_SIZE}px ${GRID_SIZE}px`,
             }}
           >
@@ -577,17 +527,17 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
               onClick={() => { setShowDisplaySettings(true); setFabOpen(false); }}
             />
 
-            {/* Find components */}
+            {/* Fit the datapath back into the viewport */}
             {components.length > 0 && (
               <FabItem
-                label="Find components"
+                label="Fit to screen"
                 icon={
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                   </svg>
                 }
                 color="bg-emerald-600 hover:bg-emerald-500"
-                onClick={() => { handleFindComponents(); setFabOpen(false); }}
+                onClick={() => { fitToScreen(); setFabOpen(false); }}
               />
             )}
 
@@ -655,40 +605,32 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
           </div>
         )}
 
-        {/* Collapsible Zoom Indicator — above FAB */}
+        {/* Zoom controls — the only way to zoom. Wheel zoom and drag-to-pan are
+            gone on purpose: they used to fire by accident all the time. */}
         <div
-          className="flex items-center gap-1 bg-gray-900/90 border border-gray-700 rounded-full shadow-xl backdrop-blur-sm overflow-hidden transition-all"
+          className="flex items-center gap-1 bg-gray-900/90 border border-gray-700 rounded-full shadow-xl backdrop-blur-sm overflow-hidden px-1"
           onMouseDown={(e) => e.stopPropagation()}
         >
-          {zoomExpanded ? (
-            <>
-              <button
-                onClick={() => setZoom(zoom - ZOOM_STEP)}
-                disabled={zoom <= ZOOM_MIN}
-                className="w-8 h-8 flex items-center justify-center rounded-full text-gray-300 hover:bg-gray-700 disabled:opacity-30 transition-colors text-lg leading-none"
-                aria-label="Zoom out"
-              >−</button>
-              <button
-                onClick={() => setZoom(1)}
-                className="min-w-[3rem] text-center text-sm font-mono text-gray-300 hover:text-white transition-colors"
-                aria-label="Reset zoom"
-              >{Math.round(zoom * 100)}%</button>
-              <button
-                onClick={() => setZoom(zoom + ZOOM_STEP)}
-                disabled={zoom >= ZOOM_MAX}
-                className="w-8 h-8 flex items-center justify-center rounded-full text-gray-300 hover:bg-gray-700 disabled:opacity-30 transition-colors text-lg leading-none"
-                aria-label="Zoom in"
-              >＋</button>
-            </>
-          ) : (
-            <button
-              onClick={() => setZoomExpanded(true)}
-              className="px-3 py-1.5 text-sm font-mono text-gray-300 hover:text-white transition-colors"
-              title="Click to show zoom controls"
-            >
-              {Math.round(zoom * 100)}%
-            </button>
-          )}
+          <button
+            onClick={() => recentre(Math.max(ZOOM_MIN, zoom - ZOOM_STEP))}
+            disabled={zoom <= ZOOM_MIN}
+            className="w-8 h-8 flex items-center justify-center rounded-full text-gray-300 hover:bg-gray-700 disabled:opacity-30 transition-colors text-lg leading-none"
+            title="Diminuir zoom"
+            aria-label="Zoom out"
+          >−</button>
+          <button
+            onClick={fitToScreen}
+            className="min-w-[3.5rem] text-center text-sm font-mono text-gray-300 hover:text-white transition-colors"
+            title="Ajustar à tela"
+            aria-label="Fit to screen"
+          >{Math.round(zoom * 100)}%</button>
+          <button
+            onClick={() => recentre(Math.min(ZOOM_MAX, zoom + ZOOM_STEP))}
+            disabled={zoom >= ZOOM_MAX}
+            className="w-8 h-8 flex items-center justify-center rounded-full text-gray-300 hover:bg-gray-700 disabled:opacity-30 transition-colors text-lg leading-none"
+            title="Aumentar zoom"
+            aria-label="Zoom in"
+          >＋</button>
         </div>
 
         {/* Main FAB button */}

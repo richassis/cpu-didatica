@@ -18,8 +18,16 @@ export interface ComponentConfig {
   wordCount?: number;
   /** Whether Register has a write-enable input port. Default true. */
   hasWriteEnable?: boolean;
+  /**
+   * Whether a Register holds its newly latched value back until the next FETCH.
+   * Used by the PC so the next address does not appear mid-instruction.
+   * Default false.
+   */
+  holdOutputUntilFetch?: boolean;
   /** Fixed numeric value for ConstantComponent. Default 1. */
   constantValue?: number;
+  /** How much an IncrementerComponent adds to its input. Default 1. */
+  step?: number;
 }
 
 interface PanelProps {
@@ -64,6 +72,39 @@ function BitWidthField({ config, onChange }: PanelProps) {
           <option key={b} value={b}>{b}-bit</option>
         ))}
       </select>
+    </div>
+  );
+}
+
+// ── Shared field: Toggle ───────────────────────────────────────────────────
+
+function ToggleField({
+  title,
+  hint,
+  checked,
+  onToggle,
+}: {
+  title: string;
+  hint: string;
+  checked: boolean;
+  onToggle: (checked: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between rounded-lg border border-gray-700 bg-gray-800/60 px-3 py-2">
+      <div className="flex flex-col">
+        <span className="text-xs text-gray-300 font-semibold">{title}</span>
+        <span className="text-[10px] text-gray-500">{hint}</span>
+      </div>
+      <label className="relative inline-flex items-center cursor-pointer">
+        <input
+          type="checkbox"
+          className="sr-only peer"
+          checked={checked}
+          onChange={(e) => onToggle(e.target.checked)}
+        />
+        <div className="w-11 h-6 bg-gray-700 rounded-full peer peer-checked:bg-cyan-600 transition-colors" />
+        <div className="absolute left-1 top-1 w-4 h-4 rounded-full bg-white transition-transform peer-checked:translate-x-5" />
+      </label>
     </div>
   );
 }
@@ -129,22 +170,18 @@ export function RegisterComponentConfigPanel(props: PanelProps) {
     <div className="flex flex-col gap-3">
       <NameField {...props} />
       <BitWidthField {...props} />
-      <div className="flex items-center justify-between rounded-lg border border-gray-700 bg-gray-800/60 px-3 py-2">
-        <div className="flex flex-col">
-          <span className="text-xs text-gray-300 font-semibold">Write Enable Port</span>
-          <span className="text-[10px] text-gray-500">Disable for always-write registers</span>
-        </div>
-        <label className="relative inline-flex items-center cursor-pointer">
-          <input
-            type="checkbox"
-            className="sr-only peer"
-            checked={props.config.hasWriteEnable ?? true}
-            onChange={(e) => props.onChange({ hasWriteEnable: e.target.checked })}
-          />
-          <div className="w-11 h-6 bg-gray-700 rounded-full peer peer-checked:bg-cyan-600 transition-colors" />
-          <div className="absolute left-1 top-1 w-4 h-4 rounded-full bg-white transition-transform peer-checked:translate-x-5" />
-        </label>
-      </div>
+      <ToggleField
+        title="Write Enable Port"
+        hint="Disable for always-write registers"
+        checked={props.config.hasWriteEnable ?? true}
+        onToggle={(hasWriteEnable) => props.onChange({ hasWriteEnable })}
+      />
+      <ToggleField
+        title="Hold Output Until Fetch"
+        hint="New value only leaves the register on the next FETCH (used by PC)"
+        checked={props.config.holdOutputUntilFetch ?? false}
+        onToggle={(holdOutputUntilFetch) => props.onChange({ holdOutputUntilFetch })}
+      />
     </div>
   );
 }
@@ -191,6 +228,26 @@ export function ConstantComponentConfigPanel(props: PanelProps) {
   );
 }
 
+export function IncrementerComponentConfigPanel(props: PanelProps) {
+  return (
+    <div className="flex flex-col gap-3">
+      <NameField {...props} />
+      <BitWidthField {...props} />
+      <div className="flex flex-col gap-1">
+        <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider">
+          Step (added to the input)
+        </label>
+        <input
+          type="number"
+          value={props.config.step ?? 1}
+          onChange={(e) => props.onChange({ step: Number(e.target.value) })}
+          className="bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors"
+        />
+      </div>
+    </div>
+  );
+}
+
 // ── Dispatcher ────────────────────────────────────────────────────────────
 
 export function ConfigPanelForType({
@@ -213,6 +270,8 @@ export function ConfigPanelForType({
       return <MuxComponentConfigPanel {...props} />;
     case "ConstantComponent":
       return <ConstantComponentConfigPanel {...props} />;
+    case "IncrementerComponent":
+      return <IncrementerComponentConfigPanel {...props} />;
     default:
       return <NameField {...props} />;
   }

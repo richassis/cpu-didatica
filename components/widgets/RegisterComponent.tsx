@@ -44,7 +44,7 @@ export default function RegisterComponent({ component, zoom }: Props) {
         className={`select-none cursor-grab active:cursor-grabbing rounded-lg flex flex-col overflow-hidden
           border transition-all duration-200
           ${isDragging ? "border-cyan-400 shadow-lg shadow-cyan-900/40" : isRevealed ? "border-cyan-500/70 shadow-md shadow-cyan-900/20" : "border-cyan-800/40"}
-          bg-[#0a0a14]`}
+          bg-[var(--widget-surface)]`}
         onDoubleClick={(e) => { e.stopPropagation(); setConfigOpen(true); }}
       >
         {/* Header */}

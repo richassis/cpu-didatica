@@ -67,7 +67,7 @@ export default function MemoryComponent({ component, zoom }: Props) {
         {...listeners} {...attributes}
         data-draggable
         className={`select-none cursor-grab active:cursor-grabbing relative rounded-xl overflow-hidden flex flex-col
-          border transition-all duration-200 bg-[#0a0a14] ${borderCls}`}
+          border transition-all duration-200 bg-[var(--widget-surface)] ${borderCls}`}
         onDoubleClick={(e) => { e.stopPropagation(); setConfigOpen(true); }}
       >
         {/* Header */}

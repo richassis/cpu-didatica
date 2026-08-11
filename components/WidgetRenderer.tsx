@@ -6,6 +6,7 @@ import MemoryComponent from "./widgets/MemoryComponent";
 import InstructionMemoryComponent from "./widgets/InstructionMemoryComponent";
 import UlaComponent from "./widgets/UlaComponent";
 import AdderComponent from "./widgets/AdderComponent";
+import IncrementerComponent from "./widgets/IncrementerComponent";
 import MuxComponent from "./widgets/MuxComponent";
 import RegisterComponent from "./widgets/RegisterComponent";
 import ConstantComponent from "./widgets/ConstantComponent";
@@ -29,6 +30,8 @@ export default function WidgetRenderer({ component, zoom }: Props) {
       return <UlaComponent component={component} zoom={zoom} />;
     case "AdderComponent":
       return <AdderComponent component={component} zoom={zoom} />;
+    case "IncrementerComponent":
+      return <IncrementerComponent component={component} zoom={zoom} />;
     case "MuxComponent":
       return <MuxComponent component={component} zoom={zoom} />;
     case "Register":

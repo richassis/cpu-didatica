@@ -2,6 +2,7 @@
 
 import { useModeStore } from "@/lib/modeStore";
 import ProjectSwitcher from "./ProjectSwitcher";
+import ThemeToggle from "./ThemeToggle";
 
 /**
  * TopBarEdit — Top bar shown in Edit Mode (developer/instructor view).
@@ -30,8 +31,9 @@ export default function TopBarEdit() {
         <ProjectSwitcher />
       </div>
 
-      {/* Right: Edit Mode badge */}
+      {/* Right: theme switch + Edit Mode badge */}
       <div className="flex items-center gap-2">
+        <ThemeToggle />
         <span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-600/50 bg-indigo-900/30 px-2.5 py-1 text-[11px] font-semibold text-indigo-200">
           <PencilIcon />
           Edit Mode

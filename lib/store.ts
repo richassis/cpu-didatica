@@ -18,6 +18,11 @@ export interface ComponentState {
   registers?: number[];
   /** Memory cell values (MemoryComponent only) */
   cells?: number[];
+  /**
+   * Value latched but not yet released to the output port (Register instances
+   * configured with `holdOutputUntilFetch`, i.e. the PC).
+   */
+  pending?: number;
 }
 
 export interface ComponentInstance {

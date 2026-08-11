@@ -42,7 +42,7 @@ export default function ConstantComponent({ component, zoom }: Props) {
         data-draggable
         className={`select-none cursor-grab active:cursor-grabbing rounded-lg overflow-hidden
           border flex items-center px-3 gap-2 transition-all duration-200
-          bg-[#0a0a14]
+          bg-[var(--widget-surface)]
           ${isDragging ? "border-emerald-400" : isRevealed ? "border-emerald-600/60" : "border-emerald-900/50"}`}
         onDoubleClick={(e) => { e.stopPropagation(); setConfigOpen(true); }}
       >

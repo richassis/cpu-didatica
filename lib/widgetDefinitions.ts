@@ -117,8 +117,11 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     label: "Adder",
     namePrefix: "ADD",
     icon: "\u2795",
-    defaultWidth: 128,  // 8 grid cells
-    defaultHeight: 176, // 11 grid cells
+    // Deliberately half the ULA's width: the PC+1 adder is secondary hardware and
+    // should not read as being as important as the ALU. 96 keeps the SVG's 161:241
+    // aspect ratio, so the artwork no longer overflows its box.
+    defaultWidth: 64,  // 4 grid cells
+    defaultHeight: 96, // 6 grid cells
     description: "Dedicated adder \u2014 always performs A + B",
     // Adder mirrored: inputs from right, output to left
     portConfig: {
@@ -127,6 +130,27 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
       ports: {
         "carry": { hidden: true, side: "left", offset: 0 },
         "result": { hidden: false, side: "left", offset: 50 }
+      },
+    },
+  },
+  {
+    type: "IncrementerComponent",
+    label: "Incrementer (+1)",
+    namePrefix: "INC",
+    icon: "➕",
+    // Deliberately the smallest block on the canvas: it is plumbing, not one of
+    // the CPU's teaching blocks.
+    defaultWidth: 48,  // 3 grid cells
+    defaultHeight: 48, // 3 grid cells
+    description: "Adds 1 to its input — single input, single output (PC+1)",
+    // Mirrored like the adder it replaces: input on the right, output on the left.
+    portConfig: {
+      defaultInputSide: "right",
+      defaultOutputSide: "left",
+      ports: {
+        "in": { side: "right", offset: 50 },
+        "result": { side: "left", offset: 50 },
+        "carry": { hidden: true, side: "bottom", offset: 50 },
       },
     },
   },

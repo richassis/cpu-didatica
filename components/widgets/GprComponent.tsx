@@ -49,7 +49,7 @@ export default function GprComponent({ component, zoom }: Props) {
         {...listeners} {...attributes}
         data-draggable
         className={`select-none cursor-grab active:cursor-grabbing relative rounded-xl overflow-hidden flex flex-col
-          border transition-all duration-200 bg-[#0a0a14]
+          border transition-all duration-200 bg-[var(--widget-surface)]
           ${isDragging ? "border-teal-400" : isRevealed ? "border-teal-600/60" : "border-teal-900/40"}`}
         onDoubleClick={(e) => { e.stopPropagation(); setConfigOpen(true); }}
       >

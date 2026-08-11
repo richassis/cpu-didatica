@@ -23,7 +23,21 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    // suppressHydrationWarning: the inline script below stamps `data-theme` on
+    // <html> before React hydrates, so the client DOM intentionally differs from
+    // the server HTML on this one attribute.
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        {/*
+          Apply the persisted colour profile before first paint, otherwise the
+          app renders dark for a frame and then flips to light.
+        */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{var t=JSON.parse(localStorage.getItem("simulator-theme")||"{}");document.documentElement.dataset.theme=(t.state&&t.state.theme)||"dark"}catch(e){document.documentElement.dataset.theme="dark"}`,
+          }}
+        />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased h-screen overflow-hidden`}
       >

@@ -11,11 +11,13 @@ import { useProjectStore } from "@/lib/projectStore";
 import { calculatePortPosition, getPortPlacement, type PortSide } from "@/lib/portPositioning";
 import { getWidgetDefinition } from "@/lib/widgetDefinitions";
 import {
+  buildWirePath,
   enforceOrthogonal,
   escapePort,
   pointsToSVGPath,
   simplifyOrthogonalPath,
   snapToGrid,
+  type AABB,
   type Point,
 } from "@/lib/wireRouting";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
@@ -176,8 +178,26 @@ export default function EnhancedBusOverlay({
       const targetEscape = escapePort(target.pos, target.side)[1] ?? target.pos;
       const nodes = normalizeNodes(wire.nodes ?? []);
 
-      const rawPath = [source.pos, sourceEscape, ...nodes, targetEscape, target.pos];
-      const path = simplifyOrthogonalPath(enforceOrthogonal(rawPath));
+      // Every component except the two this wire connects is an obstacle, so the
+      // router can drop corners without cutting a shortcut through a widget.
+      const obstacles: AABB[] = [];
+      const endpointBoxes: AABB[] = [];
+      for (const c of components) {
+        const box = { x: c.x, y: c.y, w: c.w, h: c.h };
+        if (c.id === wire.sourceComponentId || c.id === wire.targetComponentId) {
+          endpointBoxes.push(box);
+        } else {
+          obstacles.push(box);
+        }
+      }
+
+      const path = buildWirePath(
+        source.pos, source.side,
+        target.pos, target.side,
+        nodes,
+        obstacles,
+        endpointBoxes,
+      );
 
       const sourceComponent = components.find((c) => c.id === wire.sourceComponentId);
       const isCpuControlSignal = sourceComponent?.type === "CpuComponent";
@@ -353,6 +373,16 @@ export default function EnhancedBusOverlay({
     const animate = () => {
       const elapsed = Date.now() - startTime;
       if (elapsed >= totalDuration) {
+        // The last substep finishes exactly at `totalDuration`, so the frame
+        // where its `groupProgress` reaches 1 never runs and its wires were
+        // never settled — which is why the final value delivered each state
+        // (MUX_PC → PC on a fetch) vanished instead of resting at its
+        // destination. Settle everything that animated in this pass here.
+        setSettledDots((prev) => {
+          const next = new Set(prev);
+          for (const id of animatingIds) next.add(id);
+          return next;
+        });
         setAnimatingWires(new Set());
         setAnimationProgress(new Map());
         animationRef.current = null;
@@ -630,7 +660,49 @@ export default function EnhancedBusOverlay({
 
   if (!visible) return null;
 
+  const visibleWires = wireRenderData.filter((wireData) => {
+    if (wireData.wire.visible === false) return false;
+    if (wireData.isCpuControlSignal && !showCpuSignalWires) return false;
+    if (!wireData.isCpuControlSignal && !showDataSignalWires) return false;
+    return true;
+  });
+
+  /**
+   * Where the travelling value marker sits on each wire, or null when that wire
+   * is not carrying anything right now.
+   */
+  const valueMarkers = visibleWires.flatMap((wireData) => {
+    // Dots can be disabled globally; CPU wires only show dots when they're in
+    // the current animation set (i.e. their value changed).
+    if (!showWireDots) return [];
+    if (wireData.isCpuControlSignal && !animatingWires.has(wireData.wire.id)) return [];
+
+    const liveProgress = animationProgress.get(wireData.wire.id);
+    let progress: number | null = null;
+    if (liveProgress !== undefined) {
+      // Flowing this pass: appear only once its substep starts.
+      if (liveProgress > 0) progress = liveProgress;
+    } else if (settledDots.has(wireData.wire.id)) {
+      // Not flowing right now but has delivered before — rest at the target port
+      // until a new value flows.
+      progress = 1;
+    }
+    if (progress === null) return [];
+
+    return [{
+      id: wireData.wire.id,
+      point: getPointAlongPath(wireData.path, progress),
+      value: wireData.value,
+      color: wireData.isCpuControlSignal ? "var(--wire-control)" : "var(--wire-data)",
+      isResting: progress >= 1,
+      // Resting markers sit on top of the destination widget, so push the badge
+      // further away and to the side the wire arrived from.
+      lift: progress >= 1 ? 26 : 20,
+    }];
+  });
+
   return (
+    <>
     <svg
       className="absolute inset-0 pointer-events-none"
       style={{
@@ -655,33 +727,30 @@ export default function EnhancedBusOverlay({
           </feMerge>
         </filter>
 
+        {/* Colours come from CSS variables so they follow the light/dark profile.
+            They must be set via `style`, not the stop-color attribute — var()
+            is not resolved in SVG presentation attributes. */}
         <linearGradient id="wireGradientData" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#fbbf24" stopOpacity="0.85" />
-          <stop offset="100%" stopColor="#f59e0b" stopOpacity="0.85" />
+          <stop offset="0%" style={{ stopColor: "var(--wire-data)", stopOpacity: 0.85 }} />
+          <stop offset="100%" style={{ stopColor: "var(--wire-data-end)", stopOpacity: 0.85 }} />
         </linearGradient>
 
         <linearGradient id="wireGradientControl" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.85" />
-          <stop offset="100%" stopColor="#60a5fa" stopOpacity="0.85" />
+          <stop offset="0%" style={{ stopColor: "var(--wire-control-end)", stopOpacity: 0.85 }} />
+          <stop offset="100%" style={{ stopColor: "var(--wire-control)", stopOpacity: 0.85 }} />
         </linearGradient>
       </defs>
 
-      {wireRenderData
-        .filter((wireData) => {
-          if (wireData.wire.visible === false) return false;
-          if (wireData.isCpuControlSignal && !showCpuSignalWires) return false;
-          if (!wireData.isCpuControlSignal && !showDataSignalWires) return false;
-          return true;
-        })
+      {visibleWires
         .map((wireData) => {
-          const { wire, path, value, isCpuControlSignal } = wireData;
+          const { wire, path, isCpuControlSignal } = wireData;
           const pathD = pointsToSVGPath(path);
           const isSelected = wire.id === selectedWireId;
           const isHovered = wire.id === hoveredWireId && !isSelected;
           const isAnimating = animatingWires.has(wire.id);
 
           const baseColor = isCpuControlSignal ? "url(#wireGradientControl)" : "url(#wireGradientData)";
-          const pulseColor = isCpuControlSignal ? "#60a5fa" : "#fbbf24";
+          const pulseColor = isCpuControlSignal ? "var(--wire-control)" : "var(--wire-data)";
 
           const editableChain = [wireData.sourceEscape, ...(wire.nodes ?? []), wireData.targetEscape];
 
@@ -741,15 +810,19 @@ export default function EnhancedBusOverlay({
                 );
               })}
 
+              {/* Wires are deliberately thin and un-glowed: they are context, not
+                  content. Only the hovered/selected wire thickens, and only the
+                  wire currently carrying a value lights up. */}
               <path
                 d={pathD}
                 fill="none"
-                stroke={isSelected ? pulseColor : isHovered ? pulseColor : baseColor}
-                strokeWidth={isSelected ? 5 : isHovered ? 4 : 3}
+                strokeWidth={isSelected ? 2.5 : isHovered ? 2 : 1.25}
                 strokeLinecap="round"
-                filter="url(#glow)"
-                opacity={isAnimating ? 0.95 : 0.78}
+                strokeLinejoin="round"
+                filter={isAnimating ? "url(#glow)" : undefined}
+                opacity={isAnimating ? 0.95 : 0.55}
                 className="pointer-events-none"
+                style={{ stroke: isSelected || isHovered ? pulseColor : baseColor }}
               />
 
               <path
@@ -799,44 +872,6 @@ export default function EnhancedBusOverlay({
                 );
               })}
 
-              {(() => {
-                // Dots can be disabled globally; CPU wires only show dots when
-                // they're in the current animation set (i.e. their value changed).
-                if (!showWireDots) return null;
-                if (isCpuControlSignal && !animatingWires.has(wire.id)) return null;
-
-                const liveProgress = animationProgress.get(wire.id);
-                let dotProgress: number | null = null;
-                if (liveProgress !== undefined) {
-                  // Flowing this pass: appear only once its substep starts (#4).
-                  if (liveProgress > 0) dotProgress = liveProgress;
-                } else if (settledDots.has(wire.id)) {
-                  // Not flowing right now but has delivered before — rest at the
-                  // target port until a new value flows (#5).
-                  dotProgress = 1;
-                }
-
-                if (dotProgress === null) return null;
-                const point = getPointAlongPath(path, dotProgress);
-                const isResting = dotProgress >= 1;
-
-                return (
-                  <g transform={`translate(${point.x}, ${point.y})`} className="pointer-events-none">
-                    <circle r={isResting ? 5 : 6} fill={pulseColor} filter="url(#pulseGlow)" opacity={isResting ? 0.85 : 0.9} />
-                    <g transform="translate(0, -16)">
-                      <rect x="-18" y="-8" width="36" height="16" rx="4" fill="#111827" stroke={pulseColor} strokeWidth="1.4" />
-                      <text
-                        textAnchor="middle"
-                        dominantBaseline="middle"
-                        className="font-mono"
-                        style={{ fontSize: "9px", fill: "#f3f4f6" }}
-                      >
-                        {value}
-                      </text>
-                    </g>
-                  </g>
-                );
-              })()}
             </g>
           );
         })}
@@ -921,5 +956,48 @@ export default function EnhancedBusOverlay({
         </text>
       )}
     </svg>
+
+    {/*
+      Transmitted values live in their own layer painted ABOVE the widgets
+      (widgets sit at z-index 10). Previously they were drawn with the wires,
+      underneath, so a value became unreadable exactly when it arrived at its
+      destination — which is the moment that matters.
+    */}
+    <svg
+      className="absolute inset-0 pointer-events-none"
+      style={{ width: CANVAS_WIDTH, height: CANVAS_HEIGHT, zIndex: 30 }}
+    >
+      {valueMarkers.map((marker) => {
+        const width = Math.max(44, marker.value.length * 8.5 + 14);
+
+        return (
+          <g key={`value-${marker.id}`} transform={`translate(${marker.point.x}, ${marker.point.y})`}>
+            <circle
+              r={marker.isResting ? 4 : 5}
+              filter="url(#pulseGlow)"
+              opacity={0.9}
+              style={{ fill: marker.color }}
+            />
+            <g transform={`translate(0, ${-marker.lift})`}>
+              <rect
+                x={-width / 2} y={-11} width={width} height={22} rx={5}
+                strokeWidth={1.5}
+                opacity={0.97}
+                style={{ fill: "var(--wire-value-bg)", stroke: marker.color }}
+              />
+              <text
+                textAnchor="middle"
+                dominantBaseline="central"
+                className="font-mono"
+                style={{ fontSize: "13px", fontWeight: 700, fill: "var(--wire-value-fg)" }}
+              >
+                {marker.value}
+              </text>
+            </g>
+          </g>
+        );
+      })}
+    </svg>
+    </>
   );
 }

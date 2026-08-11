@@ -18,7 +18,8 @@ export function safeNumber(value: number | undefined | null, fallback: number): 
  */
 export const DEFAULT_DIMENSIONS = {
   UlaComponent: { width: 128, height: 176 },
-  AdderComponent: { width: 128, height: 176 },
+  AdderComponent: { width: 64, height: 96 },
+  IncrementerComponent: { width: 48, height: 48 },
   MuxComponent: { width: 64, height: 96 },
   MemoryComponent: { width: 160, height: 192 },
   InstructionMemoryComponent: { width: 160, height: 192 },
