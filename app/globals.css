@@ -329,6 +329,38 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* ──────────────────────────────────────────────────────────────────────────
+   Type scale
+
+   Hierarchy comes from size and colour, not from weight — nothing on screen
+   goes above 500. These classes are the only place a font-size for chrome or
+   data should be written; reach for one of them instead of `text-[10px]`.
+   ────────────────────────────────────────────────────────────────────────── */
+.t-panel   { font-family: var(--font-sans); font-size: 18px; font-weight: 500; }
+.t-node    { font-family: var(--font-sans); font-size: 13px; font-weight: 500; }
+.t-section { font-family: var(--font-sans); font-size: 12px; font-weight: 500; color: var(--text-muted); }
+.t-body    { font-family: var(--font-sans); font-size: 14px; font-weight: 400; }
+.t-metric  { font-family: var(--font-sans); font-size: 32px; font-weight: 300; }
+
+.t-value {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.t-value-sm {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.t-code {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.6;
+}
+
 /* Hide scrollbars but keep functionality */
 .scrollbar-hide {
   -ms-overflow-style: none;  /* IE and Edge */
