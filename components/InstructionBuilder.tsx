@@ -94,7 +94,7 @@ export default function InstructionBuilder({ imem, onClose, initialAddress = 0 }
     <div className="flex flex-col gap-4 p-4 bg-surface rounded-lg border border-line max-w-2xl">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-bold text-fg">Instruction Builder</h3>
+        <h3 className="t-panel text-fg">Instruction builder</h3>
         <button
           onClick={onClose}
           className="text-fg-muted hover:text-fg text-xl leading-none"
@@ -109,7 +109,7 @@ export default function InstructionBuilder({ imem, onClose, initialAddress = 0 }
         <select
           value={selectedAddress}
           onChange={(e) => setSelectedAddress(Number(e.target.value))}
-          className="flex-1 bg-sunken border border-line rounded px-3 py-2 text-white focus:outline-none focus:border-st-active"
+          className="flex-1 bg-sunken border border-line rounded px-3 py-2 text-fg focus:outline-none focus:border-st-active"
         >
           {addressOptions.map((addr) => (
             <option key={addr} value={addr}>
@@ -129,7 +129,7 @@ export default function InstructionBuilder({ imem, onClose, initialAddress = 0 }
           <select
             value={selectedMnemonic}
             onChange={(e) => handleMnemonicChange(e.target.value as keyof typeof Opcode)}
-            className="w-full bg-sunken border border-line rounded px-3 py-2 text-white focus:outline-none focus:border-st-active mb-2"
+            className="w-full bg-sunken border border-line rounded px-3 py-2 text-fg focus:outline-none focus:border-st-active mb-2"
           >
             {(Object.keys(INSTRUCTION_SET) as Array<keyof typeof Opcode>).map((mnemonic) => (
               <option key={mnemonic} value={mnemonic}>
@@ -152,7 +152,7 @@ export default function InstructionBuilder({ imem, onClose, initialAddress = 0 }
                 <select
                   value={gprAddr}
                   onChange={(e) => setGprAddr(Number(e.target.value))}
-                  className="flex-1 bg-sunken border border-line rounded px-3 py-2 text-white focus:outline-none focus:border-st-active"
+                  className="flex-1 bg-sunken border border-line rounded px-3 py-2 text-fg focus:outline-none focus:border-st-active"
                 >
                   {REGISTER_NAMES.map((name, idx) => (
                     <option key={idx} value={idx}>
@@ -175,7 +175,7 @@ export default function InstructionBuilder({ imem, onClose, initialAddress = 0 }
                       setOperand(val);
                     }
                   }}
-                  className="flex-1 bg-sunken border border-line rounded px-3 py-2 text-white font-mono focus:outline-none focus:border-st-active"
+                  className="flex-1 bg-sunken border border-line rounded px-3 py-2 text-fg font-mono focus:outline-none focus:border-st-active"
                   placeholder="0x00"
                 />
                 <span className="text-xs text-fg-muted">Range: 0x00-0xFF</span>
@@ -190,7 +190,7 @@ export default function InstructionBuilder({ imem, onClose, initialAddress = 0 }
               <select
                 value={srcA}
                 onChange={(e) => setSrcA(Number(e.target.value))}
-                className="flex-1 bg-sunken border border-line rounded px-3 py-2 text-white focus:outline-none focus:border-st-active"
+                className="flex-1 bg-sunken border border-line rounded px-3 py-2 text-fg focus:outline-none focus:border-st-active"
               >
                 {REGISTER_NAMES.map((name, idx) => (
                   <option key={idx} value={idx}>
@@ -205,7 +205,7 @@ export default function InstructionBuilder({ imem, onClose, initialAddress = 0 }
                 <select
                   value={srcB}
                   onChange={(e) => setSrcB(Number(e.target.value))}
-                  className="flex-1 bg-sunken border border-line rounded px-3 py-2 text-white focus:outline-none focus:border-st-active"
+                  className="flex-1 bg-sunken border border-line rounded px-3 py-2 text-fg focus:outline-none focus:border-st-active"
                 >
                   {REGISTER_NAMES.map((name, idx) => (
                     <option key={idx} value={idx}>
@@ -220,7 +220,7 @@ export default function InstructionBuilder({ imem, onClose, initialAddress = 0 }
               <select
                 value={dst}
                 onChange={(e) => setDst(Number(e.target.value))}
-                className="flex-1 bg-sunken border border-line rounded px-3 py-2 text-white focus:outline-none focus:border-st-active"
+                className="flex-1 bg-sunken border border-line rounded px-3 py-2 text-fg focus:outline-none focus:border-st-active"
               >
                 {REGISTER_NAMES.map((name, idx) => (
                   <option key={idx} value={idx}>
@@ -235,7 +235,7 @@ export default function InstructionBuilder({ imem, onClose, initialAddress = 0 }
 
       {/* Encoding Display */}
       <div className="border-t border-line pt-4">
-        <h4 className="text-sm font-semibold text-fg mb-3">Instruction Encoding:</h4>
+        <h4 className="t-section mb-3">Instruction encoding</h4>
         
         {/* Binary Breakdown */}
         <div className="bg-canvas border border-line rounded p-3 mb-3 font-mono text-xs">
@@ -243,17 +243,17 @@ export default function InstructionBuilder({ imem, onClose, initialAddress = 0 }
             <div className="grid grid-cols-3 gap-2 text-center">
               <div>
                 <div className="text-fg-muted mb-1">OPCODE</div>
-                <div className="text-fg font-bold">{breakdown.opcodeBits}</div>
+                <div className="text-fg font-medium">{breakdown.opcodeBits}</div>
                 <div className="text-fg-faint text-[10px]">[15:11]</div>
               </div>
               <div>
                 <div className="text-fg-muted mb-1">GPR</div>
-                <div className="text-st-active font-bold">{breakdown.field1}</div>
+                <div className="text-st-active font-medium">{breakdown.field1}</div>
                 <div className="text-fg-faint text-[10px]">[10:8]</div>
               </div>
               <div>
                 <div className="text-fg-muted mb-1">OPERAND</div>
-                <div className="text-fg font-bold">{breakdown.field2}</div>
+                <div className="text-fg font-medium">{breakdown.field2}</div>
                 <div className="text-fg-faint text-[10px]">[7:0]</div>
               </div>
             </div>
@@ -261,27 +261,27 @@ export default function InstructionBuilder({ imem, onClose, initialAddress = 0 }
             <div className="grid grid-cols-5 gap-2 text-center">
               <div>
                 <div className="text-fg-muted mb-1">OPCODE</div>
-                <div className="text-fg font-bold">{breakdown.opcodeBits}</div>
+                <div className="text-fg font-medium">{breakdown.opcodeBits}</div>
                 <div className="text-fg-faint text-[10px]">[15:11]</div>
               </div>
               <div>
                 <div className="text-fg-muted mb-1">SRC_A</div>
-                <div className="text-st-active font-bold">{breakdown.srcABits}</div>
+                <div className="text-st-active font-medium">{breakdown.srcABits}</div>
                 <div className="text-fg-faint text-[10px]">[10:8]</div>
               </div>
               <div>
                 <div className="text-fg-muted mb-1">SRC_B</div>
-                <div className="text-fg font-bold">{breakdown.srcBBits}</div>
+                <div className="text-fg font-medium">{breakdown.srcBBits}</div>
                 <div className="text-fg-faint text-[10px]">[7:5]</div>
               </div>
               <div>
                 <div className="text-fg-muted mb-1">PAD</div>
-                <div className="text-fg-faint font-bold">{breakdown.padBits}</div>
+                <div className="text-fg-faint font-medium">{breakdown.padBits}</div>
                 <div className="text-fg-faint text-[10px]">[4:3]</div>
               </div>
               <div>
                 <div className="text-fg-muted mb-1">DST</div>
-                <div className="text-st-warn font-bold">{breakdown.dstBits}</div>
+                <div className="text-st-warn font-medium">{breakdown.dstBits}</div>
                 <div className="text-fg-faint text-[10px]">[2:0]</div>
               </div>
             </div>
@@ -292,7 +292,7 @@ export default function InstructionBuilder({ imem, onClose, initialAddress = 0 }
         <div className="grid grid-cols-2 gap-4">
           <div>
             <span className="text-sm text-fg-muted">Hex: </span>
-            <span className="text-lg font-mono font-bold text-fg">
+            <span className="num font-mono text-lg text-fg">
               {formatHex(encodedValue, 16)}
             </span>
           </div>
@@ -309,19 +309,19 @@ export default function InstructionBuilder({ imem, onClose, initialAddress = 0 }
       <div className="flex gap-3 pt-4 border-t border-line">
         <button
           onClick={handleSet}
-          className="flex-1 bg-raised hover:bg-raised text-white font-semibold py-2 px-4 rounded transition-colors"
+          className="flex-1 rounded-lg border border-line-strong bg-raised px-4 py-2 text-xs text-fg transition-colors hover:border-st-active"
         >
-          Set Instruction
+          Set instruction
         </button>
         <button
           onClick={handleClear}
-          className="bg-raised hover:bg-raised text-white py-2 px-4 rounded transition-colors"
+          className="rounded-lg border border-line px-4 py-2 text-xs text-fg-muted transition-colors hover:border-line-strong hover:text-fg"
         >
           Clear
         </button>
         <button
           onClick={onClose}
-          className="bg-raised hover:bg-raised text-white py-2 px-4 rounded transition-colors"
+          className="rounded-lg border border-line px-4 py-2 text-xs text-fg-muted transition-colors hover:border-line-strong hover:text-fg"
         >
           Cancel
         </button>

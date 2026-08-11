@@ -83,7 +83,7 @@ export default function PortTooltipWrapper({ componentId, componentLabel, childr
           <div className="w-56 rounded-xl border border-line bg-surface">
             {/* Header */}
             <div className="border-b border-line px-3 py-1.5">
-              <span className="text-xs font-semibold text-white truncate">{componentLabel}</span>
+              <span className="text-xs font-medium text-fg truncate">{componentLabel}</span>
             </div>
 
             <div className="p-2 space-y-2">

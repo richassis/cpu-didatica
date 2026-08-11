@@ -136,7 +136,7 @@ export default function ProjectSwitcher() {
       {showNewProjectInput && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="w-[420px] rounded-2xl border border-line bg-surface p-6">
-            <h3 className="text-lg font-semibold text-white mb-4">Create New Project</h3>
+            <h3 className="t-panel text-fg mb-4">Create new project</h3>
             <input
               type="text"
               value={newProjectName}
@@ -202,7 +202,7 @@ export default function ProjectSwitcher() {
                   {tab.isDefaultProject && (
                     <Star className="h-3.5 w-3.5 flex-shrink-0 text-st-warn" />
                   )}
-                  <span className="flex-1 text-white truncate">{tab.name}</span>
+                  <span className="flex-1 text-fg truncate">{tab.name}</span>
                   {tab.id === activeTabId && (
                     <Check className="h-3.5 w-3.5 flex-shrink-0 text-st-active" />
                   )}

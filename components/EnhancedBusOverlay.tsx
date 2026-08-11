@@ -717,7 +717,7 @@ export default function EnhancedBusOverlay({
 
       {visibleWires
         .map((wireData) => {
-          const { wire, path, isCpuControlSignal } = wireData;
+          const { wire, path } = wireData;
           const pathD = pointsToSVGPath(path);
           const isSelected = wire.id === selectedWireId;
           const isHovered = wire.id === hoveredWireId && !isSelected;

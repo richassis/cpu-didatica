@@ -479,7 +479,7 @@ export default function ConfigModal({ component, onClose }: Props) {
                 </button>
               </div>
               <p className="text-[11px] text-fg-faint">
-                Select which CPU states animate this component's wires. Functional execution runs every CPU tick.
+                Select which CPU states animate the wires of this component. Functional execution runs every CPU tick.
               </p>
               <div className="grid grid-cols-3 gap-1.5">
                 {ALL_CPU_STATES.map((state) => {
