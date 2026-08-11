@@ -37,7 +37,7 @@ function AddComponentModalContent({ onClose }: { onClose: () => void }) {
     setSelected(def);
     setConfig({
       label: generateDefaultLabel(def, components),
-      bitWidth: def.type === "Register" || def.type === "MuxComponent" || def.type === "MemoryComponent" ? 16 : undefined,
+      bitWidth: def.type === "Register" || def.type === "PipelineRegister" || def.type === "MuxComponent" || def.type === "MemoryComponent" ? 16 : undefined,
       numInputs: def.type === "MuxComponent" ? 2 : undefined,
       wordCount: def.type === "MemoryComponent" ? 256 : undefined,
     });

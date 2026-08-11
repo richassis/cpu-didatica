@@ -2,7 +2,7 @@
   "id": "default-full-datapath",
   "name": "Full Datapath",
   "createdAt": "2026-04-07T03:40:44.124Z",
-  "updatedAt": "2026-06-11T23:26:08.593Z",
+  "updatedAt": "2026-06-12T20:32:22.205Z",
   "components": [
     {
       "id": "cpu-1",
@@ -897,7 +897,7 @@
     },
     {
       "id": "8447ad64-3e71-4ffc-97f1-7d93bad0bb6e",
-      "type": "Register",
+      "type": "PipelineRegister",
       "label": "A",
       "w": 144,
       "h": 48,
@@ -914,13 +914,13 @@
         }
       },
       "tickSteps": [
-        2,
-        4
+        5,
+        6
       ]
     },
     {
       "id": "0fe712f0-8b31-40c6-adf8-eb71600f42da",
-      "type": "Register",
+      "type": "PipelineRegister",
       "label": "B",
       "w": 144,
       "h": 48,
@@ -937,7 +937,7 @@
         }
       },
       "tickSteps": [
-        2
+        6
       ]
     },
     {

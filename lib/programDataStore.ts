@@ -11,8 +11,9 @@ import { create } from "zustand";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useExecutionStore } from "@/lib/executionStore";
 import { Gpr, Memory, InstructionMemory } from "@/lib/simulator";
-import { assemble } from "@/lib/assembler";
-import { loadTestProgram, TEST_PROGRAM_SOURCE } from "@/lib/testProgram";
+import { assemble, type AssemblyError } from "@/lib/assembler";
+import { loadTestProgram } from "@/lib/testProgram";
+import { PRESET_PROGRAMS } from "@/lib/presetPrograms";
 
 /** Schema for .cpudat files */
 export interface CpuDataFile {
@@ -43,6 +44,9 @@ interface ProgramDataState {
   /** True while a program run is executing and snapshots are being captured. */
   isRunning: boolean;
 
+  /** Errors from the most recent assembly attempt (empty = success or not yet run). */
+  assemblyErrors: AssemblyError[];
+
   /** Assemble, load, and execute the current program source. */
   runProgram: () => void;
 
@@ -64,8 +68,9 @@ interface ProgramDataState {
 }
 
 export const useProgramDataStore = create<ProgramDataState>()((set, get) => ({
-  assemblySource: TEST_PROGRAM_SOURCE,
+  assemblySource: PRESET_PROGRAMS[0].source,
   isRunning: false,
+  assemblyErrors: [],
 
   setAssemblySource: (src) => set({ assemblySource: src }),
 
@@ -95,7 +100,7 @@ export const useProgramDataStore = create<ProgramDataState>()((set, get) => ({
     const { isRunning, assemblySource } = get();
     if (isRunning) return;
 
-    set({ isRunning: true });
+    set({ isRunning: true, assemblyErrors: [] });
 
     const execution = useExecutionStore.getState();
     if (execution.isTimelineActive) {
@@ -104,13 +109,29 @@ export const useProgramDataStore = create<ProgramDataState>()((set, get) => ({
 
     window.setTimeout(() => {
       try {
-        const words = assemble(assemblySource);
-        if (words === null) {
-          // Fall back to test program while assembler is not implemented.
+        const result = assemble(assemblySource);
+
+        if (result === null) {
+          // Empty source — fall back to the built-in test program.
           loadTestProgram();
+        } else if (result.errors.length > 0) {
+          // Assembly failed: show errors, do not execute.
+          set({ assemblyErrors: result.errors, isRunning: false });
+          return;
+        } else {
+          // Assembly succeeded: load words into IMEM, reset data memory.
+          const sim = useSimulatorStore.getState();
+
+          const imemEntry = Array.from(sim.objects.entries())
+            .find(([, obj]) => obj instanceof InstructionMemory);
+          if (imemEntry) {
+            (imemEntry[1] as InstructionMemory).load(result.words);
+          }
+
+          sim.touch();
         }
-        // TODO: when assemble() returns words, load into IMEM.
-        execution.loadAndExecute();
+
+        execution.loadAndExecute(result?.dataWords ?? []);
       } finally {
         set({ isRunning: false });
       }

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { CpuState } from "@/lib/simulator";
+import { CpuState, Memory } from "@/lib/simulator";
 import type { ComponentState } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import type { CPU, CpuInternalStateSnapshot } from "@/lib/simulator/Cpu";
@@ -73,7 +73,7 @@ export interface ExecutionState extends ExecutionDerivedState {
   /** Error message when execution stops due to max ticks. */
   executionError: string | null;
 
-  loadAndExecute: () => void;
+  loadAndExecute: (dataWords?: number[]) => void;
   goToTick: (index: number) => void;
   stepForward: () => void;
   stepBackward: () => void;
@@ -194,13 +194,20 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
   canGoForward: false,
   canGoBack: false,
 
-  loadAndExecute: () => {
+  loadAndExecute: (dataWords: number[] = []) => {
     const sim = useSimulatorStore.getState();
     const frames: TickFrame[] = [];
 
     useSimulatorStore.setState({ isBatchExecuting: true });
     try {
       sim.resetClock();
+
+      // Reload initial data memory values after resetClock() wiped everything
+      if (dataWords.length > 0) {
+        const memEntry = Array.from(sim.objects.entries())
+          .find(([, obj]) => obj instanceof Memory);
+        if (memEntry) (memEntry[1] as Memory).load(dataWords);
+      }
 
       // Frame 0: initial state. No tick has run, so pre === post and there are
       // no substeps to reveal.

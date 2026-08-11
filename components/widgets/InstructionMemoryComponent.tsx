@@ -1,26 +1,29 @@
 "use client";
-
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
+import type { CSSProperties } from "react";
 import { Props } from "@/lib/store";
 import { useRevealState, revealStyle } from "@/lib/useRevealState";
 import { useSimulatorStore } from "@/lib/simulatorStore";
-import type { InstructionMemory } from "@/lib/simulator/InstructionMemory";
-import React from "react";
 import ConfigModal from "@/components/ConfigModal";
 import PortsOverlay from "@/components/PortsOverlay";
 import InstructionBuilder from "@/components/InstructionBuilder";
+import type { InstructionMemory } from "@/lib/simulator/InstructionMemory";
+import { INSTRUCTION_SET } from "@/lib/simulator/ISA";
 
-function addrHex(addr: number, addrBits: number): string {
-  const digits = Math.ceil(addrBits / 4);
-  return "0x" + addr.toString(16).toUpperCase().padStart(digits, "0");
+const WINDOW = 3;
+
+function decodeWord(word: number): string {
+  if (word === 0) return "NOP";
+  const opcode = (word >>> 11) & 0x1F;
+  const entry = Object.values(INSTRUCTION_SET).find((d) => d.opcode === opcode);
+  return entry ? entry.mnemonic : "???";
 }
 
-function dataHex(data: number, bitWidth: number): string {
-  const digits = Math.ceil(bitWidth / 4);
-  return "0x" + data.toString(16).toUpperCase().padStart(digits, "0");
+function fmtAddr(addr: number, addrBits: number) {
+  return "0x" + addr.toString(16).toUpperCase().padStart(Math.ceil(addrBits / 4), "0");
 }
 
 export default function InstructionMemoryComponent({ component, zoom }: Props) {
@@ -35,31 +38,22 @@ export default function InstructionMemoryComponent({ component, zoom }: Props) {
   void revision;
 
   const wordCount = imem?.wordCount ?? 256;
-  const bitWidth = imem?.bitWidth ?? 16;
   const addrBits = Math.max(1, Math.ceil(Math.log2(wordCount)));
-  const currentAddr = imem ? imem.in_addr.value : 0;
+  const currentAddr = imem?.in_addr.value ?? 0;
+  const isRevealed = revealStatus === "revealed";
 
-  const { attributes, listeners, setNodeRef, transform, isDragging } =
-    useDraggable({ id });
+  const startIdx = Math.max(0, currentAddr - WINDOW);
+  const endIdx = Math.min(wordCount - 1, currentAddr + WINDOW);
+  const windowRows = Array.from({ length: endIdx - startIdx + 1 }, (_, i) => startIdx + i);
 
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id });
   const correctedTransform = transform
     ? { ...transform, x: transform.x / zoom, y: transform.y / zoom }
     : null;
-
-  const style: React.CSSProperties = {
-    position: "absolute",
-    left: x,
-    top: y,
-    width: w,
-    height: h,
+  const style: CSSProperties = {
+    position: "absolute", left: x, top: y, width: w, height: h,
     transform: CSS.Translate.toString(correctedTransform),
-    zIndex: isDragging ? 50 : 10,
-    touchAction: "none",
-  };
-
-  const handleAddressClick = (addr: number) => {
-    setSelectedAddress(addr);
-    setBuilderOpen(true);
+    zIndex: isDragging ? 50 : 10, touchAction: "none",
   };
 
   return (
@@ -67,118 +61,73 @@ export default function InstructionMemoryComponent({ component, zoom }: Props) {
       <div
         ref={setNodeRef}
         style={{ ...style, ...revealStyle(revealStatus) }}
-        {...listeners}
-        {...attributes}
+        {...listeners} {...attributes}
         data-draggable
-        className="select-none cursor-grab active:cursor-grabbing relative rounded-lg border-2 border-cyan-600/60 bg-gray-900 shadow-lg flex flex-col"
-        onContextMenu={(e) => e.stopPropagation()}
-        onDoubleClick={(e) => {
-          e.stopPropagation();
-          setConfigOpen(true);
-        }}
+        className={`select-none cursor-grab active:cursor-grabbing relative rounded-xl overflow-hidden flex flex-col
+          border transition-all duration-200 bg-[#0a0a14]
+          ${isDragging ? "border-violet-400" : isRevealed ? "border-violet-600/60" : "border-violet-900/40"}`}
+        onDoubleClick={(e) => { e.stopPropagation(); setConfigOpen(true); }}
       >
         {/* Header */}
-        <div className="shrink-0 px-3 py-1.5 bg-cyan-950/80 border-b border-cyan-800/30 rounded-t-lg flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-cyan-200 tracking-wide uppercase">
-              {label || "IMEM"}
-            </span>
-          </div>
-          <button
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              setConfigOpen(true);
-            }}
-            className="text-cyan-500/60 hover:text-cyan-200 text-xs leading-none"
-            aria-label="Configure"
-          >
-            ⚙
-          </button>
+        <div className={`shrink-0 flex items-center justify-between px-2 py-1.5 border-b
+          ${isRevealed ? "bg-violet-900/40 border-violet-700/30" : "bg-violet-950/50 border-violet-900/20"}`}
+        >
+          <span className="text-[10px] font-bold text-violet-400/80 tracking-widest uppercase font-mono">{label || "IMEM"}</span>
+          <span className={`text-[10px] font-mono ${isRevealed ? "text-violet-200" : "text-violet-600"}`}>
+            PC:{fmtAddr(currentAddr, addrBits)}
+          </span>
         </div>
 
-        {/* Memory Table Header */}
-        <div className="shrink-0 grid grid-cols-2 gap-2 px-2 py-1 bg-gray-800/50 border-b border-gray-700 text-[10px] font-semibold text-gray-400">
-          <div>ADDR</div>
-          <div>DATA</div>
+        {/* Sliding window */}
+        <div className="flex-1 flex flex-col justify-center px-1.5 py-1 gap-px overflow-hidden">
+          {startIdx > 0 && (
+            <div className="text-center text-[8px] text-gray-700 font-mono py-0.5">↑ {startIdx} above</div>
+          )}
+          {windowRows.map((a) => {
+            const isCurrent = a === currentAddr;
+            const val = imem?.peek(a) ?? 0;
+            const mnem = decodeWord(val);
+            return (
+              <div
+                key={a}
+                onClick={(e) => { e.stopPropagation(); setSelectedAddress(a); setBuilderOpen(true); }}
+                className={`flex items-center gap-2 px-1.5 rounded cursor-pointer transition-colors duration-100
+                  ${isCurrent ? "bg-violet-900/40 py-[5px]" : "py-[2px] hover:bg-violet-900/10"}`}
+              >
+                {isCurrent && <span className="text-[9px] font-bold text-violet-400 leading-none shrink-0">▶</span>}
+                <span className={`font-mono shrink-0 ${isCurrent ? "text-[11px] text-violet-300 font-semibold" : "text-[10px] text-gray-600"}`}>
+                  {fmtAddr(a, addrBits)}
+                </span>
+                {isCurrent ? (
+                  <span className="flex-1 text-right font-mono text-[13px] font-bold text-violet-100">{mnem}</span>
+                ) : (
+                  <span className="flex-1 text-right font-mono text-[9px] text-gray-600">{mnem}</span>
+                )}
+              </div>
+            );
+          })}
+          {endIdx < wordCount - 1 && (
+            <div className="text-center text-[8px] text-gray-700 font-mono py-0.5">↓ {wordCount - 1 - endIdx} below</div>
+          )}
         </div>
 
-        {/* Scrollable Memory List */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden">
-          {imem &&
-            Array.from({ length: wordCount }, (_, addr) => {
-              const value = imem.peek(addr);
-              const isCurrent = addr === currentAddr;
-              
-              return (
-                <div
-                  key={addr}
-                  className={`grid grid-cols-2 gap-2 px-2 py-1 text-[10px] font-mono border-b border-gray-800/50 transition-colors cursor-pointer ${
-                    isCurrent
-                      ? "bg-cyan-900/40 text-cyan-200"
-                      : "text-gray-300 hover:bg-cyan-900/20 hover:text-cyan-200"
-                  }`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleAddressClick(addr);
-                  }}
-                  title={`Click to edit instruction at ${addrHex(addr, addrBits)}`}
-                >
-                  <div className={isCurrent ? "font-bold" : ""}>
-                    {addrHex(addr, addrBits)}
-                  </div>
-                  <div className={isCurrent ? "font-bold" : ""}>
-                    {dataHex(value, bitWidth)}
-                  </div>
-                </div>
-              );
-            })}
+        <div className="shrink-0 px-2 py-1 border-t border-gray-800/30 text-[8px] text-gray-700 text-center font-mono">
+          click to edit
         </div>
 
-        {/* Footer */}
-        <div className="shrink-0 px-2 py-1 border-t border-gray-800 bg-gray-900/80 rounded-b-lg text-[9px] text-gray-600 text-center italic">
-          click address to edit
-        </div>
-
-        {/* Port indicators */}
         <PortsOverlay componentId={id} />
       </div>
 
-      {configOpen && (
-        <ConfigModal component={component} onClose={() => setConfigOpen(false)} />
-      )}
-
+      {configOpen && <ConfigModal component={component} onClose={() => setConfigOpen(false)} />}
       {builderOpen && imem && createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center">
-          {/* Backdrop */}
-          <div 
-            className="absolute inset-0 bg-black/50" 
-            onClick={() => setBuilderOpen(false)} 
-          />
-          {/* Instruction Builder */}
+          <div className="absolute inset-0 bg-black/50" onClick={() => setBuilderOpen(false)} />
           <div className="relative z-10">
-            <InstructionBuilderWithAddress 
-              imem={imem} 
-              initialAddress={selectedAddress}
-              onClose={() => setBuilderOpen(false)} 
-            />
+            <InstructionBuilder imem={imem} onClose={() => setBuilderOpen(false)} initialAddress={selectedAddress} />
           </div>
         </div>,
         document.body
       )}
     </>
   );
-}
-
-// Wrapper component that sets the initial address
-function InstructionBuilderWithAddress({ 
-  imem, 
-  initialAddress, 
-  onClose 
-}: { 
-  imem: InstructionMemory; 
-  initialAddress: number; 
-  onClose: () => void; 
-}) {
-  return <InstructionBuilder imem={imem} onClose={onClose} initialAddress={initialAddress} />;
 }

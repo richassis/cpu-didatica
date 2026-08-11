@@ -3,10 +3,10 @@
 import { useState } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
+import type { CSSProperties } from "react";
 import { Props } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayStore, formatNum } from "@/lib/displayStore";
-import React from "react";
 import ConfigModal from "@/components/ConfigModal";
 import PortsOverlay from "@/components/PortsOverlay";
 import FlagSquares from "@/components/widgets/FlagSquares";
@@ -45,6 +45,23 @@ export const STATE_COLORS: Record<CpuState, string> = {
   [CpuState.WRITEREG3]: "text-emerald-300 bg-emerald-900/60 border-emerald-600",
   [CpuState.WRITEPC]:   "text-rose-300    bg-rose-900/60    border-rose-600",
   [CpuState.HALT]:      "text-red-300     bg-red-900/40     border-red-700/60",
+};
+
+// Background-only versions for the state band (no border class)
+const STATE_BG_COLORS: Record<CpuState, string> = {
+  [CpuState.RESET]:     "bg-gray-800/80 text-gray-200",
+  [CpuState.FETCH]:     "bg-indigo-900/80 text-indigo-100",
+  [CpuState.DECODE]:    "bg-purple-900/80 text-purple-100",
+  [CpuState.EXECUTE]:   "bg-orange-900/80 text-orange-100",
+  [CpuState.READMEM]:   "bg-cyan-900/80 text-cyan-100",
+  [CpuState.WRITEMEM]:  "bg-teal-900/80 text-teal-100",
+  [CpuState.READREG1]:  "bg-sky-900/80 text-sky-100",
+  [CpuState.READREG2]:  "bg-sky-900/80 text-sky-100",
+  [CpuState.WRITEREG1]: "bg-emerald-900/80 text-emerald-100",
+  [CpuState.WRITEREG2]: "bg-emerald-900/80 text-emerald-100",
+  [CpuState.WRITEREG3]: "bg-emerald-900/80 text-emerald-100",
+  [CpuState.WRITEPC]:   "bg-rose-900/80 text-rose-100",
+  [CpuState.HALT]:      "bg-red-900/60 text-red-200",
 };
 
 /** Read every control-signal output port value from the CPU instance. */
@@ -87,7 +104,6 @@ function SignalRow({
     >
       <span className="text-[10px] text-gray-400 font-mono w-20 truncate shrink-0">{name}</span>
       <div className="flex items-center gap-1.5">
-        {/* LED indicator */}
         <span
           className={`w-1.5 h-1.5 rounded-full shrink-0 transition-colors ${
             active ? "bg-indigo-400 shadow-[0_0_4px_#818cf8]" : "bg-gray-700"
@@ -124,7 +140,7 @@ export default function CpuComponent({ component, zoom }: Props) {
     ? { ...transform, x: transform.x / zoom, y: transform.y / zoom }
     : null;
 
-  const style: React.CSSProperties = {
+  const style: CSSProperties = {
     position: "absolute",
     left: x,
     top: y,
@@ -136,20 +152,28 @@ export default function CpuComponent({ component, zoom }: Props) {
   };
 
   // ── derived display ────────────────────────────────────────────
-  const nextState  = cpu ? (cpu.state as CpuState) : CpuState.FETCH;
-  const halted     = cpu ? cpu.halted : false;
-  const paused     = cpu ? cpu.paused : false;
-  const signals    = cpu ? readSignals(cpu) : {};
-  
-  // Calculate the current/executed state (the one whose signals are active)
-  // The CPU's state field points to the NEXT state to execute after tick
-  // previousState shows the state that was just executed and whose signals are currently active
+  const nextState    = cpu ? (cpu.state as CpuState) : CpuState.FETCH;
+  const halted       = cpu ? cpu.halted : false;
+  const paused       = cpu ? cpu.paused : false;
+  const signals      = cpu ? readSignals(cpu) : {};
   const currentState = cpu ? (cpu.previousState as CpuState) : CpuState.RESET;
-  
-  const nextLabel = halted ? "HALT" : (STATE_LABELS[nextState] ?? "???");
-  const nextColor = STATE_COLORS[nextState] ?? "text-gray-300 bg-gray-800 border-gray-600";
+
+  const nextLabel    = halted ? "HALT" : (STATE_LABELS[nextState] ?? "???");
+  const nextColor    = STATE_COLORS[nextState] ?? "text-gray-300 bg-gray-800 border-gray-600";
   const currentLabel = STATE_LABELS[currentState] ?? "???";
-  const currentColor = STATE_COLORS[currentState] ?? "text-gray-300 bg-gray-800 border-gray-600";
+  const currentBand  = STATE_BG_COLORS[currentState] ?? "bg-gray-800/80 text-gray-200";
+
+  // Split signals: active ones first, then inactive
+  const activeSignals   = CONTROL_SIGNAL_DEFS.filter((def) => {
+    const val = signals[def.name];
+    const numVal = typeof val === "boolean" ? (val ? 1 : 0) : (val ?? 0);
+    return numVal !== 0;
+  });
+  const inactiveSignals = CONTROL_SIGNAL_DEFS.filter((def) => {
+    const val = signals[def.name];
+    const numVal = typeof val === "boolean" ? (val ? 1 : 0) : (val ?? 0);
+    return numVal === 0;
+  });
 
   return (
     <>
@@ -159,67 +183,34 @@ export default function CpuComponent({ component, zoom }: Props) {
         {...listeners}
         {...attributes}
         data-draggable
-        className={`
-          select-none cursor-grab active:cursor-grabbing relative
-          rounded-xl border-2 flex flex-col
-          bg-gray-900 transition-colors
+        className={`select-none cursor-grab active:cursor-grabbing relative rounded-xl border flex flex-col
+          bg-[#0a0a14] transition-colors
           ${isDragging
-            ? "border-indigo-400 shadow-2xl opacity-90"
+            ? "border-indigo-400 shadow-2xl"
             : halted
-              ? "border-red-700/80 shadow-md"
+              ? "border-red-700/80"
               : paused
-                ? "border-yellow-600/80 shadow-md"
-                : "border-indigo-600/60 shadow-lg"}
-        `}
+                ? "border-yellow-600/80"
+                : "border-indigo-700/50"
+          }`}
         onContextMenu={(e) => e.stopPropagation()}
         onDoubleClick={(e) => { e.stopPropagation(); setConfigOpen(true); }}
       >
         {/* ── Header band ── */}
         <div
-          className={`shrink-0 px-3 py-1.5 flex items-center justify-between gap-2 border-b rounded-t-xl ${
-            halted ? "bg-red-950/60 border-red-800/40" : "bg-indigo-950/80 border-indigo-800/30"
-          }`}
+          className={`shrink-0 px-2 py-1.5 flex items-center justify-between gap-2 border-b rounded-t-xl
+            ${halted ? "bg-red-950/60 border-red-800/40" : "bg-indigo-950/80 border-indigo-800/30"}`}
         >
-          {/* CPU "chip" icon + label */}
-          <div className="flex items-center gap-2">
-            <div className="relative w-6 h-6 shrink-0">
-              {/* Stylised chip rectangle */}
-              <div className="absolute inset-[3px] rounded-[2px] border border-indigo-500/60 bg-indigo-900/60" />
-              {/* Left pins */}
-              {[0, 1, 2].map((i) => (
-                <div
-                  key={`l${i}`}
-                  className="absolute left-0 w-[3px] h-[2px] bg-indigo-400/60 rounded-r"
-                  style={{ top: `${7 + i * 4}px` }}
-                />
-              ))}
-              {/* Right pins */}
-              {[0, 1, 2].map((i) => (
-                <div
-                  key={`r${i}`}
-                  className="absolute right-0 w-[3px] h-[2px] bg-indigo-400/60 rounded-l"
-                  style={{ top: `${7 + i * 4}px` }}
-                />
-              ))}
-            </div>
-            <span className="text-[11px] font-bold text-indigo-200 tracking-wide uppercase truncate">
-              {label}
-            </span>
-          </div>
-
-          {/* Reset + Pause / Resume + Gear buttons */}
+          <span className="text-[11px] font-bold text-indigo-200 tracking-wide uppercase truncate font-mono">
+            {label}
+          </span>
           <div className="flex items-center gap-1.5 shrink-0">
-            {/* Reset CPU */}
             <button
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => { e.stopPropagation(); resetCpu(id); }}
               className="text-indigo-400/70 hover:text-indigo-200 text-xs leading-none px-1 py-0.5 rounded transition-colors"
-              aria-label="Reset CPU"
-              title="Reset CPU to RESET state"
-            >
-              ↺
-            </button>
-            {/* Pause / Resume */}
+              title="Reset CPU"
+            >↺</button>
             <button
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => { e.stopPropagation(); pauseCpu(id, !paused); }}
@@ -231,73 +222,82 @@ export default function CpuComponent({ component, zoom }: Props) {
                     : "text-indigo-400/70 hover:text-indigo-200"
               }`}
               disabled={halted}
-              aria-label={paused ? "Resume" : "Pause"}
               title={paused ? "Resume CPU" : "Pause CPU"}
-            >
-              {paused ? "▶" : "⏸"}
-            </button>
-            {/* Gear to open config */}
+            >{paused ? "▶" : "⏸"}</button>
             <button
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => { e.stopPropagation(); setConfigOpen(true); }}
               className="text-indigo-500/60 hover:text-indigo-200 text-xs leading-none"
-              aria-label="Configure"
-            >
-              ⚙
-            </button>
+            >⚙</button>
           </div>
         </div>
 
-        {/* ── Flag inputs (Z/C/N) — inside card, between header and state badges ── */}
-        <div className="shrink-0 px-3 py-1 border-b border-gray-800 flex items-center justify-between gap-2">
-          <span className="text-[9px] text-gray-500 font-mono uppercase">Flags in</span>
-          <FlagSquares
-            flags={[
-              { label: "Z", on: !!cpu && cpu.in_flagZero.value !== 0, title: "Zero flag in" },
-              { label: "C", on: !!cpu && cpu.in_flagCarry.value !== 0, title: "Carry flag in" },
-              { label: "N", on: !!cpu && cpu.in_flagNegative.value !== 0, title: "Negative flag in" },
-            ]}
-          />
-        </div>
-
-        {/* ── FSM state badges ── */}
-        <div className="shrink-0 px-3 py-1.5 border-b border-gray-800 space-y-1.5">
-          {/* Current/Executed State */}
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[9px] text-gray-500 font-mono uppercase">Executed</span>
-            {paused ? (
-              <span className="text-[10px] font-bold text-yellow-400 bg-yellow-900/40 border border-yellow-700/60 rounded px-1.5 py-0.5">
-                PAUSED
-              </span>
-            ) : (
-              <span
-                className={`text-[10px] font-bold border rounded px-1.5 py-0.5 ${currentColor}`}
-              >
-                {currentLabel}
-              </span>
-            )}
-          </div>
-          
-          {/* Next State */}
+        {/* ── BIG state band ── */}
+        <div className={`shrink-0 flex flex-col items-center justify-center py-2.5 border-b border-indigo-900/30
+          ${paused ? "bg-yellow-900/30" : currentBand}`}
+          style={{ minHeight: 44 }}
+        >
+          {paused ? (
+            <span className="text-[18px] font-black font-mono text-yellow-300 tracking-widest">PAUSED</span>
+          ) : (
+            <span className="text-[20px] font-black font-mono tracking-widest leading-none">
+              {currentLabel}
+            </span>
+          )}
           {!paused && (
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-[9px] text-gray-600 font-mono uppercase">Next</span>
-              <span
-                className={`text-[9px] font-semibold border rounded px-1.5 py-0.5 opacity-60 ${
-                  halted ? "text-red-300 bg-red-900/40 border-red-700/60" : nextColor
-                }`}
-              >
+            <div className="flex items-center gap-1 mt-0.5">
+              <span className="text-[9px] text-current/50 font-mono">→</span>
+              <span className={`text-[10px] font-mono font-semibold opacity-60 ${nextColor.split(" ")[0]}`}>
                 {nextLabel}
               </span>
             </div>
           )}
         </div>
 
-        {/* ── Control signals ── */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="px-2 pt-1 pb-0.5 text-[9px] text-gray-600 font-semibold uppercase tracking-widest">
-            Control Signals
+        {/* ── Flags ── */}
+        <div className="shrink-0 px-2 py-1 border-b border-gray-800/60 flex items-center justify-between">
+          <span className="text-[9px] text-gray-600 font-mono">flags</span>
+          <FlagSquares
+            flags={[
+              { label: "Z", on: !!cpu && cpu.in_flagZero.value !== 0, title: "Zero flag" },
+              { label: "C", on: !!cpu && cpu.in_flagCarry.value !== 0, title: "Carry flag" },
+              { label: "N", on: !!cpu && cpu.in_flagNegative.value !== 0, title: "Negative flag" },
+            ]}
+          />
+        </div>
+
+        {/* ── Active signals — 2-column compact grid ── */}
+        {activeSignals.length > 0 && (
+          <div className="shrink-0 px-1.5 py-1 border-b border-indigo-900/30">
+            <div className="text-[8px] text-indigo-500/70 font-mono uppercase tracking-widest mb-0.5 px-0.5">active</div>
+            <div className="grid grid-cols-2 gap-px">
+              {activeSignals.map((def) => {
+                const val = signals[def.name];
+                const display = typeof val === "boolean"
+                  ? (val ? "1" : "0")
+                  : def.bitWidth <= 1
+                    ? String(Number(val ?? 0))
+                    : formatNum(Number(val ?? 0), base, def.bitWidth);
+                return (
+                  <div key={def.name} className="flex items-center gap-1 bg-indigo-900/40 rounded px-1 py-0.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 shadow-[0_0_4px_#818cf8] shrink-0" />
+                    <span className="text-[9px] font-mono text-indigo-200 truncate flex-1">{def.name}</span>
+                    <span className="text-[9px] font-mono font-bold text-indigo-100 shrink-0">{display}</span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
+        )}
+
+        {/* ── All signals (scrollable) ── */}
+        <div className="flex-1 overflow-y-auto">
+          {activeSignals.length > 0 && (
+            <div className="px-2 pt-1 pb-0 text-[8px] text-gray-700 font-mono uppercase tracking-widest">all signals</div>
+          )}
+          {activeSignals.length === 0 && (
+            <div className="px-2 pt-1 pb-0.5 text-[9px] text-gray-600 font-semibold uppercase tracking-widest">Control Signals</div>
+          )}
           {CONTROL_SIGNAL_DEFS.map((def) => {
             const val = signals[def.name];
             const numVal = typeof val === "boolean" ? (val ? 1 : 0) : (val ?? 0);
@@ -315,13 +315,6 @@ export default function CpuComponent({ component, zoom }: Props) {
           })}
         </div>
 
-        {/* ── Bottom: opULA label when active ── */}
-        <div className="shrink-0 px-2 py-1 border-t border-gray-800 bg-gray-900/80 rounded-b-xl flex items-center justify-between">
-          <span className="text-[9px] text-gray-600 italic">dbl-click to configure</span>
-          <span className="text-[9px] text-gray-600 font-mono">CPU</span>
-        </div>
-        
-        {/* Port indicators */}
         <PortsOverlay componentId={id} />
       </div>
 

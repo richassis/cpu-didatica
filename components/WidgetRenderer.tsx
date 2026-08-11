@@ -32,6 +32,7 @@ export default function WidgetRenderer({ component, zoom }: Props) {
     case "MuxComponent":
       return <MuxComponent component={component} zoom={zoom} />;
     case "Register":
+    case "PipelineRegister":
       return <RegisterComponent component={component} zoom={zoom} />;
     case "ConstantComponent":
       return <ConstantComponent component={component} zoom={zoom} />;
