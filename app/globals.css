@@ -283,6 +283,13 @@ body {
   display: none;
 }
 
+/* A stand-in headline for nodes whose real content is a table or a list. It
+   exists so those nodes are not blank at mid zoom, and steps aside once the
+   anatomy itself is back. */
+[data-lod="full"] .node-value--compact {
+  display: none;
+}
+
 /* The tick slider draws no track of its own — the panel paints the rules
    underneath so they follow the theme. Only the knob is left. */
 .timeline-slider::-webkit-slider-thumb {

@@ -45,89 +45,100 @@ export default function MuxComponent({ component, zoom }: Props) {
       component={component}
       zoom={zoom}
       silhouette="custom"
-      value={formatNum(mux ? mux.result : 0, base, bitWidth)}
+      value={<span className="num font-mono text-[11px]">{formatNum(mux ? mux.result : 0, base, bitWidth)}</span>}
       actions={
         <span className="shrink-0 font-mono text-[10px] leading-none text-fg-faint">
           s={clampedSel}
         </span>
       }
+      /*
+       * Both layers go in `frame`, not in children: their coordinates are in
+       * node space, and an `absolute inset-0` inside the anatomy div would be
+       * measured against the anatomy div instead — which is only the lower
+       * part of the node, so the rail escaped out the bottom.
+       *
+       * The rail still carries `node-anatomy`, so the LOD rules hide it when
+       * zoomed out exactly as if it were a child.
+       */
       frame={
-        <svg
-          className="absolute inset-0 pointer-events-none"
-          width={W}
-          height={H}
-          viewBox={`0 0 ${W} ${H}`}
-          aria-hidden
-        >
-          <defs>
-            <radialGradient id={`mux-glow-${id}`} cx="50%" cy="115%" r="95%">
-              <stop offset="0%" stopColor="var(--node-glow)" />
-              <stop offset="70%" stopColor="transparent" />
-            </radialGradient>
-          </defs>
-          <polygon points={trapPoints} fill="var(--surface-raised)" />
-          <polygon
-            points={trapPoints}
-            fill={`url(#mux-glow-${id})`}
-            stroke="var(--node-line)"
-            strokeWidth={1}
-          />
-        </svg>
+        <>
+          <svg
+            className="absolute inset-0 pointer-events-none"
+            width={W}
+            height={H}
+            viewBox={`0 0 ${W} ${H}`}
+            aria-hidden
+          >
+            <defs>
+              <radialGradient id={`mux-glow-${id}`} cx="50%" cy="115%" r="95%">
+                <stop offset="0%" stopColor="var(--node-glow)" />
+                <stop offset="70%" stopColor="transparent" />
+              </radialGradient>
+            </defs>
+            <polygon points={trapPoints} fill="var(--surface-raised)" />
+            <polygon
+              points={trapPoints}
+              fill={`url(#mux-glow-${id})`}
+              stroke="var(--node-line)"
+              strokeWidth={1}
+            />
+          </svg>
+
+          <svg
+            className="node-anatomy absolute inset-0 pointer-events-none"
+            width={W}
+            height={H}
+            viewBox={`0 0 ${W} ${H}`}
+            aria-hidden
+          >
+            {/* The rail every input reaches. */}
+            <line
+              x1={railX}
+              y1={inputYs[0]}
+              x2={railX}
+              y2={inputYs[numInputs - 1]}
+              stroke="var(--border-strong)"
+              strokeWidth={1}
+              strokeLinecap="round"
+            />
+
+            {inputYs.map((iy, i) => (
+              <line
+                key={i}
+                x1={2}
+                y1={iy}
+                x2={railX}
+                y2={iy}
+                stroke={clampedSel === i ? "var(--st-data)" : "var(--border-strong)"}
+                strokeWidth={clampedSel === i ? 1.5 : 1}
+                strokeLinecap="round"
+              />
+            ))}
+
+            {/* The one path that continues. */}
+            <line
+              x1={railX}
+              y1={selY}
+              x2={W - 2}
+              y2={outputY}
+              stroke="var(--st-data)"
+              strokeWidth={1.5}
+              strokeLinecap="round"
+            />
+
+            <circle
+              cx={railX}
+              cy={0}
+              r={3}
+              fill="var(--st-data)"
+              style={{
+                transform: `translateY(${selY}px)`,
+                transition: "transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)",
+              }}
+            />
+          </svg>
+        </>
       }
-    >
-      <svg
-        className="absolute inset-0 pointer-events-none"
-        width={W}
-        height={H}
-        viewBox={`0 0 ${W} ${H}`}
-        aria-hidden
-      >
-        {/* The rail every input reaches. */}
-        <line
-          x1={railX}
-          y1={inputYs[0]}
-          x2={railX}
-          y2={inputYs[numInputs - 1]}
-          stroke="var(--border-strong)"
-          strokeWidth={1}
-          strokeLinecap="round"
-        />
-
-        {inputYs.map((iy, i) => (
-          <line
-            key={i}
-            x1={2}
-            y1={iy}
-            x2={railX}
-            y2={iy}
-            stroke={clampedSel === i ? "var(--st-data)" : "var(--border-strong)"}
-            strokeWidth={clampedSel === i ? 1.5 : 1}
-            strokeLinecap="round"
-          />
-        ))}
-
-        {/* The one path that continues. */}
-        <line
-          x1={railX}
-          y1={selY}
-          x2={W - 2}
-          y2={outputY}
-          stroke="var(--st-data)"
-          strokeWidth={1.5}
-          strokeLinecap="round"
-        />
-
-        <circle
-          cx={railX}
-          cy={0}
-          r={3}
-          fill="var(--st-data)"
-          style={{
-            transform: `translateY(${selY}px)`,
-            transition: "transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)",
-          }}
-        />
-      </svg>
-    </NodeShell>
+    />
   );
 }

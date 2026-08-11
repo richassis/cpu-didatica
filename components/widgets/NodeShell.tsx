@@ -46,6 +46,13 @@ interface NodeShellProps {
    * down to 50% zoom, while the anatomy does not.
    */
   value?: ReactNode;
+  /**
+   * Treat `value` as a stand-in that steps aside once the anatomy is visible.
+   * For nodes whose real content is a table or a list, where the headline just
+   * repeats one row of it. Leave off when the headline is the content — the
+   * CPU's phase, the decoder's mnemonic, the MUX's selected value.
+   */
+  compactValue?: boolean;
   /** Extra controls in the title row, left of the config button. */
   actions?: ReactNode;
   /** Internal anatomy. Hidden below 100% zoom by the LOD rules. */
@@ -72,6 +79,7 @@ export default function NodeShell({
   spine = false,
   control = false,
   value,
+  compactValue = false,
   actions,
   children,
 }: NodeShellProps) {
@@ -152,7 +160,11 @@ export default function NodeShell({
         </div>
 
         {value !== undefined && (
-          <div className="node-value t-value relative z-10 flex flex-1 items-center justify-center px-2">
+          <div
+            className={`node-value t-value relative z-10 flex items-center justify-center px-2 ${
+              children ? "shrink-0" : "flex-1"
+            } ${compactValue ? "node-value--compact" : ""}`}
+          >
             {value}
           </div>
         )}

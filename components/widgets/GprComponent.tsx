@@ -32,11 +32,19 @@ export default function GprComponent({ component, zoom }: Props) {
   const writeAddr = gpr?.in_writeAddr?.value ?? 0;
   const wrEnable = (gpr?.in_writeEnable?.value ?? 0) !== 0;
 
+  // The bank holds eight values but only one is interesting at a time, so the
+  // headline is whichever register this tick touches — that is the part that
+  // has to survive to mid zoom, where the table does not.
+  const focusAddr = wrEnable ? writeAddr : readAddrA;
+  const focusValue = regs[focusAddr]?.value ?? 0;
+
   return (
     <NodeShell
       component={component}
       zoom={zoom}
       sequential
+      value={`R${focusAddr} ${formatNum(focusValue, base, bitWidth)}`}
+      compactValue
       actions={
         <button
           onPointerDown={(e) => e.stopPropagation()}

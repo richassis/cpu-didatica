@@ -50,6 +50,9 @@ export default function MemoryComponent({ component, zoom }: Props) {
       zoom={zoom}
       sequential
       spine
+      // Survives to mid zoom, where the address list does not.
+      value={formatNum(wrMem ? dataIn : dataOut, base, bitWidth)}
+      compactValue
       actions={
         <>
           {(rdMem || wrMem) && (
@@ -141,15 +144,6 @@ export default function MemoryComponent({ component, zoom }: Props) {
                 + {wordCount - 1 - endIdx} below
               </div>
             )}
-          </div>
-
-          <div className="flex shrink-0 items-center gap-1.5 border-t border-line px-2 py-1.5 pl-3">
-            <span className="shrink-0 font-mono text-[9px] text-fg-faint">
-              {wrMem ? "in" : "out"}
-            </span>
-            <span className="node-value num flex-1 text-right font-mono text-[12px]">
-              {formatNum(wrMem ? dataIn : dataOut, base, bitWidth)}
-            </span>
           </div>
         </>
       )}

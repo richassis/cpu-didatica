@@ -50,6 +50,8 @@ export default function InstructionMemoryComponent({ component, zoom }: Props) {
         zoom={zoom}
         sequential
         spine
+        value={decodeWord(imem?.peek(currentAddr) ?? 0)}
+        compactValue
         actions={
           <span className="num shrink-0 font-mono text-[10px] text-fg-muted">
             {fmtAddr(currentAddr, addrBits)}

@@ -445,7 +445,11 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
             // out, a node keeps its silhouette and loses its anatomy; without
             // this the whole datapath is unreadable noise the moment the
             // student pulls back to see it end to end.
-            data-lod={zoom < 0.5 ? "low" : zoom < 1 ? "mid" : "full"}
+            // "full" starts just under the zoom fitToScreen typically lands on,
+            // so the default view shows the anatomy; the thresholds exist to
+            // declutter when the student pulls back, not to blank the first
+            // screen they see.
+            data-lod={zoom < 0.5 ? "low" : zoom < 0.85 ? "mid" : "full"}
             style={{
               width: CANVAS_WIDTH,
               height: CANVAS_HEIGHT,
