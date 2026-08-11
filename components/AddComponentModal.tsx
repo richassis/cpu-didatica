@@ -5,6 +5,8 @@ import { createPortal } from "react-dom";
 import { useLayoutStore } from "@/lib/store";
 import { WIDGET_DEFINITIONS, WidgetDefinition, generateDefaultLabel } from "@/lib/widgetDefinitions";
 import { ConfigPanelForType, ComponentConfig } from "@/components/widgets/ConfigPanel";
+import { GLYPHS } from "@/components/widgets/silhouettes";
+import { ArrowLeft, X, Square } from "lucide-react";
 
 type Step = "pick" | "configure";
 
@@ -64,28 +66,35 @@ function AddComponentModalContent({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px]" onClick={onClose} />
 
       {/* Panel */}
-      <div className="relative bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl w-80 max-h-[80vh] flex flex-col overflow-hidden">
+      <div className="relative flex max-h-[80vh] w-[420px] flex-col overflow-hidden rounded-2xl border border-line bg-surface">
         {/* ── Step 1: Pick ── */}
         {step === "pick" && (
           <>
-            <div className="px-4 py-3 border-b border-gray-700 flex items-center justify-between">
-              <h2 className="text-sm font-bold text-white">Add Component</h2>
-              <button onClick={onClose} className="text-gray-400 hover:text-white text-lg leading-none">✕</button>
+            <div className="flex items-center justify-between border-b border-line px-4 py-3">
+              <h2 className="t-panel text-fg">Add component</h2>
+              <button onClick={onClose} className="text-fg-muted transition-colors hover:text-fg" aria-label="Close"><X size={16} strokeWidth={1.5} /></button>
             </div>
             <ul className="p-2 space-y-1 overflow-y-auto">
               {WIDGET_DEFINITIONS.map((def) => (
                 <li key={def.type}>
                   <button
                     onClick={() => handlePick(def)}
-                    className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-gray-800 text-gray-200 transition-colors"
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-fg-muted transition-colors hover:bg-raised hover:text-fg"
                   >
-                    <span className="text-2xl">{def.icon}</span>
+                    {/* Same glyph the node wears on the canvas, so the palette
+                        teaches the badge vocabulary rather than a second one. */}
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-line">
+                      {(() => {
+                        const Glyph = GLYPHS[def.type] ?? Square;
+                        return <Glyph size={16} strokeWidth={1.5} />;
+                      })()}
+                    </span>
                     <div className="text-left">
-                      <div className="text-sm font-semibold">{def.label}</div>
-                      <div className="text-xs text-gray-500">
+                      <div className="text-sm text-fg">{def.label}</div>
+                      <div className="text-[11px] text-fg-faint">
                         {def.description} · {def.defaultWidth}×{def.defaultHeight}px
                       </div>
                     </div>
@@ -99,17 +108,16 @@ function AddComponentModalContent({ onClose }: { onClose: () => void }) {
         {/* ── Step 2: Configure ── */}
         {step === "configure" && selected && (
           <>
-            <div className="px-4 py-3 border-b border-gray-700 flex items-center gap-2">
+            <div className="flex items-center gap-2 border-b border-line px-4 py-3">
               <button
                 onClick={() => setStep("pick")}
-                className="text-gray-400 hover:text-white text-lg leading-none mr-1"
+                className="mr-1 text-fg-muted transition-colors hover:text-fg"
                 aria-label="Back"
               >
-                ←
+                <ArrowLeft size={16} strokeWidth={1.5} />
               </button>
-              <span className="text-lg">{selected.icon}</span>
-              <h2 className="text-sm font-bold text-white flex-1">{selected.label}</h2>
-              <button onClick={onClose} className="text-gray-400 hover:text-white text-lg leading-none">✕</button>
+              <h2 className="t-panel flex-1 text-fg">{selected.label}</h2>
+              <button onClick={onClose} className="text-fg-muted transition-colors hover:text-fg" aria-label="Close"><X size={16} strokeWidth={1.5} /></button>
             </div>
 
             <div className="p-4 space-y-4 overflow-y-auto">
@@ -120,16 +128,16 @@ function AddComponentModalContent({ onClose }: { onClose: () => void }) {
               />
             </div>
 
-            <div className="px-4 py-3 border-t border-gray-700 flex justify-end gap-2">
+            <div className="flex justify-end gap-2 border-t border-line px-4 py-3">
               <button
                 onClick={() => setStep("pick")}
-                className="px-3 py-1.5 text-xs rounded-lg border border-gray-600 text-gray-300 hover:bg-gray-800 transition-colors"
+                className="rounded-lg border border-line px-3 py-1.5 text-xs text-fg-muted transition-colors hover:border-line-strong hover:text-fg"
               >
                 Back
               </button>
               <button
                 onClick={handleAdd}
-                className="px-3 py-1.5 text-xs rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-colors"
+                className="rounded-lg border border-line-strong bg-raised px-3 py-1.5 text-xs text-fg transition-colors hover:border-st-active"
               >
                 Add
               </button>

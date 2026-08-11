@@ -40,14 +40,14 @@ interface PanelProps {
 function NameField({ config, onChange }: PanelProps) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider">
+      <label className="t-section">
         Name
       </label>
       <input
         type="text"
         value={config.label}
         onChange={(e) => onChange({ label: e.target.value })}
-        className="bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors"
+        className="h-9 rounded-lg border border-line bg-sunken px-3 text-sm text-fg transition-colors focus:border-line-strong focus:outline-none"
         placeholder="Component name…"
         autoFocus
       />
@@ -60,13 +60,13 @@ function NameField({ config, onChange }: PanelProps) {
 function BitWidthField({ config, onChange }: PanelProps) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider">
+      <label className="t-section">
         Bit Width
       </label>
       <select
         value={config.bitWidth ?? 16}
         onChange={(e) => onChange({ bitWidth: Number(e.target.value) })}
-        className="bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors"
+        className="h-9 rounded-lg border border-line bg-sunken px-3 text-sm text-fg transition-colors focus:border-line-strong focus:outline-none"
       >
         {[4, 8, 16, 32].map((b) => (
           <option key={b} value={b}>{b}-bit</option>
@@ -90,20 +90,20 @@ function ToggleField({
   onToggle: (checked: boolean) => void;
 }) {
   return (
-    <div className="flex items-center justify-between rounded-lg border border-gray-700 bg-gray-800/60 px-3 py-2">
+    <div className="flex items-center justify-between rounded-lg border border-line px-3 py-2">
       <div className="flex flex-col">
-        <span className="text-xs text-gray-300 font-semibold">{title}</span>
-        <span className="text-[10px] text-gray-500">{hint}</span>
+        <span className="text-xs text-fg">{title}</span>
+        <span className="text-[11px] text-fg-faint">{hint}</span>
       </div>
-      <label className="relative inline-flex items-center cursor-pointer">
+      <label className="relative inline-flex cursor-pointer items-center">
         <input
           type="checkbox"
-          className="sr-only peer"
+          className="peer sr-only"
           checked={checked}
           onChange={(e) => onToggle(e.target.checked)}
         />
-        <div className="w-11 h-6 bg-gray-700 rounded-full peer peer-checked:bg-cyan-600 transition-colors" />
-        <div className="absolute left-1 top-1 w-4 h-4 rounded-full bg-white transition-transform peer-checked:translate-x-5" />
+        <div className="h-5 w-9 rounded-full border border-line-strong transition-colors peer-checked:border-st-active" />
+        <div className="absolute left-[3px] top-[3px] h-3 w-3 rounded-full bg-line-strong transition-transform peer-checked:translate-x-4 peer-checked:bg-st-active" />
       </label>
     </div>
   );
@@ -121,13 +121,13 @@ export function MemoryComponentConfigPanel(props: PanelProps) {
       <NameField {...props} />
       <BitWidthField {...props} />
       <div className="flex flex-col gap-1">
-        <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider">
+        <label className="t-section">
           Word Count
         </label>
         <select
           value={props.config.wordCount ?? 256}
           onChange={(e) => props.onChange({ wordCount: Number(e.target.value) })}
-          className="bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors"
+          className="h-9 rounded-lg border border-line bg-sunken px-3 text-sm text-fg transition-colors focus:border-line-strong focus:outline-none"
         >
           {[64, 128, 256, 512, 1024, 2048, 4096].map((n) => (
             <option key={n} value={n}>{n} words</option>
@@ -144,13 +144,13 @@ export function InstructionMemoryComponentConfigPanel(props: PanelProps) {
       <NameField {...props} />
       <BitWidthField {...props} />
       <div className="flex flex-col gap-1">
-        <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider">
+        <label className="t-section">
           Word Count
         </label>
         <select
           value={props.config.wordCount ?? 256}
           onChange={(e) => props.onChange({ wordCount: Number(e.target.value) })}
-          className="bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors"
+          className="h-9 rounded-lg border border-line bg-sunken px-3 text-sm text-fg transition-colors focus:border-line-strong focus:outline-none"
         >
           {[64, 128, 256, 512, 1024, 2048, 4096].map((n) => (
             <option key={n} value={n}>{n} words</option>
@@ -192,13 +192,13 @@ export function MuxComponentConfigPanel(props: PanelProps) {
       <NameField {...props} />
       <BitWidthField {...props} />
       <div className="flex flex-col gap-1">
-        <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider">
+        <label className="t-section">
           Number of Inputs
         </label>
         <select
           value={props.config.numInputs ?? 2}
           onChange={(e) => props.onChange({ numInputs: Number(e.target.value) })}
-          className="bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors"
+          className="h-9 rounded-lg border border-line bg-sunken px-3 text-sm text-fg transition-colors focus:border-line-strong focus:outline-none"
         >
           <option value={2}>2 inputs</option>
           <option value={3}>3 inputs</option>
@@ -214,14 +214,14 @@ export function ConstantComponentConfigPanel(props: PanelProps) {
       <NameField {...props} />
       <BitWidthField {...props} />
       <div className="flex flex-col gap-1">
-        <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider">
+        <label className="t-section">
           Constant Value (N)
         </label>
         <input
           type="number"
           value={props.config.constantValue ?? 1}
           onChange={(e) => props.onChange({ constantValue: Number(e.target.value) })}
-          className="bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors"
+          className="h-9 rounded-lg border border-line bg-sunken px-3 text-sm text-fg transition-colors focus:border-line-strong focus:outline-none"
         />
       </div>
     </div>
@@ -234,14 +234,14 @@ export function IncrementerComponentConfigPanel(props: PanelProps) {
       <NameField {...props} />
       <BitWidthField {...props} />
       <div className="flex flex-col gap-1">
-        <label className="text-xs text-gray-400 font-semibold uppercase tracking-wider">
+        <label className="t-section">
           Step (added to the input)
         </label>
         <input
           type="number"
           value={props.config.step ?? 1}
           onChange={(e) => props.onChange({ step: Number(e.target.value) })}
-          className="bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors"
+          className="h-9 rounded-lg border border-line bg-sunken px-3 text-sm text-fg transition-colors focus:border-line-strong focus:outline-none"
         />
       </div>
     </div>
