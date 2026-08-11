@@ -1,54 +1,94 @@
 @import "tailwindcss";
 
-@theme inline {
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
 /* ──────────────────────────────────────────────────────────────────────────
-   Colour profiles
+   Design tokens
 
-   Every colour in the app comes from a Tailwind v4 palette variable, so the
-   light profile is built by redefining those variables rather than by editing
-   ~900 utility classes across the components.
+   Two rules govern this file:
 
-   The mapping mirrors each scale (50↔950, 100↔900, …): what was a dark surface
-   becomes a light one, and what was light text becomes dark text. `--color-white`
-   flips too — in this codebase `text-white` always means "strongest foreground",
-   which in a light profile must be near-black.
+   1. Colour codes STATE, never identity. A component's identity comes from its
+      silhouette, its corner glyph and its internal anatomy — see
+      `components/widgets/silhouettes.tsx`. Only five saturated colours exist,
+      and each means something is happening right now.
+   2. Depth comes from surface difference and from a state glow, never from a
+      drop shadow. There is no elevation shadow anywhere in the app.
+
+   Both colour profiles define the same semantic names, so a component never
+   needs to know which profile is active. The saturated state colours are NOT
+   the same hexes in both: neon on white is unreadable, so the light profile
+   uses darker values of the same hue.
    ────────────────────────────────────────────────────────────────────────── */
 
 :root {
-  /* Canvas surface — deliberately lighter than the old gray-900 so the widgets
-     and the values read as the foreground, not the background. */
-  --canvas-bg: #1b2231;
-  --canvas-grid: #333e55;
-  /* Widget body (was the hardcoded #0a0a14 in several widgets). */
-  --widget-surface: #131a29;
-  --widget-surface-alt: #172033;
-  /* Value badges riding the wires. */
-  --wire-value-bg: #0b1120;
-  --wire-value-fg: #f8fafc;
-  /* Wire colours: data path vs CPU control signals. */
-  --wire-data: #fbbf24;
-  --wire-data-end: #f59e0b;
-  --wire-control: #60a5fa;
-  --wire-control-end: #3b82f6;
+  /* Surfaces — near-black with a cold bias. Never #000, never Tailwind slate. */
+  --canvas:         #0E1214;
+  --surface:        #161B1E;
+  --surface-raised: rgba(255, 255, 255, 0.04);
+  --surface-sunken: rgba(0, 0, 0, 0.25);
+
+  /* Stroke */
+  --border:        rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --grid-dot:      rgba(255, 255, 255, 0.05);
+
+  /* Text */
+  --text:       #FFFFFF;
+  --text-muted: #8B9296;
+  --text-faint: #5A6165;
+
+  /* State — four, plus one used at most once per screen. Adding a sixth means
+     removing one of these. */
+  --st-active: #3DFF9E;   /* component executing this tick */
+  --st-data:   #2D7FF9;   /* bus/register carrying a valid value */
+  --st-error:  #FF4757;   /* unexpected HLT, overflow, bad address */
+  --st-warn:   #FFA92B;   /* flag set, state worth watching */
+  --st-cursor: #FF3D9A;   /* current tick, breakpoint. Max one on screen. */
+
+  /* Opacity ceiling of the state glow. Tokenised because the same value blows
+     out on a white ground — see the light profile. */
+  --glow-alpha: 22%;
+
+  /* Legacy aliases, still read by the canvas and the wire overlay. */
+  --canvas-bg: var(--canvas);
+  --canvas-grid: var(--grid-dot);
+  --widget-surface: var(--surface);
+  --widget-surface-alt: var(--surface-raised);
+  --wire-value-bg: var(--canvas);
+  --wire-value-fg: var(--text);
+  --wire-data: var(--st-data);
+  --wire-data-end: var(--st-data);
+  --wire-control: var(--text-muted);
+  --wire-control-end: var(--text-muted);
 }
 
 [data-theme="light"] {
-  --canvas-bg: #eef1f7;
-  --canvas-grid: #c3cbd9;
-  --widget-surface: #ffffff;
-  --widget-surface-alt: #f4f6fb;
-  --wire-value-bg: #ffffff;
-  --wire-value-fg: #0b1120;
-  /* Darker on a light canvas, otherwise the wires wash out. */
-  --wire-data: #b45309;
-  --wire-data-end: #d97706;
-  --wire-control: #1d4ed8;
-  --wire-control-end: #2563eb;
+  --canvas:         #F2F4F5;
+  --surface:        #FFFFFF;
+  --surface-raised: rgba(14, 18, 20, 0.03);
+  --surface-sunken: rgba(14, 18, 20, 0.05);
 
+  --border:        rgba(14, 18, 20, 0.10);
+  --border-strong: rgba(14, 18, 20, 0.20);
+  --grid-dot:      rgba(14, 18, 20, 0.08);
+
+  --text:       #0E1214;
+  --text-muted: #5A6165;
+  --text-faint: #8B9296;
+
+  --st-active: #00875A;
+  --st-data:   #1B5FD9;
+  --st-error:  #D62839;
+  --st-warn:   #B26A00;
+  --st-cursor: #C81E6E;
+
+  --glow-alpha: 10%;
+
+  /* ── Legacy Tailwind palette inversion ───────────────────────────────────
+     Temporary. Light mode used to be built by inverting every Tailwind scale,
+     which is why `bg-gray-800` silently means "light surface" here. It stays
+     only until the last palette utility is replaced by a semantic token; the
+     gate is a grep for `(bg|text|border|…)-(gray|cyan|…)-[0-9]{2,3}` over
+     app/ and components/ returning nothing. Delete this whole block then.
+     ──────────────────────────────────────────────────────────────────────── */
   --color-white: oklch(13% 0.028 261.692);
   --color-black: oklch(98.5% 0.002 247.839);
 
@@ -233,6 +273,40 @@
   --color-yellow-900: oklch(97.3% 0.071 103.193);
   --color-yellow-950: oklch(98.7% 0.026 102.212);}
 
+/* ──────────────────────────────────────────────────────────────────────────
+   Tokens → Tailwind utilities
+
+   `inline` matters here: it makes `bg-surface` compile to
+   `background-color: var(--surface)` rather than to an indirection through a
+   `--color-surface` declared on :root. Since `[data-theme="light"]` lands on
+   the same element as `:root`, only the inline form re-resolves per profile.
+
+   `--color-line` rather than `--color-border`, to avoid a `border-border`
+   utility.
+   ────────────────────────────────────────────────────────────────────────── */
+@theme inline {
+  --font-sans: var(--font-urbanist);
+  --font-mono: var(--font-jetbrains-mono);
+
+  --color-canvas:  var(--canvas);
+  --color-surface: var(--surface);
+  --color-raised:  var(--surface-raised);
+  --color-sunken:  var(--surface-sunken);
+
+  --color-line:        var(--border);
+  --color-line-strong: var(--border-strong);
+
+  --color-fg:       var(--text);
+  --color-fg-muted: var(--text-muted);
+  --color-fg-faint: var(--text-faint);
+
+  --color-st-active: var(--st-active);
+  --color-st-data:   var(--st-data);
+  --color-st-error:  var(--st-error);
+  --color-st-warn:   var(--st-warn);
+  --color-st-cursor: var(--st-cursor);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -244,9 +318,15 @@ body {
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--canvas);
+  color: var(--text);
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+/* Every column of values is read by comparing digits down the column, so the
+   digits have to be the same width. */
+.num {
+  font-variant-numeric: tabular-nums;
 }
 
 /* Hide scrollbars but keep functionality */

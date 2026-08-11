@@ -41,7 +41,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased h-screen overflow-hidden`}
       >
-        <div className="flex h-screen w-screen overflow-hidden bg-gray-950">
+        <div className="flex h-screen w-screen overflow-hidden bg-canvas">
           <main className="flex flex-col flex-1 min-h-0 min-w-0">{children}</main>
         </div>
         {/* Portal root for tooltips — rendered last in body, paints above every stacking context */}
