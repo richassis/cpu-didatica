@@ -53,14 +53,44 @@ export function calculateOrthogonalPath(
 /**
  * Converts an array of points to an SVG path string.
  */
+/** Corner radius where an orthogonal wire turns. */
+const CORNER_RADIUS = 8;
+
 export function pointsToSVGPath(points: { x: number; y: number }[]): string {
   if (points.length === 0) return "";
-  
+
   let path = `M ${points[0].x} ${points[0].y}`;
-  for (let i = 1; i < points.length; i++) {
-    path += ` L ${points[i].x} ${points[i].y}`;
+
+  // Each interior vertex becomes a quarter arc rather than a hard 90° corner.
+  // The radius shrinks to fit whichever adjoining segment is shorter, so a
+  // tight jog between two closely-spaced nodes degrades to a sharp corner
+  // instead of overshooting into the neighbouring segment.
+  for (let i = 1; i < points.length - 1; i++) {
+    const prev = points[i - 1];
+    const curr = points[i];
+    const next = points[i + 1];
+
+    const inLen = Math.hypot(curr.x - prev.x, curr.y - prev.y);
+    const outLen = Math.hypot(next.x - curr.x, next.y - curr.y);
+    const r = Math.min(CORNER_RADIUS, inLen / 2, outLen / 2);
+
+    if (r < 0.5) {
+      path += ` L ${curr.x} ${curr.y}`;
+      continue;
+    }
+
+    const inUnitX = (curr.x - prev.x) / inLen;
+    const inUnitY = (curr.y - prev.y) / inLen;
+    const outUnitX = (next.x - curr.x) / outLen;
+    const outUnitY = (next.y - curr.y) / outLen;
+
+    path += ` L ${curr.x - inUnitX * r} ${curr.y - inUnitY * r}`;
+    path += ` Q ${curr.x} ${curr.y} ${curr.x + outUnitX * r} ${curr.y + outUnitY * r}`;
   }
-  
+
+  const last = points[points.length - 1];
+  if (points.length > 1) path += ` L ${last.x} ${last.y}`;
+
   return path;
 }
 

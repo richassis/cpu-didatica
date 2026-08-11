@@ -1,10 +1,11 @@
 "use client";
 
 /**
- * FlagSquares
+ * Status flags (ULA outputs, CPU flag inputs) as outlined pills.
  *
- * A tiny row of status squares rendered on top of a component (ULA outputs,
- * CPU flag inputs). Each square lights up when its flag is true.
+ * Outlined rather than filled: a set flag is a state worth watching, not an
+ * alarm, and a filled swatch would spend a block of saturated colour on
+ * something that repeats three times per component.
  */
 export interface FlagSpec {
   /** Single-letter label, e.g. "Z", "C", "N". */
@@ -17,19 +18,19 @@ export interface FlagSpec {
 
 export default function FlagSquares({ flags }: { flags: FlagSpec[] }) {
   return (
-    <div className="flex gap-0.5 pointer-events-none">
+    <div className="flex gap-1 pointer-events-none">
       {flags.map((f) => (
-        <div
+        <span
           key={f.label}
           title={f.title ?? f.label}
-          className={`w-5 h-5 rounded-[3px] border text-[9px] leading-[19px] text-center font-bold transition-colors ${
+          className={`rounded-md border px-1.5 font-mono text-[10px] leading-[15px] transition-colors ${
             f.on
-              ? "bg-emerald-400 border-emerald-200 text-emerald-950 shadow-[0_0_5px_rgba(52,211,153,0.95)]"
-              : "bg-gray-800 border-gray-600 text-gray-500"
+              ? "border-st-warn text-st-warn"
+              : "border-line text-fg-faint"
           }`}
         >
           {f.label}
-        </div>
+        </span>
       ))}
     </div>
   );

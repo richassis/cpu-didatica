@@ -361,6 +361,116 @@ body {
   line-height: 1.6;
 }
 
+/* ──────────────────────────────────────────────────────────────────────────
+   Node state
+
+   A node's whole appearance hangs off one attribute, `data-state`, so the
+   per-widget colour ternaries disappear and stepping the clock repaints the
+   canvas from here. If two consecutive ticks look the same, this is the block
+   that is wrong.
+
+   Depth is a glow, never a shadow — and a glow only ever appears on a node
+   that is doing something. If everything glows, the glow means nothing.
+   ────────────────────────────────────────────────────────────────────────── */
+.node {
+  --node-line: var(--border);
+  --node-ink: var(--text-muted);
+  --node-glow: transparent;
+  transition: opacity 0.2s ease;
+}
+
+.node[data-state="active"] {
+  --node-line: var(--st-active);
+  --node-ink: var(--st-active);
+  --node-glow: color-mix(in srgb, var(--st-active) var(--glow-alpha), transparent);
+}
+
+.node[data-state="error"] {
+  --node-line: var(--st-error);
+  --node-ink: var(--st-error);
+  --node-glow: color-mix(in srgb, var(--st-error) var(--glow-alpha), transparent);
+}
+
+/* Participates in this tick but its wires have not arrived — it is still
+   showing last tick's value, and says so by receding. */
+.node[data-state="pending"] {
+  opacity: 0.45;
+}
+
+/* Rectangular nodes draw their own outline. Nodes with a silhouette
+   (ALU, MUX, decoder, adder) draw it in SVG instead and skip this. */
+.node--boxed {
+  border-radius: 10px;
+  border: 1px solid var(--node-line);
+  background:
+    radial-gradient(120% 90% at 50% 120%, var(--node-glow) 0%, transparent 70%),
+    var(--surface-raised);
+  transition: border-color 0.2s ease, background 0.2s ease, opacity 0.2s ease;
+}
+
+/* The control unit is not part of the datapath — it commands it. Dashed is
+   reserved for exactly this one component. */
+.node--control {
+  border-style: dashed;
+  border-dasharray: 4 3;
+}
+
+.node-badge {
+  color: var(--node-ink);
+  border-color: var(--node-line);
+}
+
+.node-title {
+  color: var(--text-muted);
+}
+
+/* A held value reads as data, so it takes the data colour the moment the node
+   latches it. This is most of what makes the blink test pass. */
+.node-value {
+  color: var(--text);
+}
+.node[data-state="active"] .node-value {
+  color: var(--st-data);
+}
+
+/* ── Ports ────────────────────────────────────────────────────────────────
+   Neutral until live. Direction is carried by shape, not by colour, so the
+   in/out/control distinction survives greyscale: output is a filled disc,
+   input a hollow ring, control signal a square.
+   ──────────────────────────────────────────────────────────────────────── */
+.port {
+  width: 6px;
+  height: 6px;
+  border: 1px solid var(--border-strong);
+  background: var(--canvas);
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+.port--in { border-radius: 50%; }
+.port--out { border-radius: 50%; background: var(--border-strong); }
+.port--ctrl { border-radius: 1px; }
+
+.port[data-live="true"] {
+  border-color: var(--st-data);
+}
+.port--out[data-live="true"] {
+  background: var(--st-data);
+}
+.port[data-drop="true"] {
+  border-color: var(--st-active);
+  transform: scale(1.6);
+}
+
+/* ── Level of detail ──────────────────────────────────────────────────────
+   Set once on the scaled canvas. Without it the datapath is unreadable noise
+   the moment the student zooms out to see the whole thing.
+   ──────────────────────────────────────────────────────────────────────── */
+[data-lod="low"] .node-badge,
+[data-lod="low"] .node-value,
+[data-lod="low"] .node-anatomy,
+[data-lod="mid"] .node-anatomy {
+  display: none;
+}
+
 /* Hide scrollbars but keep functionality */
 .scrollbar-hide {
   -ms-overflow-style: none;  /* IE and Edge */

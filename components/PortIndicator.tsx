@@ -182,42 +182,25 @@ export default function PortIndicator({
     }
   }, [isCreating, onPortHoverEnd]);
 
-  // Position the port based on side
+  // Position the port based on side. Half the 6px dot, so it straddles the
+  // node's border rather than floating beside it.
   const positionStyles: React.CSSProperties = {
     position: "absolute",
-    ...(position === "left" && { left: -6, top: `${offset}%`, transform: "translateY(-50%)" }),
-    ...(position === "right" && { right: -6, top: `${offset}%`, transform: "translateY(-50%)" }),
-    ...(position === "top" && { top: -6, left: `${offset}%`, transform: "translateX(-50%)" }),
-    ...(position === "bottom" && { bottom: -6, left: `${offset}%`, transform: "translateX(-50%)" }),
+    ...(position === "left" && { left: -3, top: `${offset}%`, transform: "translateY(-50%)" }),
+    ...(position === "right" && { right: -3, top: `${offset}%`, transform: "translateY(-50%)" }),
+    ...(position === "top" && { top: -3, left: `${offset}%`, transform: "translateX(-50%)" }),
+    ...(position === "bottom" && { bottom: -3, left: `${offset}%`, transform: "translateX(-50%)" }),
   };
 
   const isInput = direction === "input";
-  
-  // Color scheme based on port type
-  let color: string, hoverColor: string, borderColor: string, tooltipColor: string;
-  if (isControlSignal) {
-    color = "bg-blue-500";
-    hoverColor = "bg-blue-400";
-    borderColor = "border-blue-600";
-    tooltipColor = "text-blue-300";
-  } else if (isInput) {
-    color = "bg-green-500";
-    hoverColor = "bg-green-400";
-    borderColor = "border-green-600";
-    tooltipColor = "text-green-300";
-  } else {
-    color = "bg-orange-500";
-    hoverColor = "bg-orange-400";
-    borderColor = "border-orange-600";
-    tooltipColor = "text-orange-300";
-  }
 
-  // Drop target styling during wire creation
-  const dropTargetClass = isHoveredTarget
-    ? "ring-2 ring-cyan-400 ring-offset-1 ring-offset-gray-900 scale-150"
-    : isDropTarget
-      ? "animate-pulse ring-1 ring-cyan-400/50 scale-125"
-      : "";
+  // Direction is carried by SHAPE, not by colour — output is a filled disc,
+  // input a hollow ring, a control signal a square. Colour is reserved for
+  // state, so the distinction has to survive greyscale, and it does.
+  const shapeClass = isControlSignal ? "port--ctrl" : isInput ? "port--in" : "port--out";
+
+  // A port carrying a non-zero value is live and takes the data colour.
+  const isLive = portValue !== "" && portValue !== "0" && !/^0x0+$/.test(portValue);
 
   return (
     <div
@@ -237,13 +220,9 @@ export default function PortIndicator({
     >
       <div
         ref={dotRef}
-        className={`
-          w-3 h-3 rounded-full border-2 cursor-pointer transition-all
-          ${hover ? `${hoverColor} scale-125` : color}
-          ${borderColor}
-          ${dropTargetClass}
-          hover:shadow-lg
-        `}
+        data-live={isLive || undefined}
+        data-drop={isDropTarget || isHoveredTarget || undefined}
+        className={`port cursor-pointer ${shapeClass} ${hover ? "scale-150" : ""}`}
       />
 
       {/* Tooltip portalled into #portal-root — a fixed div at (0,0) with z-index 999999
@@ -254,7 +233,7 @@ export default function PortIndicator({
           if (!root) return null;
           return createPortal(
             <div
-              className="px-2 py-1 bg-gray-900 border border-gray-700 rounded text-[9px] font-mono text-white whitespace-nowrap shadow-xl"
+              className="whitespace-nowrap rounded-lg border border-line bg-surface px-2 py-1 font-mono text-[11px]"
               style={{
                 position: "absolute",
                 left: tooltipAnchor.x,
@@ -263,8 +242,8 @@ export default function PortIndicator({
                 pointerEvents: "none",
               }}
             >
-              <div className="font-semibold text-gray-300">{portName}</div>
-              <div className={tooltipColor}>{portValue}</div>
+              <div className="text-fg-muted">{portName}</div>
+              <div className="num text-fg">{portValue}</div>
             </div>,
             root,
           );

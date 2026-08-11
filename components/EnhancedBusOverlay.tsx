@@ -710,36 +710,10 @@ export default function EnhancedBusOverlay({
         height: CANVAS_HEIGHT,
       }}
     >
-      <defs>
-        <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="3" result="coloredBlur" />
-          <feMerge>
-            <feMergeNode in="coloredBlur" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
-
-        <filter id="pulseGlow" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="5" result="coloredBlur" />
-          <feMerge>
-            <feMergeNode in="coloredBlur" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
-
-        {/* Colours come from CSS variables so they follow the light/dark profile.
-            They must be set via `style`, not the stop-color attribute — var()
-            is not resolved in SVG presentation attributes. */}
-        <linearGradient id="wireGradientData" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" style={{ stopColor: "var(--wire-data)", stopOpacity: 0.85 }} />
-          <stop offset="100%" style={{ stopColor: "var(--wire-data-end)", stopOpacity: 0.85 }} />
-        </linearGradient>
-
-        <linearGradient id="wireGradientControl" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" style={{ stopColor: "var(--wire-control-end)", stopOpacity: 0.85 }} />
-          <stop offset="100%" style={{ stopColor: "var(--wire-control)", stopOpacity: 0.85 }} />
-        </linearGradient>
-      </defs>
+      {/* The two multi-colour wire gradients and the two blur filters that used
+          to live here are gone. A gradient spent colour on wire identity, and
+          the filters glowed a wire whether or not anything was flowing through
+          it — which is precisely the thing that made every tick look alike. */}
 
       {visibleWires
         .map((wireData) => {
@@ -749,8 +723,11 @@ export default function EnhancedBusOverlay({
           const isHovered = wire.id === hoveredWireId && !isSelected;
           const isAnimating = animatingWires.has(wire.id);
 
-          const baseColor = isCpuControlSignal ? "url(#wireGradientControl)" : "url(#wireGradientData)";
-          const pulseColor = isCpuControlSignal ? "var(--wire-control)" : "var(--wire-data)";
+          // A wire at rest is a hairline in the border colour — it is context,
+          // not content. It takes the data colour only while it is actually
+          // conducting, which is what makes a tick visible from across the room.
+          const baseColor = isAnimating ? "var(--st-data)" : "var(--border)";
+          const pulseColor = "var(--st-data)";
 
           const editableChain = [wireData.sourceEscape, ...(wire.nodes ?? []), wireData.targetEscape];
 
@@ -816,11 +793,9 @@ export default function EnhancedBusOverlay({
               <path
                 d={pathD}
                 fill="none"
-                strokeWidth={isSelected ? 2.5 : isHovered ? 2 : 1.25}
+                strokeWidth={isSelected || isHovered || isAnimating ? 1.5 : 1}
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                filter={isAnimating ? "url(#glow)" : undefined}
-                opacity={isAnimating ? 0.95 : 0.55}
                 className="pointer-events-none"
                 style={{ stroke: isSelected || isHovered ? pulseColor : baseColor }}
               />
@@ -863,8 +838,8 @@ export default function EnhancedBusOverlay({
                       width={8}
                       height={8}
                       rx={2}
-                      fill={isNodeSelected ? "#22d3ee" : isSelected ? "#9ca3af" : "transparent"}
-                      stroke={isNodeSelected ? "#67e8f9" : isSelected ? "#e5e7eb" : "transparent"}
+                      fill={isNodeSelected ? "var(--st-active)" : isSelected ? "var(--text-muted)" : "transparent"}
+                      stroke={isNodeSelected ? "var(--st-active)" : isSelected ? "var(--text)" : "transparent"}
                       strokeWidth={isNodeSelected ? 2 : 1}
                       className="pointer-events-none"
                     />
@@ -884,11 +859,11 @@ export default function EnhancedBusOverlay({
         return (
           <g transform={`translate(${mid.x}, ${mid.y - 18})`} className="pointer-events-auto">
             <rect x="-12" y="-12" width="24" height="24" rx="6"
-              fill="#1f2937" stroke="#ef4444" strokeWidth="1.5" cursor="pointer"
+              fill="var(--surface)" stroke="var(--st-error)" strokeWidth="1" cursor="pointer"
               onClick={(e) => { e.stopPropagation(); handleDeleteSelection(); }}
             />
             <text textAnchor="middle" dominantBaseline="central"
-              style={{ fontSize: "14px", fill: "#ef4444", cursor: "pointer", userSelect: "none" }}
+              style={{ fontSize: "12px", fill: "var(--st-error)", cursor: "pointer", userSelect: "none" }}
               onClick={(e) => { e.stopPropagation(); handleDeleteSelection(); }}
             >✕</text>
           </g>
@@ -911,7 +886,7 @@ export default function EnhancedBusOverlay({
             <rect key={`handle-${wireId}-${i}`}
               x={isH ? mx - 3 : mx - 2} y={isH ? my - 2 : my - 3}
               width={isH ? 6 : 4} height={isH ? 4 : 6} rx="1"
-              fill={selectedWireId === wireId ? "#9ca3af" : "#6b7280"}
+              fill={selectedWireId === wireId ? "var(--text-muted)" : "var(--text-faint)"}
               opacity="0.7"
               className="pointer-events-none"
             />
@@ -925,19 +900,17 @@ export default function EnhancedBusOverlay({
           <path
             d={pointsToSVGPath(previewPath)}
             fill="none"
-            stroke={previewRejected ? "#ef4444" : "#22d3ee"}
-            strokeWidth="3"
+            stroke={previewRejected ? "var(--st-error)" : "var(--st-active)"}
+            strokeWidth="1.5"
             strokeLinecap="round"
-            strokeDasharray="8,4"
-            opacity="0.8"
-            filter="url(#glow)"
+            strokeDasharray="6,4"
           />
           {/* Endpoint dot */}
           <circle
             cx={previewPath[previewPath.length - 1].x}
             cy={previewPath[previewPath.length - 1].y}
             r="5"
-            fill={previewRejected ? "#ef4444" : "#22d3ee"}
+            fill={previewRejected ? "var(--st-error)" : "var(--st-active)"}
             opacity="0.9"
             className="pointer-events-none"
           />
@@ -949,8 +922,7 @@ export default function EnhancedBusOverlay({
           x="50%"
           y="50"
           textAnchor="middle"
-          className="fill-gray-500"
-          style={{ fontSize: "14px" }}
+          style={{ fill: "var(--text-faint)", fontSize: "14px" }}
         >
           No wire connections
         </text>
@@ -968,32 +940,32 @@ export default function EnhancedBusOverlay({
       style={{ width: CANVAS_WIDTH, height: CANVAS_HEIGHT, zIndex: 30 }}
     >
       {valueMarkers.map((marker) => {
-        const width = Math.max(44, marker.value.length * 8.5 + 14);
+        // The value sits ON the wire, with a canvas-coloured plate cutting the
+        // stroke out behind the glyphs. It used to be a bordered badge floating
+        // 20px above the line, which scattered saturated chips across the canvas
+        // and left the reader to work out which wire each one belonged to.
+        const width = marker.value.length * 6.7 + 8;
 
         return (
           <g key={`value-${marker.id}`} transform={`translate(${marker.point.x}, ${marker.point.y})`}>
-            <circle
-              r={marker.isResting ? 4 : 5}
-              filter="url(#pulseGlow)"
-              opacity={0.9}
-              style={{ fill: marker.color }}
+            <rect
+              x={-width / 2}
+              y={-7}
+              width={width}
+              height={14}
+              style={{ fill: "var(--canvas)" }}
             />
-            <g transform={`translate(0, ${-marker.lift})`}>
-              <rect
-                x={-width / 2} y={-11} width={width} height={22} rx={5}
-                strokeWidth={1.5}
-                opacity={0.97}
-                style={{ fill: "var(--wire-value-bg)", stroke: marker.color }}
-              />
-              <text
-                textAnchor="middle"
-                dominantBaseline="central"
-                className="font-mono"
-                style={{ fontSize: "13px", fontWeight: 700, fill: "var(--wire-value-fg)" }}
-              >
-                {marker.value}
-              </text>
-            </g>
+            <text
+              textAnchor="middle"
+              dominantBaseline="central"
+              className="font-mono num"
+              style={{
+                fontSize: "11px",
+                fill: marker.isResting ? "var(--text-muted)" : "var(--st-data)",
+              }}
+            >
+              {marker.value}
+            </text>
           </g>
         );
       })}

@@ -417,7 +417,7 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
       }`}
       style={{
         cursor: isCreatingWire ? "crosshair" : "default",
-        background: "var(--canvas-bg)",
+        background: "var(--canvas)",
       }}
       data-canvas
       onClick={(e) => {
@@ -430,17 +430,22 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
         <div style={{ width: CANVAS_WIDTH * zoom, height: CANVAS_HEIGHT * zoom }}>
           <div
             className="relative origin-top-left"
+            // Level of detail is set once, here, and resolved in CSS. Zoomed
+            // out, a node keeps its silhouette and loses its anatomy; without
+            // this the whole datapath is unreadable noise the moment the
+            // student pulls back to see it end to end.
+            data-lod={zoom < 0.5 ? "low" : zoom < 1 ? "mid" : "full"}
             style={{
               width: CANVAS_WIDTH,
               height: CANVAS_HEIGHT,
               transform: `scale(${zoom})`,
-              background: "var(--canvas-bg)",
+              background: "var(--canvas)",
               // The grid is an authoring aid: it only helps when placing widgets,
               // so it stays out of the way in program mode.
               backgroundImage: isEditMode
-                ? "radial-gradient(circle, var(--canvas-grid) 1px, transparent 1px)"
+                ? "radial-gradient(circle, var(--grid-dot) 1px, transparent 1px)"
                 : undefined,
-              backgroundSize: `${GRID_SIZE}px ${GRID_SIZE}px`,
+              backgroundSize: "20px 20px",
             }}
           >
             <EnhancedBusOverlay visible={showWiresAndPorts} previewRejected={wirePreviewRejected} />

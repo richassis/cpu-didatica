@@ -3,9 +3,6 @@
 import { useMemo } from "react";
 import { CpuState, CPU_STATE_LABELS, Opcode, opcodeToMnemonic } from "@/lib/simulator";
 import { useExecutionStore } from "@/lib/executionStore";
-import { STATE_COLORS } from "@/components/widgets/CpuComponent";
-
-const FALLBACK_STATE_CLASS = "text-gray-300 bg-gray-800 border-gray-600";
 
 function formatOpcode(opcode: number): string {
   try {
@@ -40,10 +37,6 @@ export default function ExecutionTimeline() {
     if (!currentSnapshot) return "--";
     return formatOpcode(currentSnapshot.opcode);
   }, [currentSnapshot]);
-
-  const stateClass = currentSnapshot
-    ? (STATE_COLORS[currentSnapshot.cpuState] ?? FALLBACK_STATE_CLASS)
-    : FALLBACK_STATE_CLASS;
 
   const progress = totalTicks > 0 ? (currentIndex / totalTicks) * 100 : 0;
 
@@ -85,7 +78,7 @@ export default function ExecutionTimeline() {
             Tick {currentIndex} / {totalTicks}
           </div>
 
-          <span className={`rounded-md border px-2 py-1 text-[11px] font-semibold ${stateClass}`}>
+          <span className="rounded-md border border-st-active px-2 py-1 text-[11px] font-mono text-st-active">
             {stateLabel}
           </span>
 
