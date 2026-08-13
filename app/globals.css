@@ -310,6 +310,30 @@ body {
   cursor: pointer;
 }
 
+/* ──────────────────────────────────────────────────────────────────────────
+   Reduced motion
+
+   The canvas is built out of movement — travelling dots, glows fading in, a
+   selector sliding down a rail — and none of it carried meaning that is lost
+   by removing it: every value it animates is also written down somewhere.
+   So when the OS asks for less motion, transitions collapse rather than
+   degrade.
+
+   The wire flow itself is driven from JavaScript, not from here; the store
+   starts at instant speed when this query matches (see displayStore), which a
+   saved preference then overrides.
+   ────────────────────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* Hide scrollbars but keep functionality */
 .scrollbar-hide {
   -ms-overflow-style: none;  /* IE and Edge */

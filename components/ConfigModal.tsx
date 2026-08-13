@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useLayoutStore, ComponentInstance } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
+import { useDisplayStore, formatNum } from "@/lib/displayStore";
 import { getWidgetDefinition } from "@/lib/widgetDefinitions";
 import { ConfigPanelForType, ComponentConfig } from "@/components/widgets/ConfigPanel";
 import { CpuState, CPU_STATE_LABELS, ALL_CPU_STATES, isClockable, Constant } from "@/lib/simulator";
@@ -27,6 +28,7 @@ export default function ConfigModal({ component, onClose }: Props) {
   const layoutComponents = useLayoutStore((s) => s.components);
   const def = getWidgetDefinition(component.type);
 
+  const base = useDisplayStore((s) => s.numericBase);
   const objects   = useSimulatorStore((s) => s.objects);
   const removeWire = useSimulatorStore((s) => s.removeWire);
   const getWires  = useSimulatorStore((s) => s.getWires);
@@ -294,7 +296,7 @@ export default function ConfigModal({ component, onClose }: Props) {
   };
 
   const formatValue = (value: unknown): string => {
-    if (typeof value === "number") return `0x${value.toString(16).toUpperCase().padStart(4, "0")}`;
+    if (typeof value === "number") return formatNum(value, base);
     if (typeof value === "boolean") return value ? "1" : "0";
     return String(value);
   };

@@ -7,7 +7,7 @@
     {
       "id": "cpu-1",
       "type": "CpuComponent",
-      "label": "CPU",
+      "label": "UC",
       "x": 1280,
       "y": 96,
       "w": 176,

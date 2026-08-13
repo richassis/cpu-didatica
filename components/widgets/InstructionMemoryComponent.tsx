@@ -1,10 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { createPortal } from "react-dom";
+import { List } from "lucide-react";
 import { Props } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
+import { useIsEditMode } from "@/lib/modeStore";
 import NodeShell from "@/components/widgets/NodeShell";
+import MemoryViewer from "@/components/MemoryViewer";
 import InstructionBuilder from "@/components/InstructionBuilder";
 import { INSTRUCTION_SET } from "@/lib/simulator/ISA";
 
@@ -24,12 +27,18 @@ function fmtAddr(addr: number, addrBits: number) {
 /**
  * Instruction memory. Same shape family as data memory — a spine and an
  * address list — because they are the same class of thing; what differs is
- * that the values read as mnemonics. Click a row to edit that word.
+ * that the values read as mnemonics.
+ *
+ * A row opens the full read-only listing. Hand-assembling a word with the
+ * instruction builder is an authoring act and stays in edit mode; in program
+ * mode the program comes from the assembler, and this is for reading it.
  */
 export default function InstructionMemoryComponent({ component, zoom }: Props) {
   const { id } = component;
   const [builderOpen, setBuilderOpen] = useState(false);
+  const [viewerOpen, setViewerOpen] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState(0);
+  const canEdit = useIsEditMode();
 
   const revision = useSimulatorStore((s) => s.revision);
   const imem = useSimulatorStore((s) => s.getInstructionMemory(id));
@@ -38,6 +47,8 @@ export default function InstructionMemoryComponent({ component, zoom }: Props) {
   const wordCount = imem?.wordCount ?? 256;
   const addrBits = Math.max(1, Math.ceil(Math.log2(wordCount)));
   const currentAddr = imem?.in_addr.value ?? 0;
+
+  const readWord = useCallback((addr: number) => imem?.peek(addr) ?? 0, [imem]);
 
   const startIdx = Math.max(0, currentAddr - WINDOW);
   const endIdx = Math.min(wordCount - 1, currentAddr + WINDOW);
@@ -53,9 +64,22 @@ export default function InstructionMemoryComponent({ component, zoom }: Props) {
         value={decodeWord(imem?.peek(currentAddr) ?? 0)}
         compactValue
         actions={
-          <span className="num shrink-0 font-mono text-[10px] text-fg-muted">
-            {fmtAddr(currentAddr, addrBits)}
-          </span>
+          <>
+            <span className="num shrink-0 font-mono text-[10px] text-fg-muted">
+              {fmtAddr(currentAddr, addrBits)}
+            </span>
+            <button
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                setViewerOpen(true);
+              }}
+              className="shrink-0 rounded p-0.5 text-fg-faint transition-colors hover:text-fg"
+              title="View the whole program"
+            >
+              <List size={12} strokeWidth={1.5} />
+            </button>
+          </>
         }
       >
         <div className="flex flex-1 flex-col justify-center gap-px overflow-hidden px-1.5 py-1 pl-3">
@@ -73,7 +97,8 @@ export default function InstructionMemoryComponent({ component, zoom }: Props) {
                 onClick={(e) => {
                   e.stopPropagation();
                   setSelectedAddress(a);
-                  setBuilderOpen(true);
+                  if (canEdit) setBuilderOpen(true);
+                  else setViewerOpen(true);
                 }}
                 className="flex cursor-pointer items-center gap-1.5 rounded px-1 transition-colors"
                 style={{
@@ -112,7 +137,21 @@ export default function InstructionMemoryComponent({ component, zoom }: Props) {
         </div>
       </NodeShell>
 
+      {viewerOpen && (
+        <MemoryViewer
+          title={component.label}
+          wordCount={wordCount}
+          bitWidth={16}
+          addrBits={addrBits}
+          currentAddr={currentAddr}
+          read={readWord}
+          decode={decodeWord}
+          onClose={() => setViewerOpen(false)}
+        />
+      )}
+
       {builderOpen &&
+        canEdit &&
         imem &&
         createPortal(
           <div className="fixed inset-0 z-[9999] flex items-center justify-center">

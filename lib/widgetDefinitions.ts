@@ -222,11 +222,14 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
   },
   {
     type: "CpuComponent",
-    label: "CPU Unit",
-    namePrefix: "CPU",
+    // Display strings only. The `type` is a persisted identifier written into
+    // every .cpud project file, so it stays "CpuComponent" regardless of what
+    // the block is called on screen.
+    label: "Control unit (UC)",
+    namePrefix: "UC",
     defaultWidth: 176,  // 11 grid cells
     defaultHeight: 304, // 19 grid cells
-    description: "CPU control unit — FSM state and control signals",
+    description: "Control unit (UC) — FSM state and control signals",
     // CPU: input ports (opcode/flags) on left, all control signal outputs on top
     portConfig: {
       defaultInputSide: "left",

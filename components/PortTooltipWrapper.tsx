@@ -3,6 +3,7 @@
 import { useState, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useSimulatorStore } from "@/lib/simulatorStore";
+import { useDisplayStore, formatNum } from "@/lib/displayStore";
 
 interface PortInfo {
   name: string;
@@ -24,6 +25,8 @@ export default function PortTooltipWrapper({ componentId, componentLabel, childr
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const objects = useSimulatorStore((s) => s.objects);
   const revision = useSimulatorStore((s) => s.revision);
+  const base = useDisplayStore((s) => s.numericBase);
+  const showPortValues = useDisplayStore((s) => s.showPortValues);
   const ports = useMemo<PortInfo[]>(() => {
     void revision;
     const obj = objects.get(componentId);
@@ -61,7 +64,7 @@ export default function PortTooltipWrapper({ componentId, componentLabel, childr
   const outputPorts = ports.filter((p) => p.direction === "output");
 
   const formatValue = (value: unknown): string => {
-    if (typeof value === "number") return `0x${value.toString(16).toUpperCase().padStart(4, "0")}`;
+    if (typeof value === "number") return formatNum(value, base);
     if (typeof value === "boolean") return value ? "1" : "0";
     return String(value);
   };
@@ -75,7 +78,7 @@ export default function PortTooltipWrapper({ componentId, componentLabel, childr
     >
       {children}
 
-      {visible && ports.length > 0 && createPortal(
+      {visible && showPortValues && ports.length > 0 && createPortal(
         <div
           className="fixed z-[100] pointer-events-none"
           style={{ left: tooltipPos.x, top: tooltipPos.y }}

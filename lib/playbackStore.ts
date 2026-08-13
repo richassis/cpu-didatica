@@ -21,6 +21,7 @@
 
 import { create } from "zustand";
 import { useExecutionStore } from "./executionStore";
+import { useDisplayStore } from "./displayStore";
 
 /**
  * Beat between the end of one tick's animation and the start of the next.
@@ -55,11 +56,61 @@ interface PlaybackState {
 /** Handle of the pending advance, so pause() can cancel it. */
 let advanceTimer: number | null = null;
 
+/**
+ * Backstop for a completion signal that never arrives.
+ *
+ * Playback waits on the animation to report itself finished, which makes a lost
+ * signal indistinguishable from a very slow tick — the run simply stops with
+ * the button still reading "Pause". That is the worst failure mode this feature
+ * has, so rather than trust the chain completely, a generously-sized timer
+ * advances anyway. A tick that animates for longer than its own worst case is
+ * over as far as the student is concerned.
+ */
+let watchdogTimer: number | null = null;
+
 function clearAdvance() {
   if (advanceTimer !== null) {
     window.clearTimeout(advanceTimer);
     advanceTimer = null;
   }
+  if (watchdogTimer !== null) {
+    window.clearTimeout(watchdogTimer);
+    watchdogTimer = null;
+  }
+}
+
+/**
+ * Longest a single tick can reasonably animate: the per-step duration times a
+ * generous substep count, plus a floor for the short ones.
+ */
+function watchdogDelay(): number {
+  const perStep = useDisplayStore.getState().animationDurationMs;
+  return Math.max(2000, perStep * 12);
+}
+
+/** Advance one tick if playback is still running, or stop at the end. */
+function advance(set: (partial: { isPlaying: boolean }) => void, isPlaying: () => boolean) {
+  if (!isPlaying()) return;
+
+  const execution = useExecutionStore.getState();
+  if (!execution.isTimelineActive) {
+    set({ isPlaying: false });
+    return;
+  }
+  if (!execution.canGoForward) {
+    // Reached the end — stop rather than loop, so the final state stays up.
+    set({ isPlaying: false });
+    return;
+  }
+
+  execution.stepForward();
+
+  // Re-arm the backstop for the tick just started.
+  if (watchdogTimer !== null) window.clearTimeout(watchdogTimer);
+  watchdogTimer = window.setTimeout(() => {
+    watchdogTimer = null;
+    advance(set, isPlaying);
+  }, watchdogDelay());
 }
 
 export const usePlaybackStore = create<PlaybackState>()((set, get) => ({
@@ -83,10 +134,7 @@ export const usePlaybackStore = create<PlaybackState>()((set, get) => ({
     clearAdvance();
     advanceTimer = window.setTimeout(() => {
       advanceTimer = null;
-      if (!get().isPlaying) return;
-      const state = useExecutionStore.getState();
-      if (state.canGoForward) state.stepForward();
-      else set({ isPlaying: false });
+      advance(set, () => get().isPlaying);
     }, INTER_TICK_PAUSE_MS);
   },
 
@@ -106,20 +154,7 @@ export const usePlaybackStore = create<PlaybackState>()((set, get) => ({
     clearAdvance();
     advanceTimer = window.setTimeout(() => {
       advanceTimer = null;
-      if (!get().isPlaying) return;
-
-      const execution = useExecutionStore.getState();
-      if (!execution.isTimelineActive) {
-        set({ isPlaying: false });
-        return;
-      }
-      if (execution.canGoForward) {
-        execution.stepForward();
-      } else {
-        // Reached the end — stop rather than looping, so the final state stays
-        // on screen.
-        set({ isPlaying: false });
-      }
+      advance(set, () => get().isPlaying);
     }, INTER_TICK_PAUSE_MS);
   },
 }));

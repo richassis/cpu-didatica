@@ -116,6 +116,39 @@ export default function EnhancedBusOverlay({
   /** Substep order values already revealed in the current animation pass. */
   const revealedGroupsRef = useRef<Set<number>>(new Set());
 
+  /**
+   * Display settings, mirrored into a ref and read at pass start.
+   *
+   * They are deliberately NOT dependencies of the animation effect. When they
+   * were, moving the speed slider mid-tick re-ran the effect, whose cleanup
+   * cancelled the in-flight pass — and the "already animated this cycle" guard
+   * then returned without starting a new one, so the pass never finished and
+   * playback waited on a signal that could no longer come. Changing a setting
+   * now takes effect from the next tick, which is also what the student
+   * expects: it does not reach in and rewrite the animation already playing.
+   */
+  const settingsRef = useRef({
+    showCpuSignalWires,
+    showDataSignalWires,
+    animationEnabled,
+    animateCpuSignals,
+    animateDataSignals,
+    animationDurationMs,
+  });
+  // Declared before the animation effect so it refreshes first: effects run in
+  // declaration order, and a pass starting this commit must read this commit's
+  // settings.
+  useEffect(() => {
+    settingsRef.current = {
+      showCpuSignalWires,
+      showDataSignalWires,
+      animationEnabled,
+      animateCpuSignals,
+      animateDataSignals,
+      animationDurationMs,
+    };
+  });
+
   const projectWires = useMemo(
     () => (activeTabId ? projectData[activeTabId]?.wires ?? [] : []),
     [activeTabId, projectData]
@@ -261,6 +294,15 @@ export default function EnhancedBusOverlay({
     // Fresh pass: nothing revealed yet.
     revealedGroupsRef.current = new Set();
 
+    const {
+      showCpuSignalWires,
+      showDataSignalWires,
+      animationEnabled,
+      animateCpuSignals,
+      animateDataSignals,
+      animationDurationMs,
+    } = settingsRef.current;
+
     if (animationRef.current) {
       cancelAnimationFrame(animationRef.current);
       animationRef.current = null;
@@ -306,7 +348,14 @@ export default function EnhancedBusOverlay({
       })
       .map((wireData) => wireData.wire.id);
 
-    if (visibleWireIds.length === 0) return;
+    if (visibleWireIds.length === 0) {
+      // No wire takes part in this state at all — the reset tick is the usual
+      // case. Nothing to animate, but the pass is still over, and playback is
+      // waiting to hear so.
+      useDisplayMaskStore.getState().revealAll();
+      usePlaybackStore.getState().notifyTickAnimationComplete();
+      return;
+    }
 
     const cpuValueChanges = new Set<string>();
     for (const id of visibleWireIds) {
@@ -389,25 +438,49 @@ export default function EnhancedBusOverlay({
       setAnimatingWires(new Set(animatingIds));
     }, 0);
 
+    /**
+     * End the pass: settle the dots, land every component on its post-tick
+     * value and tell playback the tick is over.
+     *
+     * Idempotent, and reached from two directions on purpose. The rAF loop gets
+     * here on the frame that crosses `totalDuration`, but requestAnimationFrame
+     * stops being called altogether while the tab is hidden — so a run left in
+     * a background tab would hang on the current tick forever and still be
+     * sitting there on return. The timer below is what actually guarantees the
+     * pass ends; the animation loop only paints it.
+     */
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+      }
+
+      // The last substep finishes exactly at `totalDuration`, so the frame
+      // where its `groupProgress` reaches 1 may never run and its wires were
+      // never settled — which is why the final value delivered each state
+      // (MUX_PC -> PC on a fetch) vanished instead of resting at its
+      // destination. Settle everything that animated in this pass here.
+      setSettledDots((prev) => {
+        const next = new Set(prev);
+        for (const id of animatingIds) next.add(id);
+        return next;
+      });
+      setAnimatingWires(new Set());
+      setAnimationProgress(new Map());
+      useDisplayMaskStore.getState().revealAll();
+      usePlaybackStore.getState().notifyTickAnimationComplete();
+    };
+
+    const finishTimer = window.setTimeout(finish, totalDuration);
+
     const animate = () => {
       const elapsed = Date.now() - startTime;
       if (elapsed >= totalDuration) {
-        // The last substep finishes exactly at `totalDuration`, so the frame
-        // where its `groupProgress` reaches 1 never runs and its wires were
-        // never settled — which is why the final value delivered each state
-        // (MUX_PC → PC on a fetch) vanished instead of resting at its
-        // destination. Settle everything that animated in this pass here.
-        setSettledDots((prev) => {
-          const next = new Set(prev);
-          for (const id of animatingIds) next.add(id);
-          return next;
-        });
-        setAnimatingWires(new Set());
-        setAnimationProgress(new Map());
-        animationRef.current = null;
-        // Ensure every component reaches its post-tick value once the pass ends.
-        useDisplayMaskStore.getState().revealAll();
-        usePlaybackStore.getState().notifyTickAnimationComplete();
+        finish();
         return;
       }
 
@@ -479,23 +552,16 @@ export default function EnhancedBusOverlay({
 
     return () => {
       window.clearTimeout(kickoff);
+      window.clearTimeout(finishTimer);
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
         animationRef.current = null;
       }
     };
-  }, [
-    animationCycle,
-    getPrimaryCpu,
-    getComponentTickSteps,
-    getComponentTickOrderByState,
-    showCpuSignalWires,
-    showDataSignalWires,
-    animationEnabled,
-    animateCpuSignals,
-    animateDataSignals,
-    animationDurationMs,
-  ]);
+    // Settings are read from settingsRef at pass start, on purpose — see the
+    // comment on that ref. Listing them here would let a mid-tick settings
+    // change abort the pass.
+  }, [animationCycle, getPrimaryCpu, getComponentTickSteps, getComponentTickOrderByState]);
 
   const getPointAlongPath = useCallback((path: Point[], progress: number): Point => {
     if (path.length < 2) return path[0] ?? { x: 0, y: 0 };

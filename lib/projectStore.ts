@@ -56,8 +56,11 @@ export interface ProjectData {
  *      `holdOutputUntilFetch` so the next address does not appear mid-instruction.
  * v5 — PC+1 became a dedicated IncrementerComponent (one input, one output), so
  *      the constant-1 register that fed the adder is gone from the datapath.
+ * v6 — the control unit is labelled UC. It is the unit that commands the
+ *      datapath; the CPU is every module together, memories aside. Only the
+ *      display label changes — the component type is untouched.
  */
-const CURRENT_PROJECT_VERSION = 5;
+const CURRENT_PROJECT_VERSION = 6;
 
 /** Adder dimensions before v4, used to recognise instances that need shrinking. */
 const LEGACY_ADDER_SIZE = { w: 128, h: 176 } as const;
@@ -554,9 +557,18 @@ function migrateProjectData(state: ProjectState): void {
       continue;
     }
 
-    // User projects only get the cosmetic change: adders still sitting at the
-    // old ULA-sized default shrink, keeping their centre.
+    // User projects only get the cosmetic changes.
     for (const component of project.components ?? []) {
+      // v6: the block called "CPU" is the control unit. Only instances still
+      // carrying a default label are renamed — anything the user named
+      // themselves is theirs to keep.
+      if (
+        component.type === "CpuComponent" &&
+        (component.label === "CPU" || component.label === "CPU Unit")
+      ) {
+        component.label = "UC";
+      }
+
       if (
         component.type === "AdderComponent" &&
         component.w === LEGACY_ADDER_SIZE.w &&

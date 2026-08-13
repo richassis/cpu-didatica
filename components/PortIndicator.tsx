@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useLayoutStore } from "@/lib/store";
 import { useWireCreationStore } from "@/lib/wireCreationStore";
+import { useDisplayStore, formatNum } from "@/lib/displayStore";
 import type { PortSide } from "@/lib/portPositioning";
 
 const DRAG_THRESHOLD = 4; // px of movement before we consider it a drag
@@ -86,6 +87,8 @@ export default function PortIndicator({
 }: Props) {
   const [hover, setHover] = useState(false);
   const [tooltipAnchor, setTooltipAnchor] = useState<{ x: number; y: number } | null>(null);
+  const base = useDisplayStore((s) => s.numericBase);
+  const showPortValues = useDisplayStore((s) => s.showPortValues);
   const dotRef = useRef<HTMLDivElement>(null);
   const objects = useSimulatorStore((s) => s.objects);
   const revision = useSimulatorStore((s) => s.revision);
@@ -113,13 +116,13 @@ export default function PortIndicator({
 
     const val = port.value;
     if (typeof val === "number") {
-      return `0x${val.toString(16).toUpperCase().padStart(4, "0")}`;
+      return formatNum(val, base);
     }
     if (typeof val === "boolean") {
       return val ? "1" : "0";
     }
     return String(val);
-  }, [componentId, portName, objects, revision]);
+  }, [componentId, portName, objects, revision, base]);
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     if (e.button !== 0) return;
@@ -227,7 +230,7 @@ export default function PortIndicator({
 
       {/* Tooltip portalled into #portal-root — a fixed div at (0,0) with z-index 999999
           rendered as the last child of <body>, guaranteed above every stacking context. */}
-      {hover && !isCreating && tooltipAnchor && typeof document !== "undefined" &&
+      {hover && showPortValues && !isCreating && tooltipAnchor && typeof document !== "undefined" &&
         (() => {
           const root = document.getElementById("portal-root");
           if (!root) return null;

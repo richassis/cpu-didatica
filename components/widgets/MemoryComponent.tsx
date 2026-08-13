@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { Pencil } from "lucide-react";
+import { useState, useRef, useCallback } from "react";
+import { List, Pencil } from "lucide-react";
 import { Props } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
+import { useIsEditMode } from "@/lib/modeStore";
 import { useDisplayStore, formatNum, type NumericBase } from "@/lib/displayStore";
 import NodeShell from "@/components/widgets/NodeShell";
+import MemoryViewer from "@/components/MemoryViewer";
 
 const WINDOW = 3; // rows above and below the addressed word
 
@@ -24,6 +26,10 @@ function fmtAddr(addr: number, addrBits: number) {
 export default function MemoryComponent({ component, zoom }: Props) {
   const { id } = component;
   const [editMode, setEditMode] = useState(false);
+  const [viewerOpen, setViewerOpen] = useState(false);
+  // Poking values is an authoring act, so it belongs to edit mode. In program
+  // mode the memory is readable in full and writable nowhere.
+  const canEdit = useIsEditMode();
 
   const revision = useSimulatorStore((s) => s.revision);
   const mem = useSimulatorStore((s) => s.getMemory(id));
@@ -44,7 +50,10 @@ export default function MemoryComponent({ component, zoom }: Props) {
   const endIdx = Math.min(wordCount - 1, addr + WINDOW);
   const windowRows = Array.from({ length: endIdx - startIdx + 1 }, (_, i) => startIdx + i);
 
+  const readCell = useCallback((addr: number) => mem?.peek(addr) ?? 0, [mem]);
+
   return (
+    <>
     <NodeShell
       component={component}
       zoom={zoom}
@@ -55,28 +64,41 @@ export default function MemoryComponent({ component, zoom }: Props) {
       compactValue
       actions={
         <>
+          <button
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              setViewerOpen(true);
+            }}
+            className="shrink-0 rounded p-0.5 text-fg-faint transition-colors hover:text-fg"
+            title="View all memory contents"
+          >
+            <List size={12} strokeWidth={1.5} />
+          </button>
           {(rdMem || wrMem) && (
             <span className="shrink-0 rounded-md border border-st-warn px-1 font-mono text-[9px] leading-[14px] text-st-warn">
               {wrMem ? "WR" : "RD"}
             </span>
           )}
-          <button
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              setEditMode((v) => !v);
-            }}
-            className={`shrink-0 rounded p-0.5 transition-colors ${
-              editMode ? "text-st-active" : "text-fg-faint hover:text-fg"
-            }`}
-            title={editMode ? "Exit edit" : "Edit all cells"}
-          >
-            <Pencil size={12} strokeWidth={1.5} />
-          </button>
+          {canEdit && (
+            <button
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditMode((v) => !v);
+              }}
+              className={`shrink-0 rounded p-0.5 transition-colors ${
+                editMode ? "text-st-active" : "text-fg-faint hover:text-fg"
+              }`}
+              title={editMode ? "Exit edit" : "Edit all cells"}
+            >
+              <Pencil size={12} strokeWidth={1.5} />
+            </button>
+          )}
         </>
       }
     >
-      {editMode ? (
+      {canEdit && editMode ? (
         <div
           className="flex-1 overflow-y-auto px-1.5 py-1"
           onPointerDown={(e) => e.stopPropagation()}
@@ -148,6 +170,19 @@ export default function MemoryComponent({ component, zoom }: Props) {
         </>
       )}
     </NodeShell>
+
+    {viewerOpen && (
+      <MemoryViewer
+        title={component.label}
+        wordCount={wordCount}
+        bitWidth={bitWidth}
+        addrBits={addrBits}
+        currentAddr={addr}
+        read={readCell}
+        onClose={() => setViewerOpen(false)}
+      />
+    )}
+    </>
   );
 }
 
