@@ -31,6 +31,7 @@ import { snapToGrid } from "@/lib/wireRouting";
 import { calculatePortPosition, type PortSide } from "@/lib/portPositioning";
 import WidgetRenderer from "./WidgetRenderer";
 import AddComponentModal from "./AddComponentModal";
+import SimulationSettings from "./SimulationSettings";
 import EnhancedBusOverlay from "./EnhancedBusOverlay";
 import { useEffect, useRef, useState, useCallback } from "react";
 
@@ -81,10 +82,6 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
   const displayedTick = isReadOnly ? executionTick : totalTicks;
 
   // Display settings
-  const numericBase = useDisplayStore((s) => s.numericBase);
-  const setNumericBase = useDisplayStore((s) => s.setNumericBase);
-  const animationSpeed = useDisplayStore((s) => s.animationSpeed);
-  const setAnimationSpeed = useDisplayStore((s) => s.setAnimationSpeed);
 
   // Wire creation state (new drag-based API)
   const isCreatingWire = useWireCreationStore((s) => s.phase === "dragging");
@@ -541,37 +538,14 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
           </div>
         )}
 
-        {/* Display Settings Panel — shown when triggered from FAB */}
+        {/* Display Settings Panel — the same component program mode mounts, so
+            there is one definition of what a simulation setting is. */}
         {showDisplaySettings && (
           <div
-            className="mb-2 w-64 rounded-2xl border border-line bg-surface p-4"
+            className="mb-2 rounded-2xl border border-line bg-surface p-4"
             onMouseDown={(e) => e.stopPropagation()}
           >
-            <div className="mb-4">
-              <div className="t-section mb-2">Numeric base</div>
-              <div className="flex items-center gap-1">
-                {(["hex", "dec", "bin", "oct"] as const).map((b) => (
-                  <SegmentButton key={b} selected={numericBase === b} onClick={() => setNumericBase(b)}>
-                    {b}
-                  </SegmentButton>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <div className="t-section mb-2">Animation speed</div>
-              <div className="flex items-center gap-1">
-                {(["fast", "normal", "slow"] as const).map((preset) => (
-                  <SegmentButton
-                    key={preset}
-                    selected={animationSpeed === preset}
-                    onClick={() => setAnimationSpeed(preset)}
-                  >
-                    {preset}
-                  </SegmentButton>
-                ))}
-              </div>
-            </div>
+            <SimulationSettings />
           </div>
         )}
 
@@ -616,14 +590,18 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
         </div>
       )}
 
-      {/* ── Clock toolbar (bottom-left) ───────────────────── */}
+      {/* ── Clock toolbar (bottom-left) ─────────────────────
+          Edit mode only. In program mode the tick is read from the
+          seven-segment display, and this used to sit under the simulation bar
+          showing the same number a second time. */}
+      {!isReadOnly && (
       <div
         className="fixed bottom-6 left-6 z-40 flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1.5"
         onMouseDown={(e) => e.stopPropagation()}
       >
         <span className="num min-w-[4rem] text-center font-mono text-xs text-fg-muted">T{displayedTick}</span>
 
-        {!isReadOnly && (
+        {(
           <>
             <button
               onClick={tickClock}
@@ -644,6 +622,7 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
           </>
         )}
       </div>
+      )}
 
       <AddComponentModal open={showAddModal} onClose={() => setShowAddModal(false)} />
     </div>
@@ -672,28 +651,6 @@ function FabItem({
     >
       <span className={on ? "text-st-active" : undefined}>{icon}</span>
       {label}
-    </button>
-  );
-}
-
-/** One option in a small segmented control. Outlined when selected. */
-function SegmentButton({
-  selected, onClick, children,
-}: {
-  selected: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex-1 rounded-lg border px-2 py-1.5 font-mono text-xs capitalize transition-colors ${
-        selected
-          ? "border-st-active text-st-active"
-          : "border-line text-fg-muted hover:border-line-strong hover:text-fg"
-      }`}
-    >
-      {children}
     </button>
   );
 }

@@ -1,7 +1,5 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronDown, HelpCircle } from "lucide-react";
 import { Silhouette, ClockNotch, MemorySpine, GLYPHS } from "@/components/widgets/silhouettes";
 
 /**
@@ -52,16 +50,12 @@ function StateSample({ color, label, note }: { color: string; label: string; not
 }
 
 export default function Legend() {
-  const [open, setOpen] = useState(false);
-
   const Register = GLYPHS.Register;
   const Memory = GLYPHS.MemoryComponent;
 
   return (
-    <div className="absolute bottom-4 right-20 z-30 flex flex-col items-end gap-2">
-      {open && (
-        <div className="w-[380px] rounded-2xl border border-line bg-surface p-4">
-          <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+    <div className="w-[380px]">
+      <div className="grid grid-cols-2 gap-x-4 gap-y-3">
             <div>
               <div className="t-section mb-2">Shape — what it is</div>
               <div className="space-y-2">
@@ -132,29 +126,10 @@ export default function Legend() {
             </div>
           </div>
 
-          <p className="mt-3 border-t border-line pt-3 text-[10px] leading-snug text-fg-faint">
-            The two columns are independent. Shape never changes during execution, and
-            colour never tells you which component you are looking at.
-          </p>
-        </div>
-      )}
-
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className={`flex h-11 items-center gap-1.5 rounded-full border bg-surface px-3 text-xs transition-colors ${
-          open ? "border-line-strong text-fg" : "border-line text-fg-muted hover:text-fg"
-        }`}
-        aria-expanded={open}
-        title="How to read the canvas"
-      >
-        <HelpCircle size={16} strokeWidth={1.5} />
-        Legend
-        <ChevronDown
-          size={14}
-          strokeWidth={1.5}
-          className={`transition-transform ${open ? "rotate-180" : ""}`}
-        />
-      </button>
+      <p className="mt-3 border-t border-line pt-3 text-[10px] leading-snug text-fg-faint">
+        The two columns are independent. Shape never changes during execution, and
+        colour never tells you which component you are looking at.
+      </p>
     </div>
   );
 }

@@ -4,11 +4,17 @@ import { useLayoutStore, CANVAS_WIDTH, CANVAS_HEIGHT } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayMaskStore } from "@/lib/displayMaskStore";
 import { useExecutionStore } from "@/lib/executionStore";
-import { useDisplayStore, formatNum } from "@/lib/displayStore";
+import { usePlaybackStore } from "@/lib/playbackStore";
+import { useDisplayStore, formatNum, isInstantSpeed } from "@/lib/displayStore";
 import { useWireCreationStore } from "@/lib/wireCreationStore";
 import { useWireSelectionStore } from "@/lib/wireSelectionStore";
 import { useProjectStore } from "@/lib/projectStore";
-import { calculatePortPosition, getPortPlacement, type PortSide } from "@/lib/portPositioning";
+import {
+  calculatePortPosition,
+  getPortPlacement,
+  resolvePortConfig,
+  type PortSide,
+} from "@/lib/portPositioning";
 import { getWidgetDefinition } from "@/lib/widgetDefinitions";
 import {
   buildWirePath,
@@ -71,7 +77,7 @@ export default function EnhancedBusOverlay({
   const animationEnabled = useDisplayStore((s) => s.animationEnabled);
   const animateCpuSignals = useDisplayStore((s) => s.animateCpuSignals);
   const animateDataSignals = useDisplayStore((s) => s.animateDataSignals);
-  const componentAnimationDuration = useDisplayStore((s) => s.componentAnimationDuration);
+  const animationDurationMs = useDisplayStore((s) => s.animationDurationMs);
 
   const removeSimulatorWire = useSimulatorStore((s) => s.removeWire);
 
@@ -132,7 +138,12 @@ export default function EnhancedBusOverlay({
       }));
 
       const widgetDef = getWidgetDefinition(component.type);
-      const placement = getPortPlacement(portName, direction, allPorts, widgetDef?.portConfig);
+      const placement = getPortPlacement(
+        portName,
+        direction,
+        allPorts,
+        resolvePortConfig(widgetDef?.portConfig, component.meta),
+      );
       const pos = calculatePortPosition(component, placement.side, placement.offset);
 
       return { pos, side: placement.side };
@@ -255,11 +266,16 @@ export default function EnhancedBusOverlay({
       animationRef.current = null;
     }
 
-    // Animation disabled: snap straight to the post-tick state, no flow/dots.
-    if (!animationEnabled) {
+    // Animation off, or the speed slider pushed all the way to instant: snap
+    // straight to the post-tick state, no flow/dots. The two are separate
+    // controls but the same behaviour, so they share one exit.
+    if (!animationEnabled || isInstantSpeed(animationDurationMs)) {
       setAnimatingWires(new Set());
       setAnimationProgress(new Map());
       useDisplayMaskStore.getState().revealAll();
+      // This pass is over before it began, but it is still a pass: playback
+      // waits on this signal, so staying silent here would stall it.
+      usePlaybackStore.getState().notifyTickAnimationComplete();
       return;
     }
 
@@ -320,6 +336,9 @@ export default function EnhancedBusOverlay({
 
     if (animCpuIds.length === 0 && animNonCpuIds.length === 0) {
       useDisplayMaskStore.getState().revealAll();
+      // Nothing to animate this tick (a HALT, or every category switched off) —
+      // still a completed pass as far as playback is concerned.
+      usePlaybackStore.getState().notifyTickAnimationComplete();
       return;
     }
 
@@ -349,11 +368,11 @@ export default function EnhancedBusOverlay({
 
     const startTime = Date.now();
     // CPU changed signals animate concurrently in a single phase before data substeps.
-    const effectiveCpuDuration = animCpuIds.length > 0 ? componentAnimationDuration : 0;
-    const nonCpuStaggerStep = componentAnimationDuration;
+    const effectiveCpuDuration = animCpuIds.length > 0 ? animationDurationMs : 0;
+    const nonCpuStaggerStep = animationDurationMs;
     const nonCpuGroupCount = sortedNonCpuGroups.length;
     const nonCpuPhaseDuration = nonCpuGroupCount > 0
-      ? componentAnimationDuration * nonCpuGroupCount
+      ? animationDurationMs * nonCpuGroupCount
       : 0;
     const totalDuration = effectiveCpuDuration + nonCpuPhaseDuration;
 
@@ -388,6 +407,7 @@ export default function EnhancedBusOverlay({
         animationRef.current = null;
         // Ensure every component reaches its post-tick value once the pass ends.
         useDisplayMaskStore.getState().revealAll();
+        usePlaybackStore.getState().notifyTickAnimationComplete();
         return;
       }
 
@@ -417,12 +437,12 @@ export default function EnhancedBusOverlay({
       for (const id of animNonCpuIds) {
         progress.set(id, 0);
       }
-      if (elapsed > effectiveCpuDuration && componentAnimationDuration > 0 && sortedNonCpuGroups.length > 0) {
+      if (elapsed > effectiveCpuDuration && animationDurationMs > 0 && sortedNonCpuGroups.length > 0) {
         const compElapsed = elapsed - effectiveCpuDuration;
 
         sortedNonCpuGroups.forEach(([order, groupIds], index) => {
           const groupStart = index * nonCpuStaggerStep;
-          const groupProgress = Math.min(1, Math.max(0, (compElapsed - groupStart) / componentAnimationDuration));
+          const groupProgress = Math.min(1, Math.max(0, (compElapsed - groupStart) / animationDurationMs));
           for (const id of groupIds) {
             progress.set(id, groupProgress);
           }
@@ -474,7 +494,7 @@ export default function EnhancedBusOverlay({
     animationEnabled,
     animateCpuSignals,
     animateDataSignals,
-    componentAnimationDuration,
+    animationDurationMs,
   ]);
 
   const getPointAlongPath = useCallback((path: Point[], progress: number): Point => {

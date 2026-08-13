@@ -8,7 +8,7 @@ import type { HoveredPort } from "@/lib/wireCreationStore";
 import { useDisplayStore } from "@/lib/displayStore";
 import { useModeStore } from "@/lib/modeStore";
 import { getWidgetDefinition } from "@/lib/widgetDefinitions";
-import { findPortPosition, getPortPlacement } from "@/lib/portPositioning";
+import { findPortPosition, getPortPlacement, resolvePortConfig } from "@/lib/portPositioning";
 import type { PortSide } from "@/lib/portPositioning";
 import type { AABB } from "@/lib/wireRouting";
 import PortIndicator from "./PortIndicator";
@@ -50,7 +50,7 @@ export default function PortsOverlay({ componentId }: Props) {
   // Get the component and its widget definition for port configuration
   const component = components.find((c) => c.id === componentId);
   const widgetDef = component ? getWidgetDefinition(component.type) : undefined;
-  const portConfig = widgetDef?.portConfig;
+  const portConfig = resolvePortConfig(widgetDef?.portConfig, component?.meta);
 
   // Get ports from simulator object
   const ports = useMemo((): PortInfo[] => {
@@ -140,7 +140,7 @@ export default function PortsOverlay({ componentId }: Props) {
         portName,
         direction,
         targetPorts,
-        targetWidgetDef?.portConfig,
+        resolvePortConfig(targetWidgetDef?.portConfig, targetComp.meta),
       );
 
       const hovered: HoveredPort = {

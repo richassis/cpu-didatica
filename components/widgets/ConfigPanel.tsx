@@ -28,6 +28,13 @@ export interface ComponentConfig {
   constantValue?: number;
   /** How much an IncrementerComponent adds to its input. Default 1. */
   step?: number;
+  /**
+   * Swap this instance's left/right port sides. Port layout otherwise comes
+   * from the widget definition, which is shared by every component of a type —
+   * this is the escape hatch for the one that sits against the flow (MAR is fed
+   * from its right, so unmirrored its input wire wraps around the block).
+   */
+  mirrorPorts?: boolean;
 }
 
 interface PanelProps {
@@ -250,7 +257,34 @@ export function IncrementerComponentConfigPanel(props: PanelProps) {
 
 // ── Dispatcher ────────────────────────────────────────────────────────────
 
-export function ConfigPanelForType({
+/**
+ * Applies to every component type, so it lives outside the per-type switch.
+ * Top and bottom ports (control signals) are unaffected — only left/right swap.
+ */
+function MirrorPortsField({ config, onChange }: PanelProps) {
+  return (
+    <label className="flex cursor-pointer items-center justify-between gap-3">
+      <span className="t-section">Mirror port sides</span>
+      <input
+        type="checkbox"
+        checked={config.mirrorPorts ?? false}
+        onChange={(e) => onChange({ mirrorPorts: e.target.checked })}
+        className="h-4 w-4 accent-[var(--st-active)]"
+      />
+    </label>
+  );
+}
+
+export function ConfigPanelForType({ type, ...props }: PanelProps & { type: string }) {
+  return (
+    <>
+      <TypeSpecificPanel type={type} {...props} />
+      <MirrorPortsField {...props} />
+    </>
+  );
+}
+
+function TypeSpecificPanel({
   type,
   ...props
 }: PanelProps & { type: string }) {

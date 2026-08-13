@@ -51,6 +51,8 @@ export default function ConfigModal({ component, onClose }: Props) {
     holdOutputUntilFetch: typeof component.meta?.holdOutputUntilFetch === "boolean" ? component.meta.holdOutputUntilFetch : undefined,
     constantValue: typeof component.meta?.constantValue === "number" ? component.meta.constantValue : undefined,
     step: typeof component.meta?.step === "number" ? component.meta.step : undefined,
+    mirrorPorts:
+      typeof component.meta?.mirrorPorts === "boolean" ? component.meta.mirrorPorts : undefined,
   });
   // portInputs: map portName → current text being typed
   const [portInputs, setPortInputs] = useState<Record<string, string>>({});
@@ -180,6 +182,7 @@ export default function ConfigModal({ component, onClose }: Props) {
     if (config.holdOutputUntilFetch !== undefined) meta.holdOutputUntilFetch = config.holdOutputUntilFetch;
     if (config.constantValue !== undefined) meta.constantValue = config.constantValue;
     if (config.step !== undefined) meta.step = config.step;
+    if (config.mirrorPorts !== undefined) meta.mirrorPorts = config.mirrorPorts;
     
     // Check if we need to recreate the object (when port structure changes)
     const currentNumInputs = component.meta?.numInputs;

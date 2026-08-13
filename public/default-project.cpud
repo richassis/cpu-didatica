@@ -931,7 +931,8 @@
       "x": 688,
       "y": 336,
       "meta": {
-        "bitWidth": 16
+        "bitWidth": 16,
+        "mirrorPorts": true
       },
       "state": {
         "ports": {
