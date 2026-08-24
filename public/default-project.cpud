@@ -7,7 +7,7 @@
     {
       "id": "cpu-1",
       "type": "CpuComponent",
-      "label": "CPU",
+      "label": "UC",
       "x": 1280,
       "y": 96,
       "w": 176,
@@ -43,7 +43,8 @@
       "w": 144,
       "h": 48,
       "meta": {
-        "bitWidth": 16
+        "bitWidth": 16,
+        "holdOutputUntilFetch": true
       },
       "state": {
         "ports": {
@@ -463,17 +464,19 @@
     },
     {
       "id": "adder-pc",
-      "type": "AdderComponent",
+      "type": "IncrementerComponent",
       "label": "PC+1",
-      "x": 432,
-      "y": 576,
-      "w": 128,
-      "h": 176,
-      "meta": {},
+      "x": 464,
+      "y": 624,
+      "w": 48,
+      "h": 48,
+      "meta": {
+        "bitWidth": 16,
+        "step": 1
+      },
       "state": {
         "ports": {
-          "a": 0,
-          "b": 1,
+          "in": 0,
           "result": 1,
           "carry": 0
         }
@@ -791,27 +794,6 @@
       }
     },
     {
-      "id": "71514764-4187-4f67-af42-21f0b8742c3a",
-      "type": "ConstantComponent",
-      "label": "ONE",
-      "w": 144,
-      "h": 48,
-      "x": 432,
-      "y": 784,
-      "meta": {
-        "bitWidth": 16,
-        "constantValue": 1
-      },
-      "state": {
-        "ports": {
-          "value": 1
-        }
-      },
-      "tickSteps": [
-        0
-      ]
-    },
-    {
       "id": "9c3b9c7b-52e0-4388-9287-b4e8144873b2",
       "type": "MuxComponent",
       "label": "muxDReg",
@@ -949,7 +931,8 @@
       "x": 688,
       "y": 336,
       "meta": {
-        "bitWidth": 16
+        "bitWidth": 16,
+        "mirrorPorts": true
       },
       "state": {
         "ports": {
@@ -1438,12 +1421,7 @@
       "targetPortName": "in_1",
       "label": "",
       "visible": true,
-      "nodes": [
-        {
-          "x": 288,
-          "y": 560
-        }
-      ]
+      "nodes": []
     },
     {
       "id": "2f7baebb-9363-4959-a76c-947f8111d89e",
@@ -1469,38 +1447,10 @@
       "sourceComponentId": "pc-1",
       "sourcePortName": "value",
       "targetComponentId": "adder-pc",
-      "targetPortName": "a",
+      "targetPortName": "in",
       "label": "",
       "visible": true,
-      "nodes": [
-        {
-          "x": 592,
-          "y": 528
-        },
-        {
-          "x": 592,
-          "y": 672
-        }
-      ]
-    },
-    {
-      "id": "a0f45027-bde7-45f4-921c-36fa070a50d4",
-      "sourceComponentId": "71514764-4187-4f67-af42-21f0b8742c3a",
-      "sourcePortName": "value",
-      "targetComponentId": "adder-pc",
-      "targetPortName": "b",
-      "label": "",
-      "visible": true,
-      "nodes": [
-        {
-          "x": 592,
-          "y": 816
-        },
-        {
-          "x": 592,
-          "y": 688
-        }
-      ]
+      "nodes": []
     },
     {
       "id": "ca1ebadc-278b-468a-ba98-c3c2a817c5f1",
@@ -1587,7 +1537,8 @@
         "0": 0
       },
       "config": {
-        "bitWidth": 16
+        "bitWidth": 16,
+        "holdOutputUntilFetch": true
       }
     },
     {
@@ -1659,7 +1610,7 @@
     },
     {
       "id": "adder-pc",
-      "type": "AdderComponent",
+      "type": "IncrementerComponent",
       "name": "PC+1",
       "tickSteps": [
         0
@@ -1667,7 +1618,10 @@
       "tickOrderByState": {
         "0": 1
       },
-      "config": {}
+      "config": {
+        "bitWidth": 16,
+        "step": 1
+      }
     },
     {
       "id": "mux-pc",
@@ -1694,19 +1648,6 @@
         "0": 1
       },
       "config": {}
-    },
-    {
-      "id": "71514764-4187-4f67-af42-21f0b8742c3a",
-      "type": "ConstantComponent",
-      "name": "ONE",
-      "tickSteps": [
-        0
-      ],
-      "tickOrderByState": {},
-      "config": {
-        "bitWidth": 16,
-        "constantValue": 1
-      }
     },
     {
       "id": "9c3b9c7b-52e0-4388-9287-b4e8144873b2",
@@ -1795,5 +1736,5 @@
       }
     }
   ],
-  "version": 3
+  "version": 5
 }

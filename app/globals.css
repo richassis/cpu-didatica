@@ -1,8 +1,122 @@
 @import "tailwindcss";
 
+/* ──────────────────────────────────────────────────────────────────────────
+   Design tokens
+
+   Two rules govern this file:
+
+   1. Colour codes STATE, never identity. A component's identity comes from its
+      silhouette, its corner glyph and its internal anatomy — see
+      `components/widgets/silhouettes.tsx`. Only five saturated colours exist,
+      and each means something is happening right now.
+   2. Depth comes from surface difference and from a state glow, never from a
+      drop shadow. There is no elevation shadow anywhere in the app.
+
+   Both colour profiles define the same semantic names, so a component never
+   needs to know which profile is active. The saturated state colours are NOT
+   the same hexes in both: neon on white is unreadable, so the light profile
+   uses darker values of the same hue.
+   ────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* Surfaces — near-black with a cold bias. Never #000, never Tailwind slate. */
+  --canvas:         #0E1214;
+  --surface:        #161B1E;
+  --surface-raised: rgba(255, 255, 255, 0.04);
+  --surface-sunken: rgba(0, 0, 0, 0.25);
+
+  /* Stroke */
+  --border:        rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --grid-dot:      rgba(255, 255, 255, 0.05);
+
+  /* Text */
+  --text:       #FFFFFF;
+  --text-muted: #8B9296;
+  --text-faint: #5A6165;
+
+  /* State — four, plus one used at most once per screen. Adding a sixth means
+     removing one of these. */
+  --st-active: #3DFF9E;   /* component executing this tick */
+  --st-data:   #2D7FF9;   /* bus/register carrying a valid value */
+  --st-error:  #FF4757;   /* unexpected HLT, overflow, bad address */
+  --st-warn:   #FFA92B;   /* flag set, state worth watching */
+  --st-cursor: #FF3D9A;   /* current tick, breakpoint. Max one on screen. */
+
+  /* Opacity ceiling of the state glow. Tokenised because the same value blows
+     out on a white ground — see the light profile. */
+  --glow-alpha: 22%;
+
+  /* Legacy aliases, still read by the canvas and the wire overlay. */
+  --canvas-bg: var(--canvas);
+  --canvas-grid: var(--grid-dot);
+  --widget-surface: var(--surface);
+  --widget-surface-alt: var(--surface-raised);
+  --wire-value-bg: var(--canvas);
+  --wire-value-fg: var(--text);
+  --wire-data: var(--st-data);
+  --wire-data-end: var(--st-data);
+  --wire-control: var(--text-muted);
+  --wire-control-end: var(--text-muted);
+}
+
+[data-theme="light"] {
+  --canvas:         #F2F4F5;
+  --surface:        #FFFFFF;
+  --surface-raised: rgba(14, 18, 20, 0.03);
+  --surface-sunken: rgba(14, 18, 20, 0.05);
+
+  --border:        rgba(14, 18, 20, 0.10);
+  --border-strong: rgba(14, 18, 20, 0.20);
+  --grid-dot:      rgba(14, 18, 20, 0.08);
+
+  --text:       #0E1214;
+  --text-muted: #5A6165;
+  --text-faint: #8B9296;
+
+  --st-active: #00875A;
+  --st-data:   #1B5FD9;
+  --st-error:  #D62839;
+  --st-warn:   #B26A00;
+  --st-cursor: #C81E6E;
+
+  --glow-alpha: 10%;
+
+}
+
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Tokens → Tailwind utilities
+
+   `inline` matters here: it makes `bg-surface` compile to
+   `background-color: var(--surface)` rather than to an indirection through a
+   `--color-surface` declared on :root. Since `[data-theme="light"]` lands on
+   the same element as `:root`, only the inline form re-resolves per profile.
+
+   `--color-line` rather than `--color-border`, to avoid a `border-border`
+   utility.
+   ────────────────────────────────────────────────────────────────────────── */
 @theme inline {
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-urbanist);
+  --font-mono: var(--font-jetbrains-mono);
+
+  --color-canvas:  var(--canvas);
+  --color-surface: var(--surface);
+  --color-raised:  var(--surface-raised);
+  --color-sunken:  var(--surface-sunken);
+
+  --color-line:        var(--border);
+  --color-line-strong: var(--border-strong);
+
+  --color-fg:       var(--text);
+  --color-fg-muted: var(--text-muted);
+  --color-fg-faint: var(--text-faint);
+
+  --color-st-active: var(--st-active);
+  --color-st-data:   var(--st-data);
+  --color-st-error:  var(--st-error);
+  --color-st-warn:   var(--st-warn);
+  --color-st-cursor: var(--st-cursor);
 }
 
 * {
@@ -16,9 +130,208 @@ body {
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--canvas);
+  color: var(--text);
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+/* Every column of values is read by comparing digits down the column, so the
+   digits have to be the same width. */
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Type scale
+
+   Hierarchy comes from size and colour, not from weight — nothing on screen
+   goes above 500. These classes are the only place a font-size for chrome or
+   data should be written; reach for one of them instead of `text-[10px]`.
+   ────────────────────────────────────────────────────────────────────────── */
+.t-panel   { font-family: var(--font-sans); font-size: 18px; font-weight: 500; }
+.t-node    { font-family: var(--font-sans); font-size: 13px; font-weight: 500; }
+.t-section { font-family: var(--font-sans); font-size: 12px; font-weight: 500; color: var(--text-muted); }
+.t-body    { font-family: var(--font-sans); font-size: 14px; font-weight: 400; }
+.t-metric  { font-family: var(--font-sans); font-size: 32px; font-weight: 300; }
+
+.t-value {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.t-value-sm {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.t-code {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.6;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Node state
+
+   A node's whole appearance hangs off one attribute, `data-state`, so the
+   per-widget colour ternaries disappear and stepping the clock repaints the
+   canvas from here. If two consecutive ticks look the same, this is the block
+   that is wrong.
+
+   Depth is a glow, never a shadow — and a glow only ever appears on a node
+   that is doing something. If everything glows, the glow means nothing.
+   ────────────────────────────────────────────────────────────────────────── */
+.node {
+  --node-line: var(--border);
+  --node-ink: var(--text-muted);
+  --node-glow: transparent;
+  transition: opacity 0.2s ease;
+}
+
+.node[data-state="active"] {
+  --node-line: var(--st-active);
+  --node-ink: var(--st-active);
+  --node-glow: color-mix(in srgb, var(--st-active) var(--glow-alpha), transparent);
+}
+
+.node[data-state="error"] {
+  --node-line: var(--st-error);
+  --node-ink: var(--st-error);
+  --node-glow: color-mix(in srgb, var(--st-error) var(--glow-alpha), transparent);
+}
+
+/* Participates in this tick but its wires have not arrived — it is still
+   showing last tick's value, and says so by receding. */
+.node[data-state="pending"] {
+  opacity: 0.45;
+}
+
+/* Rectangular nodes draw their own outline. Nodes with a silhouette
+   (ALU, MUX, decoder, adder) draw it in SVG instead and skip this. */
+.node--boxed {
+  border-radius: 10px;
+  border: 1px solid var(--node-line);
+  background:
+    radial-gradient(120% 90% at 50% 120%, var(--node-glow) 0%, transparent 70%),
+    var(--surface-raised);
+  transition: border-color 0.2s ease, background 0.2s ease, opacity 0.2s ease;
+}
+
+/* The control unit is not part of the datapath — it commands it. Dashed is
+   reserved for exactly this one component. */
+.node--control {
+  border-style: dashed;
+  border-dasharray: 4 3;
+}
+
+.node-badge {
+  color: var(--node-ink);
+  border-color: var(--node-line);
+}
+
+.node-title {
+  color: var(--text-muted);
+}
+
+/* A held value reads as data, so it takes the data colour the moment the node
+   latches it. This is most of what makes the blink test pass. */
+.node-value {
+  color: var(--text);
+}
+.node[data-state="active"] .node-value {
+  color: var(--st-data);
+}
+
+/* ── Ports ────────────────────────────────────────────────────────────────
+   Neutral until live. Direction is carried by shape, not by colour, so the
+   in/out/control distinction survives greyscale: output is a filled disc,
+   input a hollow ring, control signal a square.
+   ──────────────────────────────────────────────────────────────────────── */
+.port {
+  width: 6px;
+  height: 6px;
+  border: 1px solid var(--border-strong);
+  background: var(--canvas);
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+.port--in { border-radius: 50%; }
+.port--out { border-radius: 50%; background: var(--border-strong); }
+.port--ctrl { border-radius: 1px; }
+
+.port[data-live="true"] {
+  border-color: var(--st-data);
+}
+.port--out[data-live="true"] {
+  background: var(--st-data);
+}
+.port[data-drop="true"] {
+  border-color: var(--st-active);
+  transform: scale(1.6);
+}
+
+/* ── Level of detail ──────────────────────────────────────────────────────
+   Set once on the scaled canvas. Without it the datapath is unreadable noise
+   the moment the student zooms out to see the whole thing.
+   ──────────────────────────────────────────────────────────────────────── */
+[data-lod="low"] .node-badge,
+[data-lod="low"] .node-value,
+[data-lod="low"] .node-anatomy,
+[data-lod="mid"] .node-anatomy {
+  display: none;
+}
+
+/* A stand-in headline for nodes whose real content is a table or a list. It
+   exists so those nodes are not blank at mid zoom, and steps aside once the
+   anatomy itself is back. */
+[data-lod="full"] .node-value--compact {
+  display: none;
+}
+
+/* The tick slider draws no track of its own — the panel paints the rules
+   underneath so they follow the theme. Only the knob is left. */
+.timeline-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--st-active);
+  cursor: pointer;
+}
+.timeline-slider::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border: none;
+  border-radius: 50%;
+  background: var(--st-active);
+  cursor: pointer;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Reduced motion
+
+   The canvas is built out of movement — travelling dots, glows fading in, a
+   selector sliding down a rail — and none of it carried meaning that is lost
+   by removing it: every value it animates is also written down somewhere.
+   So when the OS asks for less motion, transitions collapse rather than
+   degrade.
+
+   The wire flow itself is driven from JavaScript, not from here; the store
+   starts at instant speed when this query matches (see displayStore), which a
+   saved preference then overrides.
+   ────────────────────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* Hide scrollbars but keep functionality */

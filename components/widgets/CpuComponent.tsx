@@ -1,326 +1,164 @@
 "use client";
 
-import { useState } from "react";
-import { useDraggable } from "@dnd-kit/core";
-import { CSS } from "@dnd-kit/utilities";
-import type { CSSProperties } from "react";
+import { RotateCcw, Pause, Play } from "lucide-react";
 import { Props } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
-import { useDisplayStore, formatNum } from "@/lib/displayStore";
-import ConfigModal from "@/components/ConfigModal";
-import PortsOverlay from "@/components/PortsOverlay";
+import { useDisplayStore, formatNum, type NumericBase } from "@/lib/displayStore";
+import NodeShell from "@/components/widgets/NodeShell";
 import FlagSquares from "@/components/widgets/FlagSquares";
 import { CpuState, CONTROL_SIGNAL_DEFS } from "@/lib/simulator/Cpu";
+import { CPU_STATE_LABELS } from "@/lib/simulator/CpuState";
 import type { CPU } from "@/lib/simulator/Cpu";
 
-// ── helpers ───────────────────────────────────────────────────────────────────
-
-const STATE_LABELS: Record<CpuState, string> = {
-  [CpuState.RESET]:     "RESET",
-  [CpuState.FETCH]:     "FETCH",
-  [CpuState.DECODE]:    "DECODE",
-  [CpuState.EXECUTE]:   "EXEC",
-  [CpuState.READMEM]:   "RDMEM",
-  [CpuState.WRITEMEM]:  "WRMEM",
-  [CpuState.READREG1]:  "RDREG1",
-  [CpuState.READREG2]:  "RDREG2",
-  [CpuState.WRITEREG1]: "WRREG1",
-  [CpuState.WRITEREG2]: "WRREG2",
-  [CpuState.WRITEREG3]: "WRREG3",
-  [CpuState.WRITEPC]:   "WRPC",
-  [CpuState.HALT]:      "HALT",
-};
-
-export const STATE_COLORS: Record<CpuState, string> = {
-  [CpuState.RESET]:     "text-gray-300    bg-gray-800/60    border-gray-600",
-  [CpuState.FETCH]:     "text-indigo-300  bg-indigo-900/60  border-indigo-600",
-  [CpuState.DECODE]:    "text-purple-300  bg-purple-900/60  border-purple-600",
-  [CpuState.EXECUTE]:   "text-orange-300  bg-orange-900/60  border-orange-600",
-  [CpuState.READMEM]:   "text-cyan-300    bg-cyan-900/60    border-cyan-600",
-  [CpuState.WRITEMEM]:  "text-teal-300    bg-teal-900/60    border-teal-600",
-  [CpuState.READREG1]:  "text-sky-300     bg-sky-900/60     border-sky-600",
-  [CpuState.READREG2]:  "text-sky-300     bg-sky-900/60     border-sky-600",
-  [CpuState.WRITEREG1]: "text-emerald-300 bg-emerald-900/60 border-emerald-600",
-  [CpuState.WRITEREG2]: "text-emerald-300 bg-emerald-900/60 border-emerald-600",
-  [CpuState.WRITEREG3]: "text-emerald-300 bg-emerald-900/60 border-emerald-600",
-  [CpuState.WRITEPC]:   "text-rose-300    bg-rose-900/60    border-rose-600",
-  [CpuState.HALT]:      "text-red-300     bg-red-900/40     border-red-700/60",
-};
-
-// Background-only versions for the state band (no border class)
-const STATE_BG_COLORS: Record<CpuState, string> = {
-  [CpuState.RESET]:     "bg-gray-800/80 text-gray-200",
-  [CpuState.FETCH]:     "bg-indigo-900/80 text-indigo-100",
-  [CpuState.DECODE]:    "bg-purple-900/80 text-purple-100",
-  [CpuState.EXECUTE]:   "bg-orange-900/80 text-orange-100",
-  [CpuState.READMEM]:   "bg-cyan-900/80 text-cyan-100",
-  [CpuState.WRITEMEM]:  "bg-teal-900/80 text-teal-100",
-  [CpuState.READREG1]:  "bg-sky-900/80 text-sky-100",
-  [CpuState.READREG2]:  "bg-sky-900/80 text-sky-100",
-  [CpuState.WRITEREG1]: "bg-emerald-900/80 text-emerald-100",
-  [CpuState.WRITEREG2]: "bg-emerald-900/80 text-emerald-100",
-  [CpuState.WRITEREG3]: "bg-emerald-900/80 text-emerald-100",
-  [CpuState.WRITEPC]:   "bg-rose-900/80 text-rose-100",
-  [CpuState.HALT]:      "bg-red-900/60 text-red-200",
-};
+/**
+ * There used to be a private STATE_LABELS here in short form (WRREG2) next to
+ * the canonical long form in CpuState.ts (WRITEREG2), so the same phase read
+ * under two different names depending on where you looked. One name now.
+ */
+function stateLabel(state: CpuState): string {
+  return CPU_STATE_LABELS[state] ?? "???";
+}
 
 /** Read every control-signal output port value from the CPU instance. */
 function readSignals(cpu: CPU): Record<string, number | boolean> {
   const out: Record<string, number | boolean> = {};
+  const portMap = cpu.getPorts();
   for (const def of CONTROL_SIGNAL_DEFS) {
-    const portName = `out_${def.name}`;
-    const portMap  = cpu.getPorts();
-    const port     = portMap[portName];
-    out[def.name]  = port ? (port.value as number | boolean) : 0;
+    const port = portMap[`out_${def.name}`];
+    out[def.name] = port ? (port.value as number | boolean) : 0;
   }
   return out;
 }
 
-// ── signal row ────────────────────────────────────────────────────────────────
-function SignalRow({
-  name,
-  value,
-  bits,
-  active,
-  base,
-}: {
-  name: string;
-  value: number | boolean;
-  bits: number;
-  active: boolean;
-  base: import("@/lib/displayStore").NumericBase;
-}) {
-  const display = typeof value === "boolean"
-    ? (value ? "1" : "0")
-    : bits <= 1
-      ? String(Number(value))
-      : formatNum(Number(value), base, bits);
-
-  return (
-    <div
-      className={`flex items-center justify-between gap-1 px-2 py-[3px] odd:bg-gray-800/30 transition-colors ${
-        active ? "bg-indigo-900/40" : ""
-      }`}
-    >
-      <span className="text-[10px] text-gray-400 font-mono w-20 truncate shrink-0">{name}</span>
-      <div className="flex items-center gap-1.5">
-        <span
-          className={`w-1.5 h-1.5 rounded-full shrink-0 transition-colors ${
-            active ? "bg-indigo-400 shadow-[0_0_4px_#818cf8]" : "bg-gray-700"
-          }`}
-        />
-        <span
-          className={`text-[10px] font-mono font-semibold min-w-[1.5rem] text-right ${
-            active ? "text-indigo-200" : "text-gray-500"
-          }`}
-        >
-          {display}
-        </span>
-      </div>
-    </div>
-  );
+function formatSignal(value: number | boolean, bits: number, base: NumericBase): string {
+  if (typeof value === "boolean") return value ? "1" : "0";
+  if (bits <= 1) return String(Number(value));
+  return formatNum(Number(value), base, bits);
 }
 
-// ── main component ────────────────────────────────────────────────────────────
+/**
+ * The control unit.
+ *
+ * The only component with a dashed outline, and the only one entitled to it:
+ * it is not part of the datapath, it commands it. It carries no clock notch —
+ * the notch marks datapath storage.
+ *
+ * This component used to own two maps assigning a hue per CPU phase, eleven
+ * hues in total against a budget of four. Both are gone. A phase is now an
+ * outlined pill that takes the accent only while it is the current one, which
+ * is the same rule every other state indicator follows.
+ */
 export default function CpuComponent({ component, zoom }: Props) {
-  const { id, x, y, w, h, label } = component;
-  const [configOpen, setConfigOpen] = useState(false);
+  const { id } = component;
 
   const revision = useSimulatorStore((s) => s.revision);
-  const cpu      = useSimulatorStore((s) => s.getCpu(id));
+  const cpu = useSimulatorStore((s) => s.getCpu(id));
   const pauseCpu = useSimulatorStore((s) => s.pauseCpu);
   const resetCpu = useSimulatorStore((s) => s.resetCpu);
-  const base     = useDisplayStore((s) => s.numericBase);
+  const base = useDisplayStore((s) => s.numericBase);
   void revision;
 
-  const { attributes, listeners, setNodeRef, transform, isDragging } =
-    useDraggable({ id });
+  const nextState = cpu ? (cpu.state as CpuState) : CpuState.FETCH;
+  const currentState = cpu ? (cpu.previousState as CpuState) : CpuState.RESET;
+  const halted = cpu ? cpu.halted : false;
+  const paused = cpu ? cpu.paused : false;
+  const signals = cpu ? readSignals(cpu) : {};
 
-  const correctedTransform = transform
-    ? { ...transform, x: transform.x / zoom, y: transform.y / zoom }
-    : null;
-
-  const style: CSSProperties = {
-    position: "absolute",
-    left: x,
-    top: y,
-    width: w,
-    height: h,
-    transform: CSS.Translate.toString(correctedTransform),
-    zIndex: isDragging ? 50 : 10,
-    touchAction: "none",
+  const isOn = (name: string) => {
+    const v = signals[name];
+    return (typeof v === "boolean" ? (v ? 1 : 0) : (v ?? 0)) !== 0;
   };
 
-  // ── derived display ────────────────────────────────────────────
-  const nextState    = cpu ? (cpu.state as CpuState) : CpuState.FETCH;
-  const halted       = cpu ? cpu.halted : false;
-  const paused       = cpu ? cpu.paused : false;
-  const signals      = cpu ? readSignals(cpu) : {};
-  const currentState = cpu ? (cpu.previousState as CpuState) : CpuState.RESET;
-
-  const nextLabel    = halted ? "HALT" : (STATE_LABELS[nextState] ?? "???");
-  const nextColor    = STATE_COLORS[nextState] ?? "text-gray-300 bg-gray-800 border-gray-600";
-  const currentLabel = STATE_LABELS[currentState] ?? "???";
-  const currentBand  = STATE_BG_COLORS[currentState] ?? "bg-gray-800/80 text-gray-200";
-
-  // Split signals: active ones first, then inactive
-  const activeSignals   = CONTROL_SIGNAL_DEFS.filter((def) => {
-    const val = signals[def.name];
-    const numVal = typeof val === "boolean" ? (val ? 1 : 0) : (val ?? 0);
-    return numVal !== 0;
-  });
-  const inactiveSignals = CONTROL_SIGNAL_DEFS.filter((def) => {
-    const val = signals[def.name];
-    const numVal = typeof val === "boolean" ? (val ? 1 : 0) : (val ?? 0);
-    return numVal === 0;
-  });
-
   return (
-    <>
-      <div
-        ref={setNodeRef}
-        style={style}
-        {...listeners}
-        {...attributes}
-        data-draggable
-        className={`select-none cursor-grab active:cursor-grabbing relative rounded-xl border flex flex-col
-          bg-[#0a0a14] transition-colors
-          ${isDragging
-            ? "border-indigo-400 shadow-2xl"
-            : halted
-              ? "border-red-700/80"
-              : paused
-                ? "border-yellow-600/80"
-                : "border-indigo-700/50"
-          }`}
-        onContextMenu={(e) => e.stopPropagation()}
-        onDoubleClick={(e) => { e.stopPropagation(); setConfigOpen(true); }}
-      >
-        {/* ── Header band ── */}
-        <div
-          className={`shrink-0 px-2 py-1.5 flex items-center justify-between gap-2 border-b rounded-t-xl
-            ${halted ? "bg-red-950/60 border-red-800/40" : "bg-indigo-950/80 border-indigo-800/30"}`}
-        >
-          <span className="text-[11px] font-bold text-indigo-200 tracking-wide uppercase truncate font-mono">
-            {label}
+    <NodeShell
+      component={component}
+      zoom={zoom}
+      control
+      state={halted ? "error" : undefined}
+      value={
+        <span className="flex flex-col items-center leading-none">
+          <span className="font-mono text-[18px] font-medium">
+            {paused ? "PAUSED" : halted ? "HALT" : stateLabel(currentState)}
           </span>
-          <div className="flex items-center gap-1.5 shrink-0">
-            <button
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => { e.stopPropagation(); resetCpu(id); }}
-              className="text-indigo-400/70 hover:text-indigo-200 text-xs leading-none px-1 py-0.5 rounded transition-colors"
-              title="Reset CPU"
-            >↺</button>
-            <button
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => { e.stopPropagation(); pauseCpu(id, !paused); }}
-              className={`text-xs leading-none px-1.5 py-0.5 rounded transition-colors ${
-                paused
-                  ? "bg-yellow-600/80 hover:bg-yellow-500 text-white"
-                  : halted
-                    ? "text-gray-600 cursor-not-allowed"
-                    : "text-indigo-400/70 hover:text-indigo-200"
-              }`}
-              disabled={halted}
-              title={paused ? "Resume CPU" : "Pause CPU"}
-            >{paused ? "▶" : "⏸"}</button>
-            <button
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => { e.stopPropagation(); setConfigOpen(true); }}
-              className="text-indigo-500/60 hover:text-indigo-200 text-xs leading-none"
-            >⚙</button>
-          </div>
-        </div>
-
-        {/* ── BIG state band ── */}
-        <div className={`shrink-0 flex flex-col items-center justify-center py-2.5 border-b border-indigo-900/30
-          ${paused ? "bg-yellow-900/30" : currentBand}`}
-          style={{ minHeight: 44 }}
-        >
-          {paused ? (
-            <span className="text-[18px] font-black font-mono text-yellow-300 tracking-widest">PAUSED</span>
-          ) : (
-            <span className="text-[20px] font-black font-mono tracking-widest leading-none">
-              {currentLabel}
+          {!paused && !halted && (
+            <span className="mt-1 font-mono text-[10px] text-fg-faint">
+              → {stateLabel(nextState)}
             </span>
           )}
-          {!paused && (
-            <div className="flex items-center gap-1 mt-0.5">
-              <span className="text-[9px] text-current/50 font-mono">→</span>
-              <span className={`text-[10px] font-mono font-semibold opacity-60 ${nextColor.split(" ")[0]}`}>
-                {nextLabel}
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* ── Flags ── */}
-        <div className="shrink-0 px-2 py-1 border-b border-gray-800/60 flex items-center justify-between">
-          <span className="text-[9px] text-gray-600 font-mono">flags</span>
-          <FlagSquares
-            flags={[
-              { label: "Z", on: !!cpu && cpu.in_flagZero.value !== 0, title: "Zero flag" },
-              { label: "C", on: !!cpu && cpu.in_flagCarry.value !== 0, title: "Carry flag" },
-              { label: "N", on: !!cpu && cpu.in_flagNegative.value !== 0, title: "Negative flag" },
-            ]}
-          />
-        </div>
-
-        {/* ── Active signals — 2-column compact grid ── */}
-        {activeSignals.length > 0 && (
-          <div className="shrink-0 px-1.5 py-1 border-b border-indigo-900/30">
-            <div className="text-[8px] text-indigo-500/70 font-mono uppercase tracking-widest mb-0.5 px-0.5">active</div>
-            <div className="grid grid-cols-2 gap-px">
-              {activeSignals.map((def) => {
-                const val = signals[def.name];
-                const display = typeof val === "boolean"
-                  ? (val ? "1" : "0")
-                  : def.bitWidth <= 1
-                    ? String(Number(val ?? 0))
-                    : formatNum(Number(val ?? 0), base, def.bitWidth);
-                return (
-                  <div key={def.name} className="flex items-center gap-1 bg-indigo-900/40 rounded px-1 py-0.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 shadow-[0_0_4px_#818cf8] shrink-0" />
-                    <span className="text-[9px] font-mono text-indigo-200 truncate flex-1">{def.name}</span>
-                    <span className="text-[9px] font-mono font-bold text-indigo-100 shrink-0">{display}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* ── All signals (scrollable) ── */}
-        <div className="flex-1 overflow-y-auto">
-          {activeSignals.length > 0 && (
-            <div className="px-2 pt-1 pb-0 text-[8px] text-gray-700 font-mono uppercase tracking-widest">all signals</div>
-          )}
-          {activeSignals.length === 0 && (
-            <div className="px-2 pt-1 pb-0.5 text-[9px] text-gray-600 font-semibold uppercase tracking-widest">Control Signals</div>
-          )}
-          {CONTROL_SIGNAL_DEFS.map((def) => {
-            const val = signals[def.name];
-            const numVal = typeof val === "boolean" ? (val ? 1 : 0) : (val ?? 0);
-            const isActive = numVal !== 0;
-            return (
-              <SignalRow
-                key={def.name}
-                name={def.name}
-                value={val ?? 0}
-                bits={def.bitWidth}
-                active={isActive}
-                base={base}
-              />
-            );
-          })}
-        </div>
-
-        <PortsOverlay componentId={id} />
+        </span>
+      }
+      actions={
+        <>
+          <button
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              resetCpu(id);
+            }}
+            className="shrink-0 rounded p-0.5 text-fg-faint transition-colors hover:text-fg"
+            title="Reset CPU"
+          >
+            <RotateCcw size={12} strokeWidth={1.5} />
+          </button>
+          <button
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              pauseCpu(id, !paused);
+            }}
+            disabled={halted}
+            className={`shrink-0 rounded p-0.5 transition-colors ${
+              paused ? "text-st-warn" : "text-fg-faint hover:text-fg"
+            } disabled:opacity-40`}
+            title={paused ? "Resume CPU" : "Pause CPU"}
+          >
+            {paused ? <Play size={12} strokeWidth={1.5} /> : <Pause size={12} strokeWidth={1.5} />}
+          </button>
+        </>
+      }
+    >
+      <div className="flex shrink-0 items-center justify-between border-b border-line px-2 py-1">
+        <span className="font-mono text-[10px] text-fg-faint">flags</span>
+        <FlagSquares
+          flags={[
+            { label: "Z", on: !!cpu && cpu.in_flagZero.value !== 0, title: "Zero flag" },
+            { label: "C", on: !!cpu && cpu.in_flagCarry.value !== 0, title: "Carry flag" },
+            { label: "N", on: !!cpu && cpu.in_flagNegative.value !== 0, title: "Negative flag" },
+          ]}
+        />
       </div>
 
-      {configOpen && (
-        <ConfigModal component={component} onClose={() => setConfigOpen(false)} />
-      )}
-    </>
+      {/* High-density signal list: name → value. An asserted signal is marked
+          by a filled dot and full-strength text, not by a coloured row. */}
+      <div className="flex-1 overflow-y-auto">
+        {CONTROL_SIGNAL_DEFS.map((def) => {
+          const active = isOn(def.name);
+          return (
+            <div
+              key={def.name}
+              className="flex items-center justify-between gap-1 px-2 py-[2px]"
+            >
+              <span className="w-20 shrink-0 truncate font-mono text-[11px] text-fg-faint">
+                {def.name}
+              </span>
+              <div className="flex items-center gap-1.5">
+                <span
+                  className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                    active ? "bg-st-active" : "bg-line-strong"
+                  }`}
+                />
+                <span
+                  className={`num min-w-[1.75rem] text-right font-mono text-[11px] ${
+                    active ? "text-fg" : "text-fg-faint"
+                  }`}
+                >
+                  {formatSignal(signals[def.name] ?? 0, def.bitWidth, base)}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </NodeShell>
   );
 }

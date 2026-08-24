@@ -12,8 +12,6 @@ export interface WidgetDefinition {
   label: string;
   /** Short uppercase prefix used for auto-naming instances: GPR1, REG2, ... */
   namePrefix: string;
-  /** Emoji or short icon for the picker */
-  icon: string;
   /** Default instance width in canvas pixels */
   defaultWidth: number;
   /** Default instance height in canvas pixels */
@@ -39,7 +37,6 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     type: "GprComponent",
     label: "GPR Bank",
     namePrefix: "GPR",
-    icon: "\u{1F5C2}",
     defaultWidth: 160,  // 10 grid cells
     defaultHeight: 256, // 16 grid cells
     description: "General Purpose Registers bank",
@@ -58,7 +55,6 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     type: "MemoryComponent",
     label: "Memory",
     namePrefix: "MEM",
-    icon: "\u{1F9E0}",
     defaultWidth: 160,  // 10 grid cells
     defaultHeight: 192, // 12 grid cells
     description: "Unified memory — addr/data/rdMem/wrMem ports, 256×16b default",
@@ -78,7 +74,6 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     type: "InstructionMemoryComponent",
     label: "Instruction Memory",
     namePrefix: "IMEM",
-    icon: "\u{1F4C0}",
     defaultWidth: 192,  // 12 grid cells (increased from 10)
     defaultHeight: 240, // 15 grid cells (increased from 12)
     description: "Read-only instruction memory — addr input, instruction output",
@@ -95,7 +90,6 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     type: "UlaComponent",
     label: "ULA / ALU",
     namePrefix: "ULA",
-    icon: "\u2699\uFE0F",
     defaultWidth: 128,  // 8 grid cells
     defaultHeight: 176, // 11 grid cells
     description: "Arithmetic Logic Unit",
@@ -116,9 +110,11 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     type: "AdderComponent",
     label: "Adder",
     namePrefix: "ADD",
-    icon: "\u2795",
-    defaultWidth: 128,  // 8 grid cells
-    defaultHeight: 176, // 11 grid cells
+    // Deliberately half the ULA's width: the PC+1 adder is secondary hardware and
+    // should not read as being as important as the ALU. 96 keeps the SVG's 161:241
+    // aspect ratio, so the artwork no longer overflows its box.
+    defaultWidth: 64,  // 4 grid cells
+    defaultHeight: 96, // 6 grid cells
     description: "Dedicated adder \u2014 always performs A + B",
     // Adder mirrored: inputs from right, output to left
     portConfig: {
@@ -131,10 +127,29 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     },
   },
   {
+    type: "IncrementerComponent",
+    label: "Incrementer (+1)",
+    namePrefix: "INC",
+    // Deliberately the smallest block on the canvas: it is plumbing, not one of
+    // the CPU's teaching blocks.
+    defaultWidth: 48,  // 3 grid cells
+    defaultHeight: 48, // 3 grid cells
+    description: "Adds 1 to its input — single input, single output (PC+1)",
+    // Mirrored like the adder it replaces: input on the right, output on the left.
+    portConfig: {
+      defaultInputSide: "right",
+      defaultOutputSide: "left",
+      ports: {
+        "in": { side: "right", offset: 50 },
+        "result": { side: "left", offset: 50 },
+        "carry": { hidden: true, side: "bottom", offset: 50 },
+      },
+    },
+  },
+  {
     type: "MuxComponent",
     label: "Multiplexer",
     namePrefix: "MUX",
-    icon: "\u2195",
     defaultWidth: 64,   // 4 grid cells
     defaultHeight: 96,  // 6 grid cells
     description: "Selects one of 2–3 inputs based on a select signal",
@@ -151,7 +166,6 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     type: "Register",
     label: "Register",
     namePrefix: "REG",
-    icon: "\u{1F4C1}",
     defaultWidth: 144,  // 9 grid cells
     defaultHeight: 48,  // 3 grid cells
     description: "A single register showing its label and value on hover",
@@ -167,7 +181,6 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     type: "PipelineRegister",
     label: "Pipeline Register",
     namePrefix: "PREG",
-    icon: "\u{1F4C1}",
     defaultWidth: 144,
     defaultHeight: 48,
     description: "Pipeline latch (A/B) — only captures GPR output during READREG states",
@@ -183,7 +196,6 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     type: "ConstantComponent",
     label: "Constant N",
     namePrefix: "CONST",
-    icon: "N",
     defaultWidth: 112,  // 7 grid cells
     defaultHeight: 48,  // 3 grid cells
     description: "Constant numeric source with configurable N",
@@ -199,7 +211,6 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     type: "DecoderComponent",
     label: "Decoder",
     namePrefix: "DEC",
-    icon: "\u{1F4DC}",
     defaultWidth: 144,  // 9 grid cells
     defaultHeight: 192, // 12 grid cells
     description: "Instruction decoder — shows opcode, fields, and format",
@@ -211,12 +222,14 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
   },
   {
     type: "CpuComponent",
-    label: "CPU Unit",
-    namePrefix: "CPU",
-    icon: "\u{1F9EE}",
+    // Display strings only. The `type` is a persisted identifier written into
+    // every .cpud project file, so it stays "CpuComponent" regardless of what
+    // the block is called on screen.
+    label: "Control unit (UC)",
+    namePrefix: "UC",
     defaultWidth: 176,  // 11 grid cells
     defaultHeight: 304, // 19 grid cells
-    description: "CPU control unit — FSM state and control signals",
+    description: "Control unit (UC) — FSM state and control signals",
     // CPU: input ports (opcode/flags) on left, all control signal outputs on top
     portConfig: {
       defaultInputSide: "left",

@@ -61,6 +61,11 @@ export const DEFAULT_TICK_STEPS: Record<string, CpuState[]> = {
     // CpuState.EXECUTE,
   ],
 
+  // The PC+1 incrementer is relevant during fetch
+  IncrementerComponent: [
+    CpuState.FETCH,
+  ],
+
   // Constant sources are relevant in datapaths like PC+1 during fetch.
   ConstantComponent: [
     CpuState.FETCH,

@@ -276,8 +276,8 @@ export default function Home() {
 
   if (!isHydrated) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-gray-950">
-        <div className="text-gray-500">Loading...</div>
+      <div className="flex-1 flex items-center justify-center bg-canvas">
+        <div className="text-fg-muted">Loading...</div>
       </div>
     );
   }

@@ -10,14 +10,29 @@ import { persist } from "zustand/middleware";
 
 export type NumericBase = "hex" | "dec" | "bin" | "oct";
 
-export type AnimationSpeedPreset = "fast" | "normal" | "slow";
+/**
+ * Animation speed, in milliseconds per substep.
+ *
+ * This used to be three named presets at 2000/4000/5000 ms. Since one tick costs
+ * `(control signals changed ? D : 0) + D × substeps`, a three-substep FETCH ran
+ * for about sixteen seconds at "normal" — fine for staring at a single tick,
+ * impossible for watching a program run. The range is now continuous and starts
+ * far lower.
+ */
+export const ANIMATION_MIN_MS = 50;
+export const ANIMATION_MAX_MS = 3000;
+export const ANIMATION_DEFAULT_MS = 400;
 
-/** Preset durations in ms: [cpuAnimationDuration, componentAnimationDuration] */
-export const ANIMATION_PRESETS: Record<AnimationSpeedPreset, { cpu: number; component: number }> = {
-  fast:   { cpu: 2000,  component: 2000 },
-  normal: { cpu: 4000, component: 4000 },
-  slow:   { cpu: 5000, component: 5000 },
-};
+/**
+ * At the bottom of the range the flow animation is skipped entirely and values
+ * snap — a slider position rather than a separate switch, so "as fast as
+ * possible" is where the student already expects to find it.
+ */
+export const ANIMATION_INSTANT_MS = ANIMATION_MIN_MS;
+
+export function isInstantSpeed(durationMs: number): boolean {
+  return durationMs <= ANIMATION_INSTANT_MS;
+}
 
 interface DisplayState {
   numericBase: NumericBase;
@@ -51,13 +66,29 @@ interface DisplayState {
   animateDataSignals: boolean;
   setAnimateDataSignals: (animate: boolean) => void;
 
-  /** Animation speed preset */
-  animationSpeed: AnimationSpeedPreset;
-  setAnimationSpeed: (preset: AnimationSpeedPreset) => void;
-  
-  /** Derived animation durations (in ms) based on preset */
-  cpuAnimationDuration: number;
-  componentAnimationDuration: number;
+  /** Whether numeric port values are shown (port tooltips, hover readouts) */
+  showPortValues: boolean;
+  setShowPortValues: (show: boolean) => void;
+
+  /**
+   * Milliseconds per animated substep. One duration, used for both the control
+   * phase and the data phase — which is what the overlay always did in
+   * practice; the separate `cpuAnimationDuration` was written but never read.
+   */
+  animationDurationMs: number;
+  setAnimationDurationMs: (ms: number) => void;
+}
+
+/**
+ * Whether the OS asks for reduced motion.
+ *
+ * Only consulted for the *initial* value: zustand rehydrates the persisted
+ * state afterwards, so a choice the student already made always wins over the
+ * system preference. Guarded for SSR, where there is no matchMedia.
+ */
+function prefersReducedMotion(): boolean {
+  if (typeof window === "undefined" || !window.matchMedia) return false;
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
 export const useDisplayStore = create<DisplayState>()(
@@ -87,21 +118,27 @@ export const useDisplayStore = create<DisplayState>()(
       animateDataSignals: true,
       setAnimateDataSignals: (animate) => set({ animateDataSignals: animate }),
 
-      animationSpeed: "normal",
-      cpuAnimationDuration: ANIMATION_PRESETS.normal.cpu,
-      componentAnimationDuration: ANIMATION_PRESETS.normal.component,
-      setAnimationSpeed: (preset) => set({
-        animationSpeed: preset,
-        cpuAnimationDuration: ANIMATION_PRESETS[preset].cpu,
-        componentAnimationDuration: ANIMATION_PRESETS[preset].component,
-      }),
+      showPortValues: true,
+      setShowPortValues: (show) => set({ showPortValues: show }),
+
+      animationDurationMs: prefersReducedMotion() ? ANIMATION_INSTANT_MS : ANIMATION_DEFAULT_MS,
+      setAnimationDurationMs: (ms) =>
+        set({
+          animationDurationMs: Math.min(ANIMATION_MAX_MS, Math.max(ANIMATION_MIN_MS, Math.round(ms))),
+        }),
     }),
     {
       name: "simulator-display",
-      version: 4,
+      version: 5,
       migrate: (persistedState) => {
-        const state = persistedState as Partial<DisplayState>;
-        const preset = state.animationSpeed ?? "normal";
+        const state = persistedState as Partial<DisplayState> & {
+          animationSpeed?: "fast" | "normal" | "slow";
+        };
+
+        // v4 stored a preset name plus two derived durations. The presets were
+        // an order of magnitude too slow to watch a program run, so they are
+        // remapped rather than carried over literally.
+        const fromPreset = { fast: 200, normal: 400, slow: 900 } as const;
 
         return {
           ...state,
@@ -109,8 +146,9 @@ export const useDisplayStore = create<DisplayState>()(
           animationEnabled: state.animationEnabled ?? true,
           animateCpuSignals: state.animateCpuSignals ?? true,
           animateDataSignals: state.animateDataSignals ?? true,
-          cpuAnimationDuration: ANIMATION_PRESETS[preset].cpu,
-          componentAnimationDuration: ANIMATION_PRESETS[preset].component,
+          showPortValues: state.showPortValues ?? true,
+          animationDurationMs:
+            state.animationDurationMs ?? fromPreset[state.animationSpeed ?? "normal"],
         };
       },
     }

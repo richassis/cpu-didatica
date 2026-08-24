@@ -28,6 +28,50 @@ export interface ComponentPortConfig {
   defaultOutputSide?: PortSide;
 }
 
+/** Swaps left and right; leaves top and bottom alone. */
+function mirrorSide(side: PortSide): PortSide {
+  if (side === "left") return "right";
+  if (side === "right") return "left";
+  return side;
+}
+
+/**
+ * Applies per-instance overrides on top of the widget definition's port config.
+ *
+ * Port sides come from the widget *definition*, which is keyed by type — so
+ * every Register shares one layout. That is right for most of the datapath and
+ * wrong wherever a single instance sits against the flow: MAR is fed by the
+ * decoder, which is to its right, so with inputs pinned to the left its one
+ * incoming wire has to wrap around the whole component.
+ *
+ * `meta.mirrorPorts` flips that instance's left/right without touching the
+ * definition. Top and bottom are deliberately preserved: control signals are
+ * placed there on purpose (a register's write-enable, the CPU's outputs), and
+ * mirroring them would scatter them across the datapath.
+ */
+export function resolvePortConfig(
+  base: ComponentPortConfig | undefined,
+  meta: Record<string, unknown> | undefined
+): ComponentPortConfig | undefined {
+  if (!meta?.mirrorPorts) return base;
+
+  const ports = base?.ports
+    ? Object.fromEntries(
+        Object.entries(base.ports).map(([name, config]) => [
+          name,
+          { ...config, side: mirrorSide(config.side) },
+        ])
+      )
+    : undefined;
+
+  return {
+    ...base,
+    ...(ports ? { ports } : {}),
+    defaultInputSide: mirrorSide(base?.defaultInputSide ?? "left"),
+    defaultOutputSide: mirrorSide(base?.defaultOutputSide ?? "right"),
+  };
+}
+
 /**
  * Calculates the exact position of a port on a component.
  * Matches the logic in PortIndicator positioning.

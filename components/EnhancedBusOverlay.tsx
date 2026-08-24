@@ -4,18 +4,26 @@ import { useLayoutStore, CANVAS_WIDTH, CANVAS_HEIGHT } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayMaskStore } from "@/lib/displayMaskStore";
 import { useExecutionStore } from "@/lib/executionStore";
-import { useDisplayStore, formatNum } from "@/lib/displayStore";
+import { usePlaybackStore } from "@/lib/playbackStore";
+import { useDisplayStore, formatNum, isInstantSpeed } from "@/lib/displayStore";
 import { useWireCreationStore } from "@/lib/wireCreationStore";
 import { useWireSelectionStore } from "@/lib/wireSelectionStore";
 import { useProjectStore } from "@/lib/projectStore";
-import { calculatePortPosition, getPortPlacement, type PortSide } from "@/lib/portPositioning";
+import {
+  calculatePortPosition,
+  getPortPlacement,
+  resolvePortConfig,
+  type PortSide,
+} from "@/lib/portPositioning";
 import { getWidgetDefinition } from "@/lib/widgetDefinitions";
 import {
+  buildWirePath,
   enforceOrthogonal,
   escapePort,
   pointsToSVGPath,
   simplifyOrthogonalPath,
   snapToGrid,
+  type AABB,
   type Point,
 } from "@/lib/wireRouting";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
@@ -69,7 +77,7 @@ export default function EnhancedBusOverlay({
   const animationEnabled = useDisplayStore((s) => s.animationEnabled);
   const animateCpuSignals = useDisplayStore((s) => s.animateCpuSignals);
   const animateDataSignals = useDisplayStore((s) => s.animateDataSignals);
-  const componentAnimationDuration = useDisplayStore((s) => s.componentAnimationDuration);
+  const animationDurationMs = useDisplayStore((s) => s.animationDurationMs);
 
   const removeSimulatorWire = useSimulatorStore((s) => s.removeWire);
 
@@ -108,6 +116,39 @@ export default function EnhancedBusOverlay({
   /** Substep order values already revealed in the current animation pass. */
   const revealedGroupsRef = useRef<Set<number>>(new Set());
 
+  /**
+   * Display settings, mirrored into a ref and read at pass start.
+   *
+   * They are deliberately NOT dependencies of the animation effect. When they
+   * were, moving the speed slider mid-tick re-ran the effect, whose cleanup
+   * cancelled the in-flight pass — and the "already animated this cycle" guard
+   * then returned without starting a new one, so the pass never finished and
+   * playback waited on a signal that could no longer come. Changing a setting
+   * now takes effect from the next tick, which is also what the student
+   * expects: it does not reach in and rewrite the animation already playing.
+   */
+  const settingsRef = useRef({
+    showCpuSignalWires,
+    showDataSignalWires,
+    animationEnabled,
+    animateCpuSignals,
+    animateDataSignals,
+    animationDurationMs,
+  });
+  // Declared before the animation effect so it refreshes first: effects run in
+  // declaration order, and a pass starting this commit must read this commit's
+  // settings.
+  useEffect(() => {
+    settingsRef.current = {
+      showCpuSignalWires,
+      showDataSignalWires,
+      animationEnabled,
+      animateCpuSignals,
+      animateDataSignals,
+      animationDurationMs,
+    };
+  });
+
   const projectWires = useMemo(
     () => (activeTabId ? projectData[activeTabId]?.wires ?? [] : []),
     [activeTabId, projectData]
@@ -130,7 +171,12 @@ export default function EnhancedBusOverlay({
       }));
 
       const widgetDef = getWidgetDefinition(component.type);
-      const placement = getPortPlacement(portName, direction, allPorts, widgetDef?.portConfig);
+      const placement = getPortPlacement(
+        portName,
+        direction,
+        allPorts,
+        resolvePortConfig(widgetDef?.portConfig, component.meta),
+      );
       const pos = calculatePortPosition(component, placement.side, placement.offset);
 
       return { pos, side: placement.side };
@@ -176,8 +222,26 @@ export default function EnhancedBusOverlay({
       const targetEscape = escapePort(target.pos, target.side)[1] ?? target.pos;
       const nodes = normalizeNodes(wire.nodes ?? []);
 
-      const rawPath = [source.pos, sourceEscape, ...nodes, targetEscape, target.pos];
-      const path = simplifyOrthogonalPath(enforceOrthogonal(rawPath));
+      // Every component except the two this wire connects is an obstacle, so the
+      // router can drop corners without cutting a shortcut through a widget.
+      const obstacles: AABB[] = [];
+      const endpointBoxes: AABB[] = [];
+      for (const c of components) {
+        const box = { x: c.x, y: c.y, w: c.w, h: c.h };
+        if (c.id === wire.sourceComponentId || c.id === wire.targetComponentId) {
+          endpointBoxes.push(box);
+        } else {
+          obstacles.push(box);
+        }
+      }
+
+      const path = buildWirePath(
+        source.pos, source.side,
+        target.pos, target.side,
+        nodes,
+        obstacles,
+        endpointBoxes,
+      );
 
       const sourceComponent = components.find((c) => c.id === wire.sourceComponentId);
       const isCpuControlSignal = sourceComponent?.type === "CpuComponent";
@@ -230,16 +294,30 @@ export default function EnhancedBusOverlay({
     // Fresh pass: nothing revealed yet.
     revealedGroupsRef.current = new Set();
 
+    const {
+      showCpuSignalWires,
+      showDataSignalWires,
+      animationEnabled,
+      animateCpuSignals,
+      animateDataSignals,
+      animationDurationMs,
+    } = settingsRef.current;
+
     if (animationRef.current) {
       cancelAnimationFrame(animationRef.current);
       animationRef.current = null;
     }
 
-    // Animation disabled: snap straight to the post-tick state, no flow/dots.
-    if (!animationEnabled) {
+    // Animation off, or the speed slider pushed all the way to instant: snap
+    // straight to the post-tick state, no flow/dots. The two are separate
+    // controls but the same behaviour, so they share one exit.
+    if (!animationEnabled || isInstantSpeed(animationDurationMs)) {
       setAnimatingWires(new Set());
       setAnimationProgress(new Map());
       useDisplayMaskStore.getState().revealAll();
+      // This pass is over before it began, but it is still a pass: playback
+      // waits on this signal, so staying silent here would stall it.
+      usePlaybackStore.getState().notifyTickAnimationComplete();
       return;
     }
 
@@ -270,7 +348,14 @@ export default function EnhancedBusOverlay({
       })
       .map((wireData) => wireData.wire.id);
 
-    if (visibleWireIds.length === 0) return;
+    if (visibleWireIds.length === 0) {
+      // No wire takes part in this state at all — the reset tick is the usual
+      // case. Nothing to animate, but the pass is still over, and playback is
+      // waiting to hear so.
+      useDisplayMaskStore.getState().revealAll();
+      usePlaybackStore.getState().notifyTickAnimationComplete();
+      return;
+    }
 
     const cpuValueChanges = new Set<string>();
     for (const id of visibleWireIds) {
@@ -300,6 +385,9 @@ export default function EnhancedBusOverlay({
 
     if (animCpuIds.length === 0 && animNonCpuIds.length === 0) {
       useDisplayMaskStore.getState().revealAll();
+      // Nothing to animate this tick (a HALT, or every category switched off) —
+      // still a completed pass as far as playback is concerned.
+      usePlaybackStore.getState().notifyTickAnimationComplete();
       return;
     }
 
@@ -329,11 +417,11 @@ export default function EnhancedBusOverlay({
 
     const startTime = Date.now();
     // CPU changed signals animate concurrently in a single phase before data substeps.
-    const effectiveCpuDuration = animCpuIds.length > 0 ? componentAnimationDuration : 0;
-    const nonCpuStaggerStep = componentAnimationDuration;
+    const effectiveCpuDuration = animCpuIds.length > 0 ? animationDurationMs : 0;
+    const nonCpuStaggerStep = animationDurationMs;
     const nonCpuGroupCount = sortedNonCpuGroups.length;
     const nonCpuPhaseDuration = nonCpuGroupCount > 0
-      ? componentAnimationDuration * nonCpuGroupCount
+      ? animationDurationMs * nonCpuGroupCount
       : 0;
     const totalDuration = effectiveCpuDuration + nonCpuPhaseDuration;
 
@@ -350,14 +438,49 @@ export default function EnhancedBusOverlay({
       setAnimatingWires(new Set(animatingIds));
     }, 0);
 
+    /**
+     * End the pass: settle the dots, land every component on its post-tick
+     * value and tell playback the tick is over.
+     *
+     * Idempotent, and reached from two directions on purpose. The rAF loop gets
+     * here on the frame that crosses `totalDuration`, but requestAnimationFrame
+     * stops being called altogether while the tab is hidden — so a run left in
+     * a background tab would hang on the current tick forever and still be
+     * sitting there on return. The timer below is what actually guarantees the
+     * pass ends; the animation loop only paints it.
+     */
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+      }
+
+      // The last substep finishes exactly at `totalDuration`, so the frame
+      // where its `groupProgress` reaches 1 may never run and its wires were
+      // never settled — which is why the final value delivered each state
+      // (MUX_PC -> PC on a fetch) vanished instead of resting at its
+      // destination. Settle everything that animated in this pass here.
+      setSettledDots((prev) => {
+        const next = new Set(prev);
+        for (const id of animatingIds) next.add(id);
+        return next;
+      });
+      setAnimatingWires(new Set());
+      setAnimationProgress(new Map());
+      useDisplayMaskStore.getState().revealAll();
+      usePlaybackStore.getState().notifyTickAnimationComplete();
+    };
+
+    const finishTimer = window.setTimeout(finish, totalDuration);
+
     const animate = () => {
       const elapsed = Date.now() - startTime;
       if (elapsed >= totalDuration) {
-        setAnimatingWires(new Set());
-        setAnimationProgress(new Map());
-        animationRef.current = null;
-        // Ensure every component reaches its post-tick value once the pass ends.
-        useDisplayMaskStore.getState().revealAll();
+        finish();
         return;
       }
 
@@ -387,12 +510,12 @@ export default function EnhancedBusOverlay({
       for (const id of animNonCpuIds) {
         progress.set(id, 0);
       }
-      if (elapsed > effectiveCpuDuration && componentAnimationDuration > 0 && sortedNonCpuGroups.length > 0) {
+      if (elapsed > effectiveCpuDuration && animationDurationMs > 0 && sortedNonCpuGroups.length > 0) {
         const compElapsed = elapsed - effectiveCpuDuration;
 
         sortedNonCpuGroups.forEach(([order, groupIds], index) => {
           const groupStart = index * nonCpuStaggerStep;
-          const groupProgress = Math.min(1, Math.max(0, (compElapsed - groupStart) / componentAnimationDuration));
+          const groupProgress = Math.min(1, Math.max(0, (compElapsed - groupStart) / animationDurationMs));
           for (const id of groupIds) {
             progress.set(id, groupProgress);
           }
@@ -429,23 +552,16 @@ export default function EnhancedBusOverlay({
 
     return () => {
       window.clearTimeout(kickoff);
+      window.clearTimeout(finishTimer);
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
         animationRef.current = null;
       }
     };
-  }, [
-    animationCycle,
-    getPrimaryCpu,
-    getComponentTickSteps,
-    getComponentTickOrderByState,
-    showCpuSignalWires,
-    showDataSignalWires,
-    animationEnabled,
-    animateCpuSignals,
-    animateDataSignals,
-    componentAnimationDuration,
-  ]);
+    // Settings are read from settingsRef at pass start, on purpose — see the
+    // comment on that ref. Listing them here would let a mid-tick settings
+    // change abort the pass.
+  }, [animationCycle, getPrimaryCpu, getComponentTickSteps, getComponentTickOrderByState]);
 
   const getPointAlongPath = useCallback((path: Point[], progress: number): Point => {
     if (path.length < 2) return path[0] ?? { x: 0, y: 0 };
@@ -630,7 +746,49 @@ export default function EnhancedBusOverlay({
 
   if (!visible) return null;
 
+  const visibleWires = wireRenderData.filter((wireData) => {
+    if (wireData.wire.visible === false) return false;
+    if (wireData.isCpuControlSignal && !showCpuSignalWires) return false;
+    if (!wireData.isCpuControlSignal && !showDataSignalWires) return false;
+    return true;
+  });
+
+  /**
+   * Where the travelling value marker sits on each wire, or null when that wire
+   * is not carrying anything right now.
+   */
+  const valueMarkers = visibleWires.flatMap((wireData) => {
+    // Dots can be disabled globally; CPU wires only show dots when they're in
+    // the current animation set (i.e. their value changed).
+    if (!showWireDots) return [];
+    if (wireData.isCpuControlSignal && !animatingWires.has(wireData.wire.id)) return [];
+
+    const liveProgress = animationProgress.get(wireData.wire.id);
+    let progress: number | null = null;
+    if (liveProgress !== undefined) {
+      // Flowing this pass: appear only once its substep starts.
+      if (liveProgress > 0) progress = liveProgress;
+    } else if (settledDots.has(wireData.wire.id)) {
+      // Not flowing right now but has delivered before — rest at the target port
+      // until a new value flows.
+      progress = 1;
+    }
+    if (progress === null) return [];
+
+    return [{
+      id: wireData.wire.id,
+      point: getPointAlongPath(wireData.path, progress),
+      value: wireData.value,
+      color: wireData.isCpuControlSignal ? "var(--wire-control)" : "var(--wire-data)",
+      isResting: progress >= 1,
+      // Resting markers sit on top of the destination widget, so push the badge
+      // further away and to the side the wire arrived from.
+      lift: progress >= 1 ? 26 : 20,
+    }];
+  });
+
   return (
+    <>
     <svg
       className="absolute inset-0 pointer-events-none"
       style={{
@@ -638,50 +796,24 @@ export default function EnhancedBusOverlay({
         height: CANVAS_HEIGHT,
       }}
     >
-      <defs>
-        <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="3" result="coloredBlur" />
-          <feMerge>
-            <feMergeNode in="coloredBlur" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
+      {/* The two multi-colour wire gradients and the two blur filters that used
+          to live here are gone. A gradient spent colour on wire identity, and
+          the filters glowed a wire whether or not anything was flowing through
+          it — which is precisely the thing that made every tick look alike. */}
 
-        <filter id="pulseGlow" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="5" result="coloredBlur" />
-          <feMerge>
-            <feMergeNode in="coloredBlur" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
-
-        <linearGradient id="wireGradientData" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#fbbf24" stopOpacity="0.85" />
-          <stop offset="100%" stopColor="#f59e0b" stopOpacity="0.85" />
-        </linearGradient>
-
-        <linearGradient id="wireGradientControl" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.85" />
-          <stop offset="100%" stopColor="#60a5fa" stopOpacity="0.85" />
-        </linearGradient>
-      </defs>
-
-      {wireRenderData
-        .filter((wireData) => {
-          if (wireData.wire.visible === false) return false;
-          if (wireData.isCpuControlSignal && !showCpuSignalWires) return false;
-          if (!wireData.isCpuControlSignal && !showDataSignalWires) return false;
-          return true;
-        })
+      {visibleWires
         .map((wireData) => {
-          const { wire, path, value, isCpuControlSignal } = wireData;
+          const { wire, path } = wireData;
           const pathD = pointsToSVGPath(path);
           const isSelected = wire.id === selectedWireId;
           const isHovered = wire.id === hoveredWireId && !isSelected;
           const isAnimating = animatingWires.has(wire.id);
 
-          const baseColor = isCpuControlSignal ? "url(#wireGradientControl)" : "url(#wireGradientData)";
-          const pulseColor = isCpuControlSignal ? "#60a5fa" : "#fbbf24";
+          // A wire at rest is a hairline in the border colour — it is context,
+          // not content. It takes the data colour only while it is actually
+          // conducting, which is what makes a tick visible from across the room.
+          const baseColor = isAnimating ? "var(--st-data)" : "var(--border)";
+          const pulseColor = "var(--st-data)";
 
           const editableChain = [wireData.sourceEscape, ...(wire.nodes ?? []), wireData.targetEscape];
 
@@ -741,15 +873,17 @@ export default function EnhancedBusOverlay({
                 );
               })}
 
+              {/* Wires are deliberately thin and un-glowed: they are context, not
+                  content. Only the hovered/selected wire thickens, and only the
+                  wire currently carrying a value lights up. */}
               <path
                 d={pathD}
                 fill="none"
-                stroke={isSelected ? pulseColor : isHovered ? pulseColor : baseColor}
-                strokeWidth={isSelected ? 5 : isHovered ? 4 : 3}
+                strokeWidth={isSelected || isHovered || isAnimating ? 1.5 : 1}
                 strokeLinecap="round"
-                filter="url(#glow)"
-                opacity={isAnimating ? 0.95 : 0.78}
+                strokeLinejoin="round"
                 className="pointer-events-none"
+                style={{ stroke: isSelected || isHovered ? pulseColor : baseColor }}
               />
 
               <path
@@ -790,8 +924,8 @@ export default function EnhancedBusOverlay({
                       width={8}
                       height={8}
                       rx={2}
-                      fill={isNodeSelected ? "#22d3ee" : isSelected ? "#9ca3af" : "transparent"}
-                      stroke={isNodeSelected ? "#67e8f9" : isSelected ? "#e5e7eb" : "transparent"}
+                      fill={isNodeSelected ? "var(--st-active)" : isSelected ? "var(--text-muted)" : "transparent"}
+                      stroke={isNodeSelected ? "var(--st-active)" : isSelected ? "var(--text)" : "transparent"}
                       strokeWidth={isNodeSelected ? 2 : 1}
                       className="pointer-events-none"
                     />
@@ -799,44 +933,6 @@ export default function EnhancedBusOverlay({
                 );
               })}
 
-              {(() => {
-                // Dots can be disabled globally; CPU wires only show dots when
-                // they're in the current animation set (i.e. their value changed).
-                if (!showWireDots) return null;
-                if (isCpuControlSignal && !animatingWires.has(wire.id)) return null;
-
-                const liveProgress = animationProgress.get(wire.id);
-                let dotProgress: number | null = null;
-                if (liveProgress !== undefined) {
-                  // Flowing this pass: appear only once its substep starts (#4).
-                  if (liveProgress > 0) dotProgress = liveProgress;
-                } else if (settledDots.has(wire.id)) {
-                  // Not flowing right now but has delivered before — rest at the
-                  // target port until a new value flows (#5).
-                  dotProgress = 1;
-                }
-
-                if (dotProgress === null) return null;
-                const point = getPointAlongPath(path, dotProgress);
-                const isResting = dotProgress >= 1;
-
-                return (
-                  <g transform={`translate(${point.x}, ${point.y})`} className="pointer-events-none">
-                    <circle r={isResting ? 5 : 6} fill={pulseColor} filter="url(#pulseGlow)" opacity={isResting ? 0.85 : 0.9} />
-                    <g transform="translate(0, -16)">
-                      <rect x="-18" y="-8" width="36" height="16" rx="4" fill="#111827" stroke={pulseColor} strokeWidth="1.4" />
-                      <text
-                        textAnchor="middle"
-                        dominantBaseline="middle"
-                        className="font-mono"
-                        style={{ fontSize: "9px", fill: "#f3f4f6" }}
-                      >
-                        {value}
-                      </text>
-                    </g>
-                  </g>
-                );
-              })()}
             </g>
           );
         })}
@@ -849,11 +945,11 @@ export default function EnhancedBusOverlay({
         return (
           <g transform={`translate(${mid.x}, ${mid.y - 18})`} className="pointer-events-auto">
             <rect x="-12" y="-12" width="24" height="24" rx="6"
-              fill="#1f2937" stroke="#ef4444" strokeWidth="1.5" cursor="pointer"
+              fill="var(--surface)" stroke="var(--st-error)" strokeWidth="1" cursor="pointer"
               onClick={(e) => { e.stopPropagation(); handleDeleteSelection(); }}
             />
             <text textAnchor="middle" dominantBaseline="central"
-              style={{ fontSize: "14px", fill: "#ef4444", cursor: "pointer", userSelect: "none" }}
+              style={{ fontSize: "12px", fill: "var(--st-error)", cursor: "pointer", userSelect: "none" }}
               onClick={(e) => { e.stopPropagation(); handleDeleteSelection(); }}
             >✕</text>
           </g>
@@ -876,7 +972,7 @@ export default function EnhancedBusOverlay({
             <rect key={`handle-${wireId}-${i}`}
               x={isH ? mx - 3 : mx - 2} y={isH ? my - 2 : my - 3}
               width={isH ? 6 : 4} height={isH ? 4 : 6} rx="1"
-              fill={selectedWireId === wireId ? "#9ca3af" : "#6b7280"}
+              fill={selectedWireId === wireId ? "var(--text-muted)" : "var(--text-faint)"}
               opacity="0.7"
               className="pointer-events-none"
             />
@@ -890,19 +986,17 @@ export default function EnhancedBusOverlay({
           <path
             d={pointsToSVGPath(previewPath)}
             fill="none"
-            stroke={previewRejected ? "#ef4444" : "#22d3ee"}
-            strokeWidth="3"
+            stroke={previewRejected ? "var(--st-error)" : "var(--st-active)"}
+            strokeWidth="1.5"
             strokeLinecap="round"
-            strokeDasharray="8,4"
-            opacity="0.8"
-            filter="url(#glow)"
+            strokeDasharray="6,4"
           />
           {/* Endpoint dot */}
           <circle
             cx={previewPath[previewPath.length - 1].x}
             cy={previewPath[previewPath.length - 1].y}
             r="5"
-            fill={previewRejected ? "#ef4444" : "#22d3ee"}
+            fill={previewRejected ? "var(--st-error)" : "var(--st-active)"}
             opacity="0.9"
             className="pointer-events-none"
           />
@@ -914,12 +1008,54 @@ export default function EnhancedBusOverlay({
           x="50%"
           y="50"
           textAnchor="middle"
-          className="fill-gray-500"
-          style={{ fontSize: "14px" }}
+          style={{ fill: "var(--text-faint)", fontSize: "14px" }}
         >
           No wire connections
         </text>
       )}
     </svg>
+
+    {/*
+      Transmitted values live in their own layer painted ABOVE the widgets
+      (widgets sit at z-index 10). Previously they were drawn with the wires,
+      underneath, so a value became unreadable exactly when it arrived at its
+      destination — which is the moment that matters.
+    */}
+    <svg
+      className="absolute inset-0 pointer-events-none"
+      style={{ width: CANVAS_WIDTH, height: CANVAS_HEIGHT, zIndex: 30 }}
+    >
+      {valueMarkers.map((marker) => {
+        // The value sits ON the wire, with a canvas-coloured plate cutting the
+        // stroke out behind the glyphs. It used to be a bordered badge floating
+        // 20px above the line, which scattered saturated chips across the canvas
+        // and left the reader to work out which wire each one belonged to.
+        const width = marker.value.length * 6.7 + 8;
+
+        return (
+          <g key={`value-${marker.id}`} transform={`translate(${marker.point.x}, ${marker.point.y})`}>
+            <rect
+              x={-width / 2}
+              y={-7}
+              width={width}
+              height={14}
+              style={{ fill: "var(--canvas)" }}
+            />
+            <text
+              textAnchor="middle"
+              dominantBaseline="central"
+              className="font-mono num"
+              style={{
+                fontSize: "11px",
+                fill: marker.isResting ? "var(--text-muted)" : "var(--st-data)",
+              }}
+            >
+              {marker.value}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+    </>
   );
 }

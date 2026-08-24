@@ -1,17 +1,19 @@
 "use client";
 
 import { useRef } from "react";
+import { Upload, Download, Play, Pencil, LoaderCircle } from "lucide-react";
 import { useModeStore } from "@/lib/modeStore";
 import { useProjectStore } from "@/lib/projectStore";
 import { DEFAULT_PROJECT_ID, DEFAULT_PROJECT_NAME, isDefaultProject } from "@/lib/defaultProject";
 import { useProgramDataStore } from "@/lib/programDataStore";
+import ThemeToggle from "./ThemeToggle";
 
 /**
- * TopBarProgram — Top bar shown in Program Mode (default/end-user view).
+ * Top bar for Program Mode (the default, end-user view).
  *
- * Left:   App title "CPU Didática"
- * Centre: Assembly I/O + Data I/O buttons
- * Right:  [▶ Run] button + [Edit Mode] button
+ * The I/O buttons are grouped into clusters with their own surface rather than
+ * sitting loose side by side, so the bar reads as three regions instead of six
+ * equally-weighted controls.
  */
 export default function TopBarProgram() {
   const enterEditMode = useModeStore((s) => s.enterEditMode);
@@ -28,12 +30,10 @@ export default function TopBarProgram() {
   const asmFileRef = useRef<HTMLInputElement>(null);
   const dataFileRef = useRef<HTMLInputElement>(null);
 
-  const handleRun = () => runProgram();
-
   const handleEnterEditMode = async () => {
     const shouldEditDefault = window.confirm(
       `Editar o datapath default ("${DEFAULT_PROJECT_NAME}")?\n` +
-        "As alteracoes serao salvas no arquivo default-project.cpud."
+        "As alterações serão salvas no arquivo default-project.cpud."
     );
 
     if (!shouldEditDefault) return;
@@ -48,32 +48,21 @@ export default function TopBarProgram() {
 
   const handleImportAsm = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      importAssembly(file).catch(console.error);
-    }
+    if (file) importAssembly(file).catch(console.error);
     e.target.value = "";
   };
 
   const handleImportData = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      importData(file).catch(console.error);
-    }
+    if (file) importData(file).catch(console.error);
     e.target.value = "";
   };
 
   return (
-    <div className="flex items-center justify-between px-4 py-2 bg-gray-900 border-b border-gray-700 min-h-[48px]">
-      {/* Left: App title */}
-      <div className="flex items-center gap-3">
-        <span className="text-sm font-bold text-gray-100 tracking-tight select-none">
-          CPU Didática
-        </span>
-      </div>
+    <div className="flex min-h-[48px] items-center justify-between border-b border-line bg-surface px-4 py-2">
+      <span className="t-body select-none text-fg">CPU Didática</span>
 
-      {/* Centre: I/O controls */}
-      <div className="flex items-center gap-1">
-        {/* Assembly I/O */}
+      <div className="flex items-center gap-2">
         <input
           ref={asmFileRef}
           type="file"
@@ -81,26 +70,6 @@ export default function TopBarProgram() {
           className="hidden"
           onChange={handleImportAsm}
         />
-        <button
-          onClick={() => asmFileRef.current?.click()}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-gray-300 hover:text-white hover:bg-gray-700 border border-gray-700 hover:border-gray-600 transition-colors"
-          title="Import assembly source (.asm / .s)"
-        >
-          <UploadIcon />
-          Import .asm
-        </button>
-        <button
-          onClick={exportAssembly}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-gray-300 hover:text-white hover:bg-gray-700 border border-gray-700 hover:border-gray-600 transition-colors"
-          title="Export assembly source as program.asm"
-        >
-          <DownloadIcon />
-          Export .asm
-        </button>
-
-        <div className="w-px h-5 bg-gray-700 mx-1" />
-
-        {/* Data I/O */}
         <input
           ref={dataFileRef}
           type="file"
@@ -108,83 +77,100 @@ export default function TopBarProgram() {
           className="hidden"
           onChange={handleImportData}
         />
-        <button
-          onClick={() => dataFileRef.current?.click()}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-gray-300 hover:text-white hover:bg-gray-700 border border-gray-700 hover:border-gray-600 transition-colors"
-          title="Import data file (.cpudat) — loads GPR and memory values"
-        >
-          <UploadIcon />
-          Import Data
-        </button>
-        <button
-          onClick={exportData}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-gray-300 hover:text-white hover:bg-gray-700 border border-gray-700 hover:border-gray-600 transition-colors"
-          title="Export data file (.cpudat) — saves GPR and memory values"
-        >
-          <DownloadIcon />
-          Export Data
-        </button>
+
+        <Cluster>
+          <ClusterButton
+            onClick={() => asmFileRef.current?.click()}
+            title="Import assembly source (.asm / .s)"
+          >
+            <Upload size={14} strokeWidth={1.5} />
+            Import .asm
+          </ClusterButton>
+          <ClusterDivider />
+          <ClusterButton onClick={exportAssembly} title="Export assembly source as program.asm">
+            <Download size={14} strokeWidth={1.5} />
+            Export .asm
+          </ClusterButton>
+        </Cluster>
+
+        <Cluster>
+          <ClusterButton
+            onClick={() => dataFileRef.current?.click()}
+            title="Import data file (.cpudat) — loads GPR and memory values"
+          >
+            <Upload size={14} strokeWidth={1.5} />
+            Import data
+          </ClusterButton>
+          <ClusterDivider />
+          <ClusterButton
+            onClick={exportData}
+            title="Export data file (.cpudat) — saves GPR and memory values"
+          >
+            <Download size={14} strokeWidth={1.5} />
+            Export data
+          </ClusterButton>
+        </Cluster>
       </div>
 
-      {/* Right: Run + Edit Mode */}
       <div className="flex items-center gap-2">
+        <ThemeToggle />
+
+        {/* The button stays neutral; the accent lives in the icon. A solid
+            saturated fill on a 90px control would eat most of the colour
+            budget for the whole screen. */}
         <button
-          onClick={handleRun}
+          onClick={() => runProgram()}
           disabled={isRunning}
-          className="inline-flex items-center gap-2 rounded-md bg-cyan-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-60 transition-colors"
+          className="inline-flex h-8 items-center gap-2 rounded-lg border border-line-strong bg-raised px-3 text-xs text-fg transition-colors hover:border-st-active disabled:cursor-not-allowed disabled:opacity-60"
           title="Carregar programa e executar até HLT"
         >
           {isRunning ? (
-            <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+            <LoaderCircle size={14} strokeWidth={1.5} className="animate-spin text-st-active" />
           ) : (
-            <PlayIcon />
+            <Play size={14} strokeWidth={1.5} className="text-st-active" />
           )}
-          {isRunning ? "Executando..." : "▶ Run"}
+          {isRunning ? "Running…" : "Run"}
         </button>
 
         <button
           onClick={handleEnterEditMode}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-gray-400 hover:text-white hover:bg-gray-700 border border-gray-700 hover:border-gray-600 transition-colors"
+          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-line px-2.5 text-xs text-fg-muted transition-colors hover:border-line-strong hover:text-fg"
           title="Entrar no modo de edição (desenvolvedor)"
         >
-          <PencilIcon />
-          Edit Mode
+          <Pencil size={14} strokeWidth={1.5} />
+          Edit mode
         </button>
       </div>
     </div>
   );
 }
 
-// ── Inline SVG icons ──────────────────────────────────────────────────────────
-
-function UploadIcon() {
+function Cluster({ children }: { children: React.ReactNode }) {
   return (
-    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-    </svg>
+    <div className="flex items-center rounded-lg border border-line bg-raised">{children}</div>
   );
 }
 
-function DownloadIcon() {
-  return (
-    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-    </svg>
-  );
+function ClusterDivider() {
+  return <div className="h-4 w-px bg-line" />;
 }
 
-function PlayIcon() {
+function ClusterButton({
+  onClick,
+  title,
+  children,
+}: {
+  onClick: () => void;
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
-    <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
-      <path d="M8 5v14l11-7z" />
-    </svg>
-  );
-}
-
-function PencilIcon() {
-  return (
-    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-    </svg>
+    <button
+      onClick={onClick}
+      title={title}
+      className="inline-flex h-8 items-center gap-1.5 px-2.5 text-xs text-fg-muted transition-colors hover:text-fg"
+    >
+      {children}
+    </button>
   );
 }

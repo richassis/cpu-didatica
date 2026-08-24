@@ -2,15 +2,16 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
+import { X } from "lucide-react";
 import { useLayoutStore, ComponentInstance } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
+import { useDisplayStore, formatNum } from "@/lib/displayStore";
 import { getWidgetDefinition } from "@/lib/widgetDefinitions";
 import { ConfigPanelForType, ComponentConfig } from "@/components/widgets/ConfigPanel";
 import { CpuState, CPU_STATE_LABELS, ALL_CPU_STATES, isClockable, Constant } from "@/lib/simulator";
 import { Opcode, INSTRUCTION_SET } from "@/lib/simulator/ISA";
 import { OPCODE_SEQUENCES } from "@/lib/simulator/Cpu";
 import type { CPU } from "@/lib/simulator/Cpu";
-import InstructionBuilder from "@/components/InstructionBuilder";
 
 interface Props {
   component: ComponentInstance;
@@ -27,6 +28,7 @@ export default function ConfigModal({ component, onClose }: Props) {
   const layoutComponents = useLayoutStore((s) => s.components);
   const def = getWidgetDefinition(component.type);
 
+  const base = useDisplayStore((s) => s.numericBase);
   const objects   = useSimulatorStore((s) => s.objects);
   const removeWire = useSimulatorStore((s) => s.removeWire);
   const getWires  = useSimulatorStore((s) => s.getWires);
@@ -48,7 +50,11 @@ export default function ConfigModal({ component, onClose }: Props) {
     numInputs: typeof component.meta?.numInputs === "number" ? component.meta.numInputs : undefined,
     wordCount: typeof component.meta?.wordCount === "number" ? component.meta.wordCount : undefined,
     hasWriteEnable: typeof component.meta?.hasWriteEnable === "boolean" ? component.meta.hasWriteEnable : undefined,
+    holdOutputUntilFetch: typeof component.meta?.holdOutputUntilFetch === "boolean" ? component.meta.holdOutputUntilFetch : undefined,
     constantValue: typeof component.meta?.constantValue === "number" ? component.meta.constantValue : undefined,
+    step: typeof component.meta?.step === "number" ? component.meta.step : undefined,
+    mirrorPorts:
+      typeof component.meta?.mirrorPorts === "boolean" ? component.meta.mirrorPorts : undefined,
   });
   // portInputs: map portName → current text being typed
   const [portInputs, setPortInputs] = useState<Record<string, string>>({});
@@ -61,8 +67,12 @@ export default function ConfigModal({ component, onClose }: Props) {
   const isClockableObj = obj && isClockable(obj);
   const isCpu = component.type === "CpuComponent";
   const cpu = isCpu ? (obj as CPU | undefined) : undefined;
-  const isInstructionMemory = component.type === "InstructionMemory";
-  const imem = isInstructionMemory ? useSimulatorStore.getState().getInstructionMemory(component.id) : undefined;
+  // There used to be an early return here swapping the whole modal for the
+  // InstructionBuilder. It compared against "InstructionMemory" while the
+  // registered type is "InstructionMemoryComponent", so it never fired. Rather
+  // than switch it on — which would make word count and bit width unreachable
+  // for instruction memory — it is gone: the builder is reached by clicking a
+  // row on the widget itself.
   
   // Animation step configuration (kept in tickSteps for backward compatibility)
   const currentTickSteps = useMemo(() => {
@@ -171,24 +181,40 @@ export default function ConfigModal({ component, onClose }: Props) {
     if (config.numInputs !== undefined) meta.numInputs = config.numInputs;
     if (config.wordCount !== undefined) meta.wordCount = config.wordCount;
     if (config.hasWriteEnable !== undefined) meta.hasWriteEnable = config.hasWriteEnable;
+    if (config.holdOutputUntilFetch !== undefined) meta.holdOutputUntilFetch = config.holdOutputUntilFetch;
     if (config.constantValue !== undefined) meta.constantValue = config.constantValue;
+    if (config.step !== undefined) meta.step = config.step;
+    if (config.mirrorPorts !== undefined) meta.mirrorPorts = config.mirrorPorts;
     
     // Check if we need to recreate the object (when port structure changes)
     const currentNumInputs = component.meta?.numInputs;
     const currentHasWriteEnable =
       typeof component.meta?.hasWriteEnable === "boolean" ? component.meta.hasWriteEnable : true;
     const nextHasWriteEnable = config.hasWriteEnable ?? true;
+    const currentHoldOutput =
+      typeof component.meta?.holdOutputUntilFetch === "boolean"
+        ? component.meta.holdOutputUntilFetch
+        : false;
+    const nextHoldOutput = config.holdOutputUntilFetch ?? false;
 
     const muxNeedsRecreate =
       component.type === "MuxComponent" &&
       config.numInputs !== undefined &&
       config.numInputs !== currentNumInputs;
 
+    // `holdOutputUntilFetch` is fixed at construction time, so changing it needs
+    // the same recreate path as a port-structure change.
+    // `step` is fixed at construction time, like the Mux input count.
+    const incrementerNeedsRecreate =
+      component.type === "IncrementerComponent" &&
+      config.step !== undefined &&
+      config.step !== component.meta?.step;
+
     const registerNeedsRecreate =
       (component.type === "Register" || component.type === "PipelineRegister") &&
-      nextHasWriteEnable !== currentHasWriteEnable;
+      (nextHasWriteEnable !== currentHasWriteEnable || nextHoldOutput !== currentHoldOutput);
 
-    const needsRecreate = muxNeedsRecreate || registerNeedsRecreate;
+    const needsRecreate = muxNeedsRecreate || registerNeedsRecreate || incrementerNeedsRecreate;
     
     if (needsRecreate) {
       // Recreate component when port structure changes.
@@ -270,7 +296,7 @@ export default function ConfigModal({ component, onClose }: Props) {
   };
 
   const formatValue = (value: unknown): string => {
-    if (typeof value === "number") return `0x${value.toString(16).toUpperCase().padStart(4, "0")}`;
+    if (typeof value === "number") return formatNum(value, base);
     if (typeof value === "boolean") return value ? "1" : "0";
     return String(value);
   };
@@ -278,45 +304,28 @@ export default function ConfigModal({ component, onClose }: Props) {
   const inputPorts  = ports.filter((p) => p.direction === "input");
   const outputPorts = ports.filter((p) => p.direction === "output");
 
-  // If this is instruction memory, show the builder instead of the default config
-  if (isInstructionMemory && imem) {
-    return createPortal(
-      <div className="fixed inset-0 z-50 flex items-center justify-center">
-        {/* Backdrop */}
-        <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-        {/* Instruction Builder */}
-        <div className="relative z-10">
-          <InstructionBuilder imem={imem} onClose={onClose} />
-        </div>
-      </div>,
-      document.body
-    );
-  }
-
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px]" onClick={onClose} />
 
       {/* Panel */}
-      <div className="relative bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl w-96 max-h-[90vh] flex flex-col overflow-hidden">
+      <div className="relative flex max-h-[90vh] w-[420px] flex-col overflow-hidden rounded-2xl border border-line bg-surface">
         {/* Header */}
-        <div className="px-4 py-3 border-b border-gray-700 flex items-center justify-between shrink-0">
+        <div className="flex shrink-0 items-center justify-between border-b border-line px-4 py-3">
           <div>
-            <h2 className="text-sm font-bold text-white">
-              {def?.icon} {def?.label ?? component.type}
-            </h2>
-            <p className="text-[10px] text-gray-500 font-mono mt-0.5">
+            <h2 className="t-panel text-fg">{def?.label ?? component.type}</h2>
+            <p className="mt-0.5 font-mono text-[11px] text-fg-faint">
               id: {component.id.slice(0, 8)}
             </p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-white text-lg leading-none">✕</button>
+          <button onClick={onClose} aria-label="Close" className="text-fg-muted transition-colors hover:text-fg"><X size={16} strokeWidth={1.5} /></button>
         </div>
 
         {/* Scrollable body */}
         <div className="overflow-y-auto flex-1">
           {/* Label / type config */}
-          <div className="p-4 border-b border-gray-800">
+          <div className="border-b border-line p-4">
             <ConfigPanelForType
               type={component.type}
               config={config}
@@ -326,23 +335,23 @@ export default function ConfigModal({ component, onClose }: Props) {
 
           {/* ── Port value overrides ────────────────── */}
           {isConnectable && ports.length > 0 && (
-            <div className="p-4 border-b border-gray-800 space-y-3">
-              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Port Values</h3>
+            <div className="space-y-3 border-b border-line p-4">
+              <h3 className="t-section">Port values</h3>
 
               {inputPorts.length > 0 && (
                 <div className="space-y-1.5">
-                  <div className="text-[10px] font-semibold text-green-400 mb-1">Inputs</div>
+                  <div className="mb-1 text-[11px] text-fg-muted">Inputs</div>
                   {inputPorts.map((port) => {
                     const key = port.name;
                     const inputVal = portInputs[key] ?? formatValue(port.value);
                     return (
                       <div key={key} className="flex items-center gap-2">
-                        <span className="text-[10px] font-mono text-gray-300 w-24 truncate shrink-0">{key}</span>
+                        <span className="w-24 shrink-0 truncate font-mono text-[11px] text-fg-muted">{key}</span>
                         <input
                           type="text"
                           value={inputVal}
                           onChange={(e) => setPortInputs((prev) => ({ ...prev, [key]: e.target.value }))}
-                          className="flex-1 bg-gray-800 border border-gray-600 rounded px-2 py-0.5 text-[10px] font-mono text-cyan-200 focus:border-cyan-500 focus:outline-none"
+                          className="num h-9 flex-1 rounded-lg border border-line bg-sunken px-2 font-mono text-[11px] text-fg focus:border-line-strong focus:outline-none"
                           placeholder={port.dataType === "boolean" ? "0 / 1" : "0x0000"}
                         />
                       </div>
@@ -353,18 +362,18 @@ export default function ConfigModal({ component, onClose }: Props) {
 
               {outputPorts.length > 0 && (
                 <div className="space-y-1.5">
-                  <div className="text-[10px] font-semibold text-orange-400 mb-1">Outputs</div>
+                  <div className="mb-1 text-[11px] text-fg-muted">Outputs</div>
                   {outputPorts.map((port) => {
                     const key = port.name;
                     const inputVal = portInputs[key] ?? formatValue(port.value);
                     return (
                       <div key={key} className="flex items-center gap-2">
-                        <span className="text-[10px] font-mono text-gray-300 w-24 truncate shrink-0">{key}</span>
+                        <span className="w-24 shrink-0 truncate font-mono text-[11px] text-fg-muted">{key}</span>
                         <input
                           type="text"
                           value={inputVal}
                           onChange={(e) => setPortInputs((prev) => ({ ...prev, [key]: e.target.value }))}
-                          className="flex-1 bg-gray-800 border border-gray-600 rounded px-2 py-0.5 text-[10px] font-mono text-purple-200 focus:border-purple-500 focus:outline-none"
+                          className="num h-9 flex-1 rounded-lg border border-line bg-sunken px-2 font-mono text-[11px] text-fg focus:border-line-strong focus:outline-none"
                           placeholder={port.dataType === "boolean" ? "0 / 1" : "0x0000"}
                         />
                       </div>
@@ -377,9 +386,9 @@ export default function ConfigModal({ component, onClose }: Props) {
 
           {/* ── CPU Testing Mode ────────────────────────── */}
           {isCpu && (
-            <div className="p-4 border-b border-gray-800 space-y-3">
-              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Testing Mode</h3>
-              <p className="text-[10px] text-gray-500">
+            <div className="space-y-3 border-b border-line p-4">
+              <h3 className="t-section">Testing mode</h3>
+              <p className="text-[11px] text-fg-faint">
                 Select an instruction to force the CPU in_opcode port and keep it set.
               </p>
               
@@ -395,9 +404,9 @@ export default function ConfigModal({ component, onClose }: Props) {
                     setTestingModeOpcode(null);
                   }
                 }}
-                className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors"
+                className="h-9 w-full rounded-lg border border-line bg-sunken px-3 text-sm text-fg transition-colors focus:border-line-strong focus:outline-none"
               >
-                <option value="">-- Disable Testing Mode --</option>
+                <option value="">Disable testing mode</option>
                 {Object.entries(INSTRUCTION_SET).map(([mnemonic, descriptor]) => (
                   <option key={mnemonic} value={descriptor.opcode}>
                     {mnemonic} (0b{descriptor.opcode.toString(2).padStart(5, "0")})
@@ -407,7 +416,7 @@ export default function ConfigModal({ component, onClose }: Props) {
 
               {/* Display selected instruction info */}
               {testingModeOpcode !== null && (
-                <div className="bg-gray-800/50 rounded-lg p-3 space-y-2">
+                <div className="space-y-2 rounded-lg border border-line p-3">
                   {(() => {
                     const selectedInstruction = Object.entries(INSTRUCTION_SET).find(([, descriptor]) => descriptor.opcode === testingModeOpcode);
                     if (!selectedInstruction) return null;
@@ -419,25 +428,23 @@ export default function ConfigModal({ component, onClose }: Props) {
                     return (
                       <div key={mnemonic} className="space-y-2">
                         <div className="flex items-center gap-2">
-                          <span className="text-[11px] font-bold text-indigo-300">{mnemonic}</span>
-                          <span className="text-[10px] text-gray-500 font-mono">
+                          <span className="font-mono text-[12px] text-fg">{mnemonic}</span>
+                          <span className="num font-mono text-[11px] text-fg-faint">
                             0x{descriptor.opcode.toString(16).toUpperCase().padStart(2, "0")}
                           </span>
                         </div>
 
-                        <p className="text-[10px] text-gray-400">{descriptor.description}</p>
+                        <p className="text-[11px] text-fg-muted">{descriptor.description}</p>
 
-                        <div className="text-[10px] text-gray-500">
-                          <span className="font-semibold">Format:</span> {isStandard ? "Standard" : "ULA"}
-                        </div>
+                        <div className="text-[11px] text-fg-faint">Format: {isStandard ? "Standard" : "ULA"}</div>
 
                         <div className="space-y-1">
-                          <div className="text-[10px] font-semibold text-cyan-400">Pipeline Steps:</div>
+                          <div className="t-section">Pipeline steps</div>
                           <div className="flex flex-wrap gap-1">
-                            <span className="text-[9px] px-2 py-1 rounded bg-indigo-900/60 border border-indigo-600 text-indigo-200 font-mono">
+                            <span className="rounded-md border border-line px-2 py-1 font-mono text-[11px] text-fg-muted">
                               FETCH
                             </span>
-                            <span className="text-[9px] px-2 py-1 rounded bg-purple-900/60 border border-purple-600 text-purple-200 font-mono">
+                            <span className="rounded-md border border-line px-2 py-1 font-mono text-[11px] text-fg-muted">
                               DECODE
                             </span>
 
@@ -445,13 +452,13 @@ export default function ConfigModal({ component, onClose }: Props) {
                               steps.map((state, idx) => (
                                 <span
                                   key={idx}
-                                  className="text-[9px] px-2 py-1 rounded bg-cyan-900/60 border border-cyan-600 text-cyan-200 font-mono"
+                                  className="rounded-md border border-line px-2 py-1 font-mono text-[11px] text-fg-muted"
                                 >
                                   {CPU_STATE_LABELS[state] || `STATE_${state}`}
                                 </span>
                               ))
                             ) : (
-                              <span className="text-[9px] text-gray-500 italic">no extra steps</span>
+                              <span className="text-[11px] italic text-fg-faint">no extra steps</span>
                             )}
                           </div>
                         </div>
@@ -465,19 +472,19 @@ export default function ConfigModal({ component, onClose }: Props) {
 
           {/* ── Animation Steps Configuration ────────────────── */}
           {isClockableObj && component.type !== "CpuComponent" && (
-            <div className="p-4 border-b border-gray-800 space-y-3">
+            <div className="space-y-3 border-b border-line p-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Animation Steps</h3>
+                <h3 className="t-section">Animation steps</h3>
                 <button
                   onClick={handleTickComponent}
-                  className="text-[10px] px-2 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-colors"
+                  className="rounded-lg border border-line px-2 py-1 text-[11px] text-fg-muted transition-colors hover:border-line-strong hover:text-fg"
                   title="Manually tick this component"
                 >
                   Tick Now
                 </button>
               </div>
-              <p className="text-[10px] text-gray-500">
-                Select which CPU states animate this component wires. Functional execution runs every CPU tick.
+              <p className="text-[11px] text-fg-faint">
+                Select which CPU states animate the wires of this component. Functional execution runs every CPU tick.
               </p>
               <div className="grid grid-cols-3 gap-1.5">
                 {ALL_CPU_STATES.map((state) => {
@@ -486,10 +493,10 @@ export default function ConfigModal({ component, onClose }: Props) {
                     <button
                       key={state}
                       onClick={() => toggleTickStep(state)}
-                      className={`px-2 py-1 rounded text-[9px] font-mono font-semibold transition-colors ${
+                      className={`rounded-md border px-2 py-1 font-mono text-[11px] transition-colors ${
                         isActive
-                          ? "bg-cyan-600 text-white"
-                          : "bg-gray-800 text-gray-500 hover:bg-gray-700 hover:text-gray-300"
+                          ? "border-st-active text-st-active"
+                          : "border-line text-fg-faint hover:border-line-strong hover:text-fg"
                       }`}
                     >
                       {CPU_STATE_LABELS[state]}
@@ -498,9 +505,9 @@ export default function ConfigModal({ component, onClose }: Props) {
                 })}
               </div>
 
-              <div className="pt-2 border-t border-gray-800 space-y-2">
-                <h4 className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Animation Substep Order</h4>
-                <p className="text-[10px] text-gray-500">
+              <div className="space-y-2 border-t border-line pt-2">
+                <h4 className="t-section">Animation substep order</h4>
+                <p className="text-[11px] text-fg-faint">
                   Lower values animate earlier inside the same CPU state. Leave blank to use default order (0).
                 </p>
                 <div className="grid grid-cols-3 gap-2">
@@ -508,14 +515,14 @@ export default function ConfigModal({ component, onClose }: Props) {
                     const value = tickOrderByState[state];
                     return (
                       <label key={`order-${state}`} className="flex flex-col gap-1">
-                        <span className="text-[9px] font-mono text-gray-400">{CPU_STATE_LABELS[state]}</span>
+                        <span className="font-mono text-[11px] text-fg-muted">{CPU_STATE_LABELS[state]}</span>
                         <input
                           type="number"
                           min={0}
                           step={1}
                           value={value ?? ""}
                           onChange={(e) => setTickOrderForState(state, e.target.value)}
-                          className="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-[10px] font-mono text-gray-200 focus:border-cyan-500 focus:outline-none"
+                          className="num h-9 rounded-lg border border-line bg-sunken px-2 font-mono text-[11px] text-fg focus:border-line-strong focus:outline-none"
                           placeholder="0"
                         />
                       </label>
@@ -529,32 +536,35 @@ export default function ConfigModal({ component, onClose }: Props) {
           {/* ── Wire connections ────────────────────── */}
           {isConnectable && (
             <div className="p-4 space-y-2">
-              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                Connections {componentWires.length > 0 && <span className="text-gray-600 normal-case font-normal">({componentWires.length})</span>}
+              <h3 className="t-section">
+                Connections{" "}
+                {componentWires.length > 0 && (
+                  <span className="text-fg-faint">({componentWires.length})</span>
+                )}
               </h3>
               {componentWires.length === 0 ? (
-                <p className="text-[10px] text-gray-600 italic">No connections</p>
+                <p className="text-[11px] italic text-fg-faint">No connections</p>
               ) : (
                 <div className="space-y-1">
                   {componentWires.map((wire) => {
                     const isSource = wire.sourceComponentId === component.id;
                     return (
-                      <div key={wire.id} className="flex items-center gap-2 bg-gray-800 rounded px-2 py-1.5 text-[10px]">
+                      <div key={wire.id} className="flex items-center gap-2 rounded-lg border border-line px-2 py-1.5 text-[11px]">
                         {/* Source side */}
-                        <span className={`font-mono truncate ${isSource ? "text-orange-300 font-semibold" : "text-gray-400"}`}>
+                        <span className={`truncate font-mono ${isSource ? "text-fg" : "text-fg-muted"}`}>
                           {labelFor(wire.sourceComponentId)}.{wire.sourcePortName}
                         </span>
-                        <svg className="w-3 h-3 text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="h-3 w-3 shrink-0 text-fg-faint" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
                         </svg>
                         {/* Target side */}
-                        <span className={`font-mono truncate flex-1 ${!isSource ? "text-cyan-300 font-semibold" : "text-gray-400"}`}>
+                        <span className={`flex-1 truncate font-mono ${!isSource ? "text-fg" : "text-fg-muted"}`}>
                           {labelFor(wire.targetComponentId)}.{wire.targetPortName}
                         </span>
                         {/* Remove button */}
                         <button
                           onClick={() => removeWire(wire.id)}
-                          className="text-red-500 hover:text-red-400 leading-none shrink-0 ml-1"
+                          className="ml-1 shrink-0 leading-none text-st-error transition-colors hover:opacity-70"
                           aria-label="Remove connection"
                           title="Remove connection"
                         >✕</button>
@@ -568,23 +578,23 @@ export default function ConfigModal({ component, onClose }: Props) {
         </div>
 
         {/* Footer */}
-        <div className="px-4 py-3 border-t border-gray-700 flex items-center justify-between gap-2 shrink-0">
+        <div className="flex shrink-0 items-center justify-between gap-2 border-t border-line px-4 py-3">
           <button
             onClick={() => { removeComponent(component.id); onClose(); }}
-            className="text-xs text-red-400 hover:text-red-300 transition-colors"
+            className="rounded-lg border border-st-error px-3 py-1.5 text-xs text-st-error transition-colors hover:bg-st-error/10"
           >
             Remove component
           </button>
           <div className="flex gap-2">
             <button
               onClick={onClose}
-              className="px-3 py-1.5 text-xs rounded-lg border border-gray-600 text-gray-300 hover:bg-gray-800 transition-colors"
+              className="rounded-lg border border-line px-3 py-1.5 text-xs text-fg-muted transition-colors hover:border-line-strong hover:text-fg"
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
-              className="px-3 py-1.5 text-xs rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-colors"
+              className="rounded-lg border border-line-strong bg-raised px-3 py-1.5 text-xs text-fg transition-colors hover:border-st-active"
             >
               Save
             </button>

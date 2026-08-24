@@ -74,7 +74,7 @@ function createFallbackProject(): ProjectData {
       {
         id: "cpu-1",
         type: "CpuComponent",
-        label: "CPU",
+        label: "UC",
         x: 400,
         y: 300,
         w: 176,

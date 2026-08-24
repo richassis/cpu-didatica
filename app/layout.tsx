@@ -1,15 +1,25 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Urbanist, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+/**
+ * Two families, rigid roles: Urbanist carries the chrome, JetBrains Mono
+ * carries data.
+ *
+ * The mono is not a stylistic choice — hex needs tabular figures and a `0`
+ * that cannot be confused with `O`, and Urbanist has neither. Never set a
+ * numeric value in the sans.
+ */
+const sans = Urbanist({
+  variable: "--font-urbanist",
   subsets: ["latin"],
+  weight: ["300", "400", "500"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const mono = JetBrains_Mono({
+  variable: "--font-jetbrains-mono",
   subsets: ["latin"],
+  weight: ["400", "500"],
 });
 
 export const metadata: Metadata = {
@@ -23,11 +33,25 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    // suppressHydrationWarning: the inline script below stamps `data-theme` on
+    // <html> before React hydrates, so the client DOM intentionally differs from
+    // the server HTML on this one attribute.
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        {/*
+          Apply the persisted colour profile before first paint, otherwise the
+          app renders dark for a frame and then flips to light.
+        */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{var t=JSON.parse(localStorage.getItem("simulator-theme")||"{}");document.documentElement.dataset.theme=(t.state&&t.state.theme)||"dark"}catch(e){document.documentElement.dataset.theme="dark"}`,
+          }}
+        />
+      </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased h-screen overflow-hidden`}
+        className={`${sans.variable} ${mono.variable} antialiased h-screen overflow-hidden`}
       >
-        <div className="flex h-screen w-screen overflow-hidden bg-gray-950">
+        <div className="flex h-screen w-screen overflow-hidden bg-canvas">
           <main className="flex flex-col flex-1 min-h-0 min-w-0">{children}</main>
         </div>
         {/* Portal root for tooltips — rendered last in body, paints above every stacking context */}

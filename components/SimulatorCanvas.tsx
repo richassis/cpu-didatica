@@ -8,6 +8,17 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
+import {
+  Plus,
+  Minus,
+  Spline,
+  Cpu,
+  Database,
+  Settings2,
+  Maximize2,
+  Trash2,
+  RotateCcw,
+} from "lucide-react";
 import { useLayoutStore, ZOOM_STEP, ZOOM_MIN, ZOOM_MAX, CANVAS_WIDTH, CANVAS_HEIGHT } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayStore } from "@/lib/displayStore";
@@ -20,6 +31,7 @@ import { snapToGrid } from "@/lib/wireRouting";
 import { calculatePortPosition, type PortSide } from "@/lib/portPositioning";
 import WidgetRenderer from "./WidgetRenderer";
 import AddComponentModal from "./AddComponentModal";
+import SimulationSettings from "./SimulationSettings";
 import EnhancedBusOverlay from "./EnhancedBusOverlay";
 import { useEffect, useRef, useState, useCallback } from "react";
 
@@ -49,9 +61,6 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
   const [fabOpen, setFabOpen] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const [showDisplaySettings, setShowDisplaySettings] = useState(false);
-  const [zoomExpanded, setZoomExpanded] = useState(false);
-  const [isPanning, setIsPanning] = useState(false);
-  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
 
   // Mode state - determines what actions are allowed
   const mode = useModeStore((s) => s.mode);
@@ -73,10 +82,6 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
   const displayedTick = isReadOnly ? executionTick : totalTicks;
 
   // Display settings
-  const numericBase = useDisplayStore((s) => s.numericBase);
-  const setNumericBase = useDisplayStore((s) => s.setNumericBase);
-  const animationSpeed = useDisplayStore((s) => s.animationSpeed);
-  const setAnimationSpeed = useDisplayStore((s) => s.setAnimationSpeed);
 
   // Wire creation state (new drag-based API)
   const isCreatingWire = useWireCreationStore((s) => s.phase === "dragging");
@@ -106,40 +111,7 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
     );
   }, [setViewport]);
 
-  // Scroll to components or canvas centre on first mount
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    
-    // If there are components, center on them; otherwise center on canvas
-    if (components.length > 0) {
-      // Calculate bounding box of all components
-      let minX = Infinity, minY = Infinity;
-      let maxX = -Infinity, maxY = -Infinity;
-      
-      for (const c of components) {
-        minX = Math.min(minX, c.x);
-        minY = Math.min(minY, c.y);
-        maxX = Math.max(maxX, c.x + c.w);
-        maxY = Math.max(maxY, c.y + c.h);
-      }
-
-      const centerX = (minX + maxX) / 2;
-      const centerY = (minY + maxY) / 2;
-      
-      el.scrollLeft = centerX * zoom - el.clientWidth / 2;
-      el.scrollTop = centerY * zoom - el.clientHeight / 2;
-    } else {
-      // Center on canvas origin area for new projects
-      el.scrollLeft = 0;
-      el.scrollTop = 0;
-    }
-    syncViewport();
-  // Run once on mount only
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Keep viewport in sync on scroll
+  // Keep viewport in sync on scroll/resize
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -152,84 +124,14 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
     };
   }, [syncViewport]);
 
-  // Scroll wheel to zoom (Google Maps style)
+  // Close FAB / display settings when clicking outside
   useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      const delta = e.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP;
-      const newZoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoom + delta));
-      
-      // Zoom towards cursor position
-      const rect = el.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left;
-      const mouseY = e.clientY - rect.top;
-      
-      // Calculate scroll position to keep zoom centered on cursor
-      const scrollX = (el.scrollLeft + mouseX) / zoom * newZoom - mouseX;
-      const scrollY = (el.scrollTop + mouseY) / zoom * newZoom - mouseY;
-      
-      setZoom(newZoom);
-      
-      // Apply new scroll position after zoom
-      requestAnimationFrame(() => {
-        if (scrollRef.current) {
-          scrollRef.current.scrollLeft = scrollX;
-          scrollRef.current.scrollTop = scrollY;
-        }
-      });
-    };
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
-  }, [zoom, setZoom]);
-
-  // Close FAB / display settings / zoom when clicking outside
-  useEffect(() => {
-    if (!fabOpen && !showDisplaySettings && !zoomExpanded) return;
-    const handler = () => { setFabOpen(false); setShowDisplaySettings(false); setZoomExpanded(false); };
+    if (!fabOpen && !showDisplaySettings) return;
+    const handler = () => { setFabOpen(false); setShowDisplaySettings(false); };
     window.addEventListener("mousedown", handler);
     return () => window.removeEventListener("mousedown", handler);
-  }, [fabOpen, showDisplaySettings, zoomExpanded]);
+  }, [fabOpen, showDisplaySettings]);
 
-  // Click and drag to pan (Google Maps style)
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-
-    const onMouseDown = (e: MouseEvent) => {
-      if (isCreatingWire) return;
-      // Only pan on primary button and not on interactive elements
-      if (e.button !== 0) return;
-      const target = e.target as HTMLElement;
-      // Don't pan if clicking on widgets, ports, or interactive elements
-      if (target.closest('[data-draggable], [data-port-indicator], button, input, select, textarea, svg')) return;
-      
-      setIsPanning(true);
-      setPanStart({ x: e.clientX + el.scrollLeft, y: e.clientY + el.scrollTop });
-      e.preventDefault();
-    };
-
-    const onMouseMove = (e: MouseEvent) => {
-      if (!isPanning) return;
-      el.scrollLeft = panStart.x - e.clientX;
-      el.scrollTop = panStart.y - e.clientY;
-    };
-
-    const onMouseUp = () => {
-      setIsPanning(false);
-    };
-
-    el.addEventListener("mousedown", onMouseDown);
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseUp);
-
-    return () => {
-      el.removeEventListener("mousedown", onMouseDown);
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("mouseup", onMouseUp);
-    };
-  }, [isPanning, panStart, isCreatingWire]);
 
   // Drag-based wire creation: track mouse and complete on mouseup.
   useEffect(() => {
@@ -418,15 +320,20 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
     }
   };
 
-  // Find and center viewport on all components
-  const handleFindComponents = useCallback(() => {
+  /**
+   * Zoom and centre so the whole datapath fits the viewport.
+   *
+   * The canvas cannot be panned or wheel-zoomed any more, so this is the only
+   * thing that positions the view: it runs on mount, whenever the set of
+   * components changes (project switch) and on resize.
+   */
+  const fitToScreen = useCallback(() => {
     const el = scrollRef.current;
     if (!el || components.length === 0) return;
 
-    // Calculate bounding box of all components
     let minX = Infinity, minY = Infinity;
     let maxX = -Infinity, maxY = -Infinity;
-    
+
     for (const c of components) {
       minX = Math.min(minX, c.x);
       minY = Math.min(minY, c.y);
@@ -434,46 +341,92 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
       maxY = Math.max(maxY, c.y + c.h);
     }
 
-    // Add some padding
-    const padding = 100;
+    const padding = 48;
     minX -= padding;
     minY -= padding;
     maxX += padding;
     maxY += padding;
 
-    // Calculate the center of the bounding box
     const centerX = (minX + maxX) / 2;
     const centerY = (minY + maxY) / 2;
 
-    // Calculate zoom to fit all components with some margin
-    const boundingWidth = maxX - minX;
-    const boundingHeight = maxY - minY;
-    const viewportWidth = el.clientWidth;
-    const viewportHeight = el.clientHeight;
-    
-    const fitZoomX = viewportWidth / boundingWidth;
-    const fitZoomY = viewportHeight / boundingHeight;
-    const fitZoom = Math.min(fitZoomX, fitZoomY, 1); // Don't zoom in more than 100%
+    const fitZoom = Math.min(
+      el.clientWidth / (maxX - minX),
+      el.clientHeight / (maxY - minY),
+      1, // never magnify past 100%
+    );
     const clampedZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, fitZoom));
-    
+
     setZoom(clampedZoom);
-    
-    // Center viewport on components after zoom is applied
+
     requestAnimationFrame(() => {
-      if (scrollRef.current) {
-        const newEl = scrollRef.current;
-        newEl.scrollLeft = centerX * clampedZoom - newEl.clientWidth / 2;
-        newEl.scrollTop = centerY * clampedZoom - newEl.clientHeight / 2;
-        syncViewport();
-      }
+      const newEl = scrollRef.current;
+      if (!newEl) return;
+      newEl.scrollLeft = centerX * clampedZoom - newEl.clientWidth / 2;
+      newEl.scrollTop = centerY * clampedZoom - newEl.clientHeight / 2;
+      syncViewport();
     });
   }, [components, setZoom, syncViewport]);
 
+  /** Re-centre at the current zoom, used by the +/- buttons. */
+  const recentre = useCallback((nextZoom: number) => {
+    const el = scrollRef.current;
+    if (!el || components.length === 0) return;
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const c of components) {
+      minX = Math.min(minX, c.x);
+      minY = Math.min(minY, c.y);
+      maxX = Math.max(maxX, c.x + c.w);
+      maxY = Math.max(maxY, c.y + c.h);
+    }
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+
+    setZoom(nextZoom);
+    requestAnimationFrame(() => {
+      const newEl = scrollRef.current;
+      if (!newEl) return;
+      newEl.scrollLeft = centerX * nextZoom - newEl.clientWidth / 2;
+      newEl.scrollTop = centerY * nextZoom - newEl.clientHeight / 2;
+      syncViewport();
+    });
+  }, [components, setZoom, syncViewport]);
+
+  // Fit on mount and whenever the datapath changes (e.g. switching projects).
+  const componentSignature = components.map((c) => c.id).join("|");
+  useEffect(() => {
+    if (components.length === 0) return;
+    // Wait a frame so the scroll container has its final size.
+    const raf = requestAnimationFrame(fitToScreen);
+    return () => cancelAnimationFrame(raf);
+  // Deliberately keyed on the component set, not on fitToScreen's identity,
+  // so dragging a widget in edit mode does not snap the view back.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [componentSignature]);
+
+  // Keep the datapath fitted when the window changes size.
+  useEffect(() => {
+    const onResize = () => fitToScreen();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [fitToScreen]);
+
   return (
-    <div 
-      ref={scrollRef} 
-      className="flex-1 min-h-0 overflow-auto bg-gray-950 relative scrollbar-hide"
-      style={{ cursor: isCreatingWire ? 'crosshair' : isPanning ? 'grabbing' : 'grab' }}
+    <div
+      ref={scrollRef}
+      // Program mode locks the view: it is positioned only by fitToScreen and the
+      // zoom buttons, so the datapath can no longer be lost by an accidental
+      // scroll, wheel-zoom or background drag. Edit mode keeps normal scrolling,
+      // otherwise there would be no way to reach canvas outside the fitted area
+      // while authoring.
+      className={`flex-1 min-h-0 relative ${
+        isEditMode ? "overflow-auto" : "overflow-hidden scrollbar-hide"
+      }`}
+      style={{
+        cursor: isCreatingWire ? "crosshair" : "default",
+        background: "var(--canvas)",
+      }}
       data-canvas
       onClick={(e) => {
         // Click on empty canvas deselects wires
@@ -484,13 +437,27 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
       <DndContext sensors={isReadOnly ? [] : sensors} onDragEnd={handleDragEnd}>
         <div style={{ width: CANVAS_WIDTH * zoom, height: CANVAS_HEIGHT * zoom }}>
           <div
-            className="relative bg-gray-900 origin-top-left"
+            className="relative origin-top-left"
+            // Level of detail is set once, here, and resolved in CSS. Zoomed
+            // out, a node keeps its silhouette and loses its anatomy; without
+            // this the whole datapath is unreadable noise the moment the
+            // student pulls back to see it end to end.
+            // "full" starts just under the zoom fitToScreen typically lands on,
+            // so the default view shows the anatomy; the thresholds exist to
+            // declutter when the student pulls back, not to blank the first
+            // screen they see.
+            data-lod={zoom < 0.5 ? "low" : zoom < 0.85 ? "mid" : "full"}
             style={{
               width: CANVAS_WIDTH,
               height: CANVAS_HEIGHT,
               transform: `scale(${zoom})`,
-              backgroundImage: "radial-gradient(circle, #374151 1px, transparent 1px)",
-              backgroundSize: `${GRID_SIZE}px ${GRID_SIZE}px`,
+              background: "var(--canvas)",
+              // The grid is an authoring aid: it only helps when placing widgets,
+              // so it stays out of the way in program mode.
+              backgroundImage: isEditMode
+                ? "radial-gradient(circle, var(--grid-dot) 1px, transparent 1px)"
+                : undefined,
+              backgroundSize: "20px 20px",
             }}
           >
             <EnhancedBusOverlay visible={showWiresAndPorts} previewRejected={wirePreviewRejected} />
@@ -507,232 +474,155 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
           className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2"
           onMouseDown={(e) => e.stopPropagation()} // prevent outside-click handler
         >
-        {/* Action items — slide up when open */}
+        {/* Action items — slide up when open. Every item is neutral: these are
+            commands, not states, so none of them is entitled to an accent. The
+            only exception is the second press of Clear canvas, which is
+            destructive and says so. */}
         {fabOpen && (
-          <div className="flex flex-col items-end gap-2 mb-1">
-            {/* Add component - Edit mode only */}
+          <div className="mb-1 flex flex-col items-end gap-2">
             {isEditMode && (
               <FabItem
                 label="Add component"
-                icon={
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                }
-                color="bg-cyan-600 hover:bg-cyan-500"
+                icon={<Plus size={16} strokeWidth={1.5} />}
                 onClick={() => { setShowAddModal(true); setFabOpen(false); }}
               />
             )}
 
-            {/* Toggle wires */}
             <FabItem
               label={showWiresAndPorts ? "Hide wires" : "Show wires"}
-              icon={
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-              }
-              color={showWiresAndPorts ? "bg-indigo-600 hover:bg-indigo-500" : "bg-gray-600 hover:bg-gray-500"}
+              icon={<Spline size={16} strokeWidth={1.5} />}
+              on={showWiresAndPorts}
               onClick={() => { setShowWiresAndPorts(!showWiresAndPorts); setFabOpen(false); }}
             />
 
-            {/* Toggle CPU signal wires */}
             {showWiresAndPorts && (
               <FabItem
                 label={showCpuSignalWires ? "Hide CPU signals" : "Show CPU signals"}
-                icon={
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
-                  </svg>
-                }
-                color={showCpuSignalWires ? "bg-blue-600 hover:bg-blue-500" : "bg-gray-600 hover:bg-gray-500"}
+                icon={<Cpu size={16} strokeWidth={1.5} />}
+                on={showCpuSignalWires}
                 onClick={() => { setShowCpuSignalWires(!showCpuSignalWires); setFabOpen(false); }}
               />
             )}
 
-            {/* Toggle data signal wires */}
             {showWiresAndPorts && (
               <FabItem
                 label={showDataSignalWires ? "Hide data signals" : "Show data signals"}
-                icon={
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
-                  </svg>
-                }
-                color={showDataSignalWires ? "bg-amber-600 hover:bg-amber-500" : "bg-gray-600 hover:bg-gray-500"}
+                icon={<Database size={16} strokeWidth={1.5} />}
+                on={showDataSignalWires}
                 onClick={() => { setShowDataSignalWires(!showDataSignalWires); setFabOpen(false); }}
               />
             )}
 
-            {/* Display settings */}
             <FabItem
               label="Display settings"
-              icon={
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.573-1.066z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-              }
-              color="bg-gray-700 hover:bg-gray-600"
+              icon={<Settings2 size={16} strokeWidth={1.5} />}
               onClick={() => { setShowDisplaySettings(true); setFabOpen(false); }}
             />
 
-            {/* Find components */}
             {components.length > 0 && (
               <FabItem
-                label="Find components"
-                icon={
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                }
-                color="bg-emerald-600 hover:bg-emerald-500"
-                onClick={() => { handleFindComponents(); setFabOpen(false); }}
+                label="Fit to screen"
+                icon={<Maximize2 size={16} strokeWidth={1.5} />}
+                onClick={() => { fitToScreen(); setFabOpen(false); }}
               />
             )}
 
-            {/* Clear canvas - Edit mode only */}
             {isEditMode && components.length > 0 && (
               <FabItem
                 label={confirmClear ? `Confirm clear (${components.length})` : "Clear canvas"}
-                icon={
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                }
-                color={confirmClear ? "bg-red-600 hover:bg-red-500" : "bg-gray-700 hover:bg-red-700"}
+                icon={<Trash2 size={16} strokeWidth={1.5} />}
+                destructive={confirmClear}
                 onClick={handleClear}
               />
             )}
           </div>
         )}
 
-        {/* Display Settings Panel — shown when triggered from FAB */}
+        {/* Display Settings Panel — the same component program mode mounts, so
+            there is one definition of what a simulation setting is. */}
         {showDisplaySettings && (
           <div
-            className="bg-gray-900/95 border border-gray-700 rounded-2xl shadow-2xl backdrop-blur-sm p-4 w-64 mb-2"
+            className="mb-2 rounded-2xl border border-line bg-surface p-4"
             onMouseDown={(e) => e.stopPropagation()}
           >
-            {/* Numeric Base */}
-            <div className="mb-4">
-              <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Numeric Base</div>
-              <div className="flex items-center gap-1">
-                {(["hex", "dec", "bin", "oct"] as const).map((b) => (
-                  <button
-                    key={b}
-                    onClick={() => setNumericBase(b)}
-                    className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-mono font-semibold transition-colors ${
-                      numericBase === b
-                        ? "bg-cyan-600 text-white"
-                        : "bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700"
-                    }`}
-                  >
-                    {b.toUpperCase()}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Animation Speed */}
-            <div>
-              <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Animation Speed</div>
-              <div className="flex items-center gap-1">
-                {(["fast", "normal", "slow"] as const).map((preset) => (
-                  <button
-                    key={preset}
-                    onClick={() => setAnimationSpeed(preset)}
-                    className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-colors capitalize ${
-                      animationSpeed === preset
-                        ? "bg-indigo-600 text-white"
-                        : "bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700"
-                    }`}
-                  >
-                    {preset}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <SimulationSettings />
           </div>
         )}
 
-        {/* Collapsible Zoom Indicator — above FAB */}
+        {/* Zoom controls — the only way to zoom. Wheel zoom and drag-to-pan are
+            gone on purpose: they used to fire by accident all the time. */}
         <div
-          className="flex items-center gap-1 bg-gray-900/90 border border-gray-700 rounded-full shadow-xl backdrop-blur-sm overflow-hidden transition-all"
+          className="flex items-center gap-1 overflow-hidden rounded-full border border-line bg-surface px-1"
           onMouseDown={(e) => e.stopPropagation()}
         >
-          {zoomExpanded ? (
-            <>
-              <button
-                onClick={() => setZoom(zoom - ZOOM_STEP)}
-                disabled={zoom <= ZOOM_MIN}
-                className="w-8 h-8 flex items-center justify-center rounded-full text-gray-300 hover:bg-gray-700 disabled:opacity-30 transition-colors text-lg leading-none"
-                aria-label="Zoom out"
-              >−</button>
-              <button
-                onClick={() => setZoom(1)}
-                className="min-w-[3rem] text-center text-sm font-mono text-gray-300 hover:text-white transition-colors"
-                aria-label="Reset zoom"
-              >{Math.round(zoom * 100)}%</button>
-              <button
-                onClick={() => setZoom(zoom + ZOOM_STEP)}
-                disabled={zoom >= ZOOM_MAX}
-                className="w-8 h-8 flex items-center justify-center rounded-full text-gray-300 hover:bg-gray-700 disabled:opacity-30 transition-colors text-lg leading-none"
-                aria-label="Zoom in"
-              >＋</button>
-            </>
-          ) : (
-            <button
-              onClick={() => setZoomExpanded(true)}
-              className="px-3 py-1.5 text-sm font-mono text-gray-300 hover:text-white transition-colors"
-              title="Click to show zoom controls"
-            >
-              {Math.round(zoom * 100)}%
-            </button>
-          )}
+          <button
+            onClick={() => recentre(Math.max(ZOOM_MIN, zoom - ZOOM_STEP))}
+            disabled={zoom <= ZOOM_MIN}
+            className="flex h-8 w-8 items-center justify-center rounded-full text-fg-muted transition-colors hover:text-fg disabled:opacity-30"
+            title="Diminuir zoom"
+            aria-label="Zoom out"
+          ><Minus size={14} strokeWidth={1.5} /></button>
+          <button
+            onClick={fitToScreen}
+            className="num min-w-[3.5rem] text-center font-mono text-xs text-fg-muted transition-colors hover:text-fg"
+            title="Ajustar à tela"
+            aria-label="Fit to screen"
+          >{Math.round(zoom * 100)}%</button>
+          <button
+            onClick={() => recentre(Math.min(ZOOM_MAX, zoom + ZOOM_STEP))}
+            disabled={zoom >= ZOOM_MAX}
+            className="flex h-8 w-8 items-center justify-center rounded-full text-fg-muted transition-colors hover:text-fg disabled:opacity-30"
+            title="Aumentar zoom"
+            aria-label="Zoom in"
+          ><Plus size={14} strokeWidth={1.5} /></button>
         </div>
 
         {/* Main FAB button */}
         <button
           onClick={() => { setFabOpen((v) => !v); setConfirmClear(false); setShowDisplaySettings(false); }}
-          className={`w-12 h-12 rounded-full shadow-xl flex items-center justify-center text-white text-xl font-bold transition-all ${
-            fabOpen ? "bg-gray-600 rotate-45" : "bg-gray-800 hover:bg-gray-700 border border-gray-600"
+          className={`flex h-12 w-12 items-center justify-center rounded-full border border-line-strong bg-surface text-fg transition-transform ${
+            fabOpen ? "rotate-45" : ""
           }`}
           aria-label="Actions"
         >
-          {fabOpen ? "✕" : "⋯"}
+          <Plus size={20} strokeWidth={1.5} />
         </button>
         </div>
       )}
 
-      {/* ── Clock toolbar (bottom-left) ───────────────────── */}
+      {/* ── Clock toolbar (bottom-left) ─────────────────────
+          Edit mode only. In program mode the tick is read from the
+          seven-segment display, and this used to sit under the simulation bar
+          showing the same number a second time. */}
+      {!isReadOnly && (
       <div
-        className="fixed bottom-6 left-6 z-40 flex items-center gap-2 bg-gray-900/90 border border-gray-700 rounded-full px-3 py-1.5 shadow-xl backdrop-blur-sm"
+        className="fixed bottom-6 left-6 z-40 flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1.5"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <span className="text-xs font-mono text-gray-400 min-w-[4rem] text-center">T{displayedTick}</span>
+        <span className="num min-w-[4rem] text-center font-mono text-xs text-fg-muted">T{displayedTick}</span>
 
-        {!isReadOnly && (
+        {(
           <>
             <button
               onClick={tickClock}
               disabled={isHalted}
-              className="px-2.5 py-1 rounded-full text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="rounded-full border border-line-strong px-2.5 py-1 text-xs text-fg transition-colors hover:border-st-active disabled:cursor-not-allowed disabled:opacity-50"
               title="Advance clock by one tick"
             >Tick</button>
             <button
               onClick={handleReset}
-              className="w-7 h-7 flex items-center justify-center rounded-full text-gray-400 hover:bg-gray-700 hover:text-white transition-colors"
+              className="flex h-7 w-7 items-center justify-center rounded-full text-fg-muted transition-colors hover:text-fg"
               title="Reset clock"
-            >↺</button>
+            ><RotateCcw size={14} strokeWidth={1.5} /></button>
             {isHalted && (
-              <span className="flex items-center gap-1 text-xs text-red-400 font-semibold">
-                <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+              <span className="flex items-center gap-1.5 rounded-full border border-st-error px-2 py-0.5 text-xs text-st-error">
                 Halted
               </span>
             )}
           </>
         )}
       </div>
+      )}
 
       <AddComponentModal open={showAddModal} onClose={() => setShowAddModal(false)} />
     </div>
@@ -741,19 +631,25 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
 
 // ── FAB menu item ─────────────────────────────────────────────
 function FabItem({
-  label, icon, color, onClick,
+  label, icon, onClick, on = false, destructive = false,
 }: {
   label: string;
   icon: React.ReactNode;
-  color: string;
   onClick: () => void;
+  /** Toggle that is currently on — marked by the accent on the icon only. */
+  on?: boolean;
+  destructive?: boolean;
 }) {
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-2 pl-3 pr-4 py-2 rounded-full text-sm font-medium text-white shadow-lg transition-all ${color}`}
+      className={`flex items-center gap-2 rounded-full border py-2 pl-3 pr-4 text-sm transition-colors ${
+        destructive
+          ? "border-st-error bg-surface text-st-error"
+          : "border-line bg-surface text-fg-muted hover:border-line-strong hover:text-fg"
+      }`}
     >
-      {icon}
+      <span className={on ? "text-st-active" : undefined}>{icon}</span>
       {label}
     </button>
   );

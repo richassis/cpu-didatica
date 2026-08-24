@@ -17,6 +17,12 @@ export interface ControlSignalDef {
   description: string;
 }
 
+/**
+ * Safety cap for the combinational settle loop in `tickAllComponentsPhased()`.
+ * Deeper than any datapath the simulator can build; guards against oscillation.
+ */
+const MAX_EVALUATE_PASSES = 8;
+
 export const CONTROL_SIGNAL_DEFS: ControlSignalDef[] = [
   { name: "wrIR", bitWidth: 1, description: "Write enable for IR" },
   { name: "muxAReg", bitWidth: 1, description: "GPR address mux select" },
@@ -609,6 +615,17 @@ export class CPU implements Clockable, Connectable {
       }
     }
 
+    // Registers configured to hold their output (the PC) release the value they
+    // latched during the previous instruction. This runs before the evaluate
+    // phase so the instruction memory and the PC+1 adder already see the new
+    // address on this very tick.
+    if (this._previousState === CpuState.FETCH) {
+      for (const entry of this._registeredComponents.values()) {
+        (entry.component as unknown as { releaseHeldOutput?: () => void })
+          .releaseHeldOutput?.();
+      }
+    }
+
     this.tickAllComponentsPhased();
 
     // Latch ULA flags only after EXECUTE completes.
@@ -638,19 +655,53 @@ export class CPU implements Clockable, Connectable {
 
   /**
    * Tick all registered components in two phases:
-   * 1) evaluate combinational logic
+   * 1) evaluate combinational logic (repeated until it settles)
    * 2) commit sequential state updates
+   *
+   * Components evaluate in registration order, which is the order they appear in
+   * the project file and therefore not guaranteed to follow the dataflow — the
+   * PC+1 adder must run before MuxPC for the PC loop to close within one tick.
+   * The evaluate pass is repeated until every output port stops changing, which
+   * is safe because all `evaluate()` implementations are pure.
    */
   private tickAllComponentsPhased(): void {
     const entries = Array.from(this._registeredComponents.values());
 
-    for (const entry of entries) {
-      this.runEvaluate(entry.component);
+    let signature = this.outputSignature(entries);
+    for (let pass = 0; pass < MAX_EVALUATE_PASSES; pass++) {
+      for (const entry of entries) {
+        this.runEvaluate(entry.component);
+      }
+
+      const settled = this.outputSignature(entries);
+      if (settled === signature) break;
+      signature = settled;
     }
 
     for (const entry of entries) {
       this.runCommit(entry.component);
     }
+  }
+
+  /**
+   * Snapshot of every registered component's output port values, used to detect
+   * that the combinational phase has settled.
+   */
+  private outputSignature(entries: RegisteredComponent[]): string {
+    const parts: string[] = [];
+
+    for (const entry of entries) {
+      const connectable = entry.component as unknown as { getPorts?: () => PortMap };
+      if (typeof connectable.getPorts !== "function") continue;
+
+      for (const [key, port] of Object.entries(connectable.getPorts())) {
+        if (port.direction === "output") {
+          parts.push(`${entry.id}.${key}=${String(port.value)}`);
+        }
+      }
+    }
+
+    return parts.join("|");
   }
 
   private runEvaluate(component: Clockable): void {

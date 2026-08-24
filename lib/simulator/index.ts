@@ -9,6 +9,7 @@ export { Constant } from "./Constant";
 export { Gpr } from "./Gpr";
 export { Ula } from "./Ula";
 export { Adder } from "./Adder";
+export { Incrementer } from "./Incrementer";
 export { Mux } from "./Mux";
 export { Memory } from "./Memory";
 export { InstructionMemory } from "./InstructionMemory";

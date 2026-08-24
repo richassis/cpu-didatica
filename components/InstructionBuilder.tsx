@@ -91,13 +91,13 @@ export default function InstructionBuilder({ imem, onClose, initialAddress = 0 }
   const breakdown = getBinaryBreakdown();
 
   return (
-    <div className="flex flex-col gap-4 p-4 bg-gray-900 rounded-lg border border-gray-700 max-w-2xl">
+    <div className="flex flex-col gap-4 p-4 bg-surface rounded-lg border border-line max-w-2xl">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-bold text-indigo-300">Instruction Builder</h3>
+        <h3 className="t-panel text-fg">Instruction builder</h3>
         <button
           onClick={onClose}
-          className="text-gray-400 hover:text-gray-200 text-xl leading-none"
+          className="text-fg-muted hover:text-fg text-xl leading-none"
         >
           ×
         </button>
@@ -105,11 +105,11 @@ export default function InstructionBuilder({ imem, onClose, initialAddress = 0 }
 
       {/* Address Selection */}
       <div className="flex items-center gap-4">
-        <label className="text-sm text-gray-400 min-w-[100px]">Address:</label>
+        <label className="text-sm text-fg-muted min-w-[100px]">Address:</label>
         <select
           value={selectedAddress}
           onChange={(e) => setSelectedAddress(Number(e.target.value))}
-          className="flex-1 bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white focus:outline-none focus:border-indigo-500"
+          className="flex-1 bg-sunken border border-line rounded px-3 py-2 text-fg focus:outline-none focus:border-st-active"
         >
           {addressOptions.map((addr) => (
             <option key={addr} value={addr}>
@@ -117,19 +117,19 @@ export default function InstructionBuilder({ imem, onClose, initialAddress = 0 }
             </option>
           ))}
         </select>
-        <span className="text-sm text-gray-500">
-          Current: <span className="text-gray-300 font-mono">{formatHex(currentValue, 16)}</span>
+        <span className="text-sm text-fg-muted">
+          Current: <span className="text-fg font-mono">{formatHex(currentValue, 16)}</span>
         </span>
       </div>
 
       {/* Opcode Selection */}
       <div className="flex items-start gap-4">
-        <label className="text-sm text-gray-400 min-w-[100px] pt-2">Opcode:</label>
+        <label className="text-sm text-fg-muted min-w-[100px] pt-2">Opcode:</label>
         <div className="flex-1">
           <select
             value={selectedMnemonic}
             onChange={(e) => handleMnemonicChange(e.target.value as keyof typeof Opcode)}
-            className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white focus:outline-none focus:border-indigo-500 mb-2"
+            className="w-full bg-sunken border border-line rounded px-3 py-2 text-fg focus:outline-none focus:border-st-active mb-2"
           >
             {(Object.keys(INSTRUCTION_SET) as Array<keyof typeof Opcode>).map((mnemonic) => (
               <option key={mnemonic} value={mnemonic}>
@@ -137,22 +137,22 @@ export default function InstructionBuilder({ imem, onClose, initialAddress = 0 }
               </option>
             ))}
           </select>
-          <p className="text-xs text-gray-500 italic">{descriptor.description}</p>
+          <p className="text-xs text-fg-muted italic">{descriptor.description}</p>
         </div>
       </div>
 
       {/* Dynamic Fields Based on Format */}
-      <div className="border-t border-gray-700 pt-4">
+      <div className="border-t border-line pt-4">
         {descriptor.format === "standard" ? (
           <>
             {/* Standard Format Fields */}
             {(descriptor as StandardDescriptor).usesGPR && (
               <div className="flex items-center gap-4 mb-3">
-                <label className="text-sm text-gray-400 min-w-[100px]">GPR Address:</label>
+                <label className="text-sm text-fg-muted min-w-[100px]">GPR Address:</label>
                 <select
                   value={gprAddr}
                   onChange={(e) => setGprAddr(Number(e.target.value))}
-                  className="flex-1 bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white focus:outline-none focus:border-indigo-500"
+                  className="flex-1 bg-sunken border border-line rounded px-3 py-2 text-fg focus:outline-none focus:border-st-active"
                 >
                   {REGISTER_NAMES.map((name, idx) => (
                     <option key={idx} value={idx}>
@@ -164,7 +164,7 @@ export default function InstructionBuilder({ imem, onClose, initialAddress = 0 }
             )}
             {(descriptor as StandardDescriptor).usesOperand && (
               <div className="flex items-center gap-4">
-                <label className="text-sm text-gray-400 min-w-[100px]">Operand (8-bit):</label>
+                <label className="text-sm text-fg-muted min-w-[100px]">Operand (8-bit):</label>
                 <input
                   type="text"
                   value={formatHex(operand, 8)}
@@ -175,10 +175,10 @@ export default function InstructionBuilder({ imem, onClose, initialAddress = 0 }
                       setOperand(val);
                     }
                   }}
-                  className="flex-1 bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white font-mono focus:outline-none focus:border-indigo-500"
+                  className="flex-1 bg-sunken border border-line rounded px-3 py-2 text-fg font-mono focus:outline-none focus:border-st-active"
                   placeholder="0x00"
                 />
-                <span className="text-xs text-gray-500">Range: 0x00-0xFF</span>
+                <span className="text-xs text-fg-muted">Range: 0x00-0xFF</span>
               </div>
             )}
           </>
@@ -186,11 +186,11 @@ export default function InstructionBuilder({ imem, onClose, initialAddress = 0 }
           <>
             {/* ULA Format Fields */}
             <div className="flex items-center gap-4 mb-3">
-              <label className="text-sm text-gray-400 min-w-[100px]">Source A:</label>
+              <label className="text-sm text-fg-muted min-w-[100px]">Source A:</label>
               <select
                 value={srcA}
                 onChange={(e) => setSrcA(Number(e.target.value))}
-                className="flex-1 bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white focus:outline-none focus:border-indigo-500"
+                className="flex-1 bg-sunken border border-line rounded px-3 py-2 text-fg focus:outline-none focus:border-st-active"
               >
                 {REGISTER_NAMES.map((name, idx) => (
                   <option key={idx} value={idx}>
@@ -201,11 +201,11 @@ export default function InstructionBuilder({ imem, onClose, initialAddress = 0 }
             </div>
             {(descriptor as ULADescriptor).usesSrcB && (
               <div className="flex items-center gap-4 mb-3">
-                <label className="text-sm text-gray-400 min-w-[100px]">Source B:</label>
+                <label className="text-sm text-fg-muted min-w-[100px]">Source B:</label>
                 <select
                   value={srcB}
                   onChange={(e) => setSrcB(Number(e.target.value))}
-                  className="flex-1 bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white focus:outline-none focus:border-indigo-500"
+                  className="flex-1 bg-sunken border border-line rounded px-3 py-2 text-fg focus:outline-none focus:border-st-active"
                 >
                   {REGISTER_NAMES.map((name, idx) => (
                     <option key={idx} value={idx}>
@@ -216,11 +216,11 @@ export default function InstructionBuilder({ imem, onClose, initialAddress = 0 }
               </div>
             )}
             <div className="flex items-center gap-4">
-              <label className="text-sm text-gray-400 min-w-[100px]">Destination:</label>
+              <label className="text-sm text-fg-muted min-w-[100px]">Destination:</label>
               <select
                 value={dst}
                 onChange={(e) => setDst(Number(e.target.value))}
-                className="flex-1 bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white focus:outline-none focus:border-indigo-500"
+                className="flex-1 bg-sunken border border-line rounded px-3 py-2 text-fg focus:outline-none focus:border-st-active"
               >
                 {REGISTER_NAMES.map((name, idx) => (
                   <option key={idx} value={idx}>
@@ -234,55 +234,55 @@ export default function InstructionBuilder({ imem, onClose, initialAddress = 0 }
       </div>
 
       {/* Encoding Display */}
-      <div className="border-t border-gray-700 pt-4">
-        <h4 className="text-sm font-semibold text-gray-300 mb-3">Instruction Encoding:</h4>
+      <div className="border-t border-line pt-4">
+        <h4 className="t-section mb-3">Instruction encoding</h4>
         
         {/* Binary Breakdown */}
-        <div className="bg-gray-950 border border-gray-700 rounded p-3 mb-3 font-mono text-xs">
+        <div className="bg-canvas border border-line rounded p-3 mb-3 font-mono text-xs">
           {descriptor.format === "standard" ? (
             <div className="grid grid-cols-3 gap-2 text-center">
               <div>
-                <div className="text-gray-500 mb-1">OPCODE</div>
-                <div className="text-indigo-300 font-bold">{breakdown.opcodeBits}</div>
-                <div className="text-gray-600 text-[10px]">[15:11]</div>
+                <div className="text-fg-muted mb-1">OPCODE</div>
+                <div className="text-fg font-medium">{breakdown.opcodeBits}</div>
+                <div className="text-fg-faint text-[10px]">[15:11]</div>
               </div>
               <div>
-                <div className="text-gray-500 mb-1">GPR</div>
-                <div className="text-green-300 font-bold">{breakdown.field1}</div>
-                <div className="text-gray-600 text-[10px]">[10:8]</div>
+                <div className="text-fg-muted mb-1">GPR</div>
+                <div className="text-st-active font-medium">{breakdown.field1}</div>
+                <div className="text-fg-faint text-[10px]">[10:8]</div>
               </div>
               <div>
-                <div className="text-gray-500 mb-1">OPERAND</div>
-                <div className="text-cyan-300 font-bold">{breakdown.field2}</div>
-                <div className="text-gray-600 text-[10px]">[7:0]</div>
+                <div className="text-fg-muted mb-1">OPERAND</div>
+                <div className="text-fg font-medium">{breakdown.field2}</div>
+                <div className="text-fg-faint text-[10px]">[7:0]</div>
               </div>
             </div>
           ) : (
             <div className="grid grid-cols-5 gap-2 text-center">
               <div>
-                <div className="text-gray-500 mb-1">OPCODE</div>
-                <div className="text-indigo-300 font-bold">{breakdown.opcodeBits}</div>
-                <div className="text-gray-600 text-[10px]">[15:11]</div>
+                <div className="text-fg-muted mb-1">OPCODE</div>
+                <div className="text-fg font-medium">{breakdown.opcodeBits}</div>
+                <div className="text-fg-faint text-[10px]">[15:11]</div>
               </div>
               <div>
-                <div className="text-gray-500 mb-1">SRC_A</div>
-                <div className="text-green-300 font-bold">{breakdown.srcABits}</div>
-                <div className="text-gray-600 text-[10px]">[10:8]</div>
+                <div className="text-fg-muted mb-1">SRC_A</div>
+                <div className="text-st-active font-medium">{breakdown.srcABits}</div>
+                <div className="text-fg-faint text-[10px]">[10:8]</div>
               </div>
               <div>
-                <div className="text-gray-500 mb-1">SRC_B</div>
-                <div className="text-cyan-300 font-bold">{breakdown.srcBBits}</div>
-                <div className="text-gray-600 text-[10px]">[7:5]</div>
+                <div className="text-fg-muted mb-1">SRC_B</div>
+                <div className="text-fg font-medium">{breakdown.srcBBits}</div>
+                <div className="text-fg-faint text-[10px]">[7:5]</div>
               </div>
               <div>
-                <div className="text-gray-500 mb-1">PAD</div>
-                <div className="text-gray-600 font-bold">{breakdown.padBits}</div>
-                <div className="text-gray-600 text-[10px]">[4:3]</div>
+                <div className="text-fg-muted mb-1">PAD</div>
+                <div className="text-fg-faint font-medium">{breakdown.padBits}</div>
+                <div className="text-fg-faint text-[10px]">[4:3]</div>
               </div>
               <div>
-                <div className="text-gray-500 mb-1">DST</div>
-                <div className="text-orange-300 font-bold">{breakdown.dstBits}</div>
-                <div className="text-gray-600 text-[10px]">[2:0]</div>
+                <div className="text-fg-muted mb-1">DST</div>
+                <div className="text-st-warn font-medium">{breakdown.dstBits}</div>
+                <div className="text-fg-faint text-[10px]">[2:0]</div>
               </div>
             </div>
           )}
@@ -291,14 +291,14 @@ export default function InstructionBuilder({ imem, onClose, initialAddress = 0 }
         {/* Result */}
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <span className="text-sm text-gray-400">Hex: </span>
-            <span className="text-lg font-mono font-bold text-indigo-300">
+            <span className="text-sm text-fg-muted">Hex: </span>
+            <span className="num font-mono text-lg text-fg">
               {formatHex(encodedValue, 16)}
             </span>
           </div>
           <div>
-            <span className="text-sm text-gray-400">Binary: </span>
-            <span className="text-xs font-mono text-gray-300">
+            <span className="text-sm text-fg-muted">Binary: </span>
+            <span className="text-xs font-mono text-fg">
               {formatBinary(encodedValue, 16)}
             </span>
           </div>
@@ -306,22 +306,22 @@ export default function InstructionBuilder({ imem, onClose, initialAddress = 0 }
       </div>
 
       {/* Action Buttons */}
-      <div className="flex gap-3 pt-4 border-t border-gray-700">
+      <div className="flex gap-3 pt-4 border-t border-line">
         <button
           onClick={handleSet}
-          className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2 px-4 rounded transition-colors"
+          className="flex-1 rounded-lg border border-line-strong bg-raised px-4 py-2 text-xs text-fg transition-colors hover:border-st-active"
         >
-          Set Instruction
+          Set instruction
         </button>
         <button
           onClick={handleClear}
-          className="bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded transition-colors"
+          className="rounded-lg border border-line px-4 py-2 text-xs text-fg-muted transition-colors hover:border-line-strong hover:text-fg"
         >
           Clear
         </button>
         <button
           onClick={onClose}
-          className="bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded transition-colors"
+          className="rounded-lg border border-line px-4 py-2 text-xs text-fg-muted transition-colors hover:border-line-strong hover:text-fg"
         >
           Cancel
         </button>

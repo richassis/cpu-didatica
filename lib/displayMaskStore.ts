@@ -16,7 +16,7 @@ import { create } from "zustand";
 import type { TickSnapshot, SubstepGroup } from "./executionStore";
 import { applySnapshot } from "./executionStore";
 import { useSimulatorStore } from "./simulatorStore";
-import { Gpr, Memory, InstructionMemory } from "./simulator";
+import { Gpr, Memory, InstructionMemory, Register } from "./simulator";
 
 interface DisplayMaskState {
   /** Whether progressive reveal is active (only during timeline animation). */
@@ -96,6 +96,10 @@ function applyComponentTargetState(componentId: string, targetSnapshot: TickSnap
   }
   if ((obj instanceof Memory || obj instanceof InstructionMemory) && targetState.cells) {
     obj.load(targetState.cells);
+  }
+  // Restore a value held back from the output port (PC-style registers).
+  if (obj instanceof Register) {
+    obj.setPendingValue(targetState.pending ?? null);
   }
 
   // Restore output port values from the post-tick snapshot.
