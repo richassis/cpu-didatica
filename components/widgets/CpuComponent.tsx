@@ -5,19 +5,25 @@ import { Props } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayStore, formatNum, type NumericBase } from "@/lib/displayStore";
 import NodeShell from "@/components/widgets/NodeShell";
+import CpuFsmGraph from "@/components/widgets/CpuFsmGraph";
 import FlagSquares from "@/components/widgets/FlagSquares";
 import { CpuState, CONTROL_SIGNAL_DEFS } from "@/lib/simulator/Cpu";
-import { CPU_STATE_LABELS } from "@/lib/simulator/CpuState";
 import type { CPU } from "@/lib/simulator/Cpu";
 
 /**
- * There used to be a private STATE_LABELS here in short form (WRREG2) next to
- * the canonical long form in CpuState.ts (WRITEREG2), so the same phase read
- * under two different names depending on where you looked. One name now.
+ * The 10 control-signal outputs, in the order the CPU class declares them —
+ * this is also the order `getPortOffset` walks when it auto-places the bottom
+ * ports (nothing here overrides `offset` in the widget definition), so a
+ * signal's index in this array is its index among the bottom ports too. The
+ * strip below reuses that same `(i + 1) / (n + 1)` formula so its dots land
+ * under the real port dots without having to measure anything.
  */
-function stateLabel(state: CpuState): string {
-  return CPU_STATE_LABELS[state] ?? "???";
-}
+const BOTTOM_SIGNAL_ORDER = [
+  "muxPC", "wrPC", "wrIR", "rdMem", "wrMem",
+  "muxAReg", "muxDReg", "wrReg", "opULA", "muxAMem",
+] as const;
+
+const SIGNAL_BITS = Object.fromEntries(CONTROL_SIGNAL_DEFS.map((d) => [d.name, d.bitWidth]));
 
 /** Read every control-signal output port value from the CPU instance. */
 function readSignals(cpu: CPU): Record<string, number | boolean> {
@@ -43,10 +49,12 @@ function formatSignal(value: number | boolean, bits: number, base: NumericBase):
  * it is not part of the datapath, it commands it. It carries no clock notch —
  * the notch marks datapath storage.
  *
- * This component used to own two maps assigning a hue per CPU phase, eleven
- * hues in total against a budget of four. Both are gone. A phase is now an
- * outlined pill that takes the accent only while it is the current one, which
- * is the same rule every other state indicator follows.
+ * A wide, short block rather than the old tall one: the FSM graph reads left
+ * to right (FETCH → DECODE → the chosen branch), so the shape follows the
+ * content instead of fighting it. The old state headline and the row-per-
+ * signal list are both gone — the graph shows the phase, and the signal strip
+ * along the bottom edge shows each control line right next to the port it
+ * actually drives, instead of in a list disconnected from the wiring.
  */
 export default function CpuComponent({ component, zoom }: Props) {
   const { id } = component;
@@ -60,6 +68,7 @@ export default function CpuComponent({ component, zoom }: Props) {
 
   const nextState = cpu ? (cpu.state as CpuState) : CpuState.FETCH;
   const currentState = cpu ? (cpu.previousState as CpuState) : CpuState.RESET;
+  const opcode = cpu ? Number(cpu.in_opcode.value) : 0;
   const halted = cpu ? cpu.halted : false;
   const paused = cpu ? cpu.paused : false;
   const signals = cpu ? readSignals(cpu) : {};
@@ -74,21 +83,22 @@ export default function CpuComponent({ component, zoom }: Props) {
       component={component}
       zoom={zoom}
       control
+      dense
       state={halted ? "error" : undefined}
-      value={
-        <span className="flex flex-col items-center leading-none">
-          <span className="font-mono text-[18px] font-medium">
-            {paused ? "PAUSED" : halted ? "HALT" : stateLabel(currentState)}
-          </span>
-          {!paused && !halted && (
-            <span className="mt-1 font-mono text-[10px] text-fg-faint">
-              → {stateLabel(nextState)}
-            </span>
-          )}
-        </span>
-      }
       actions={
         <>
+          {paused && (
+            <span className="shrink-0 rounded-md border border-st-warn px-1.5 py-0.5 font-mono text-[10px] text-st-warn">
+              PAUSED
+            </span>
+          )}
+          <FlagSquares
+            flags={[
+              { label: "Z", on: !!cpu && cpu.in_flagZero.value !== 0, title: "Zero flag" },
+              { label: "C", on: !!cpu && cpu.in_flagCarry.value !== 0, title: "Carry flag" },
+              { label: "N", on: !!cpu && cpu.in_flagNegative.value !== 0, title: "Negative flag" },
+            ]}
+          />
           <button
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => {
@@ -117,44 +127,41 @@ export default function CpuComponent({ component, zoom }: Props) {
         </>
       }
     >
-      <div className="flex shrink-0 items-center justify-between border-b border-line px-2 py-1">
-        <span className="font-mono text-[10px] text-fg-faint">flags</span>
-        <FlagSquares
-          flags={[
-            { label: "Z", on: !!cpu && cpu.in_flagZero.value !== 0, title: "Zero flag" },
-            { label: "C", on: !!cpu && cpu.in_flagCarry.value !== 0, title: "Carry flag" },
-            { label: "N", on: !!cpu && cpu.in_flagNegative.value !== 0, title: "Negative flag" },
-          ]}
+      <div className="min-h-0 flex-1 px-2 pt-1">
+        <CpuFsmGraph
+          currentState={currentState}
+          nextState={nextState}
+          opcode={opcode}
+          halted={halted}
         />
       </div>
 
-      {/* High-density signal list: name → value. An asserted signal is marked
-          by a filled dot and full-strength text, not by a coloured row. */}
-      <div className="flex-1 overflow-y-auto">
-        {CONTROL_SIGNAL_DEFS.map((def) => {
-          const active = isOn(def.name);
+      {/* Signal strip: one dot per bottom control port, positioned with the
+          same (i+1)/(n+1) formula the port itself is auto-placed with, so a
+          dot sits directly under its port regardless of the node's width. */}
+      <div className="relative h-9 shrink-0 border-t border-line">
+        {BOTTOM_SIGNAL_ORDER.map((name, i) => {
+          const active = isOn(name);
+          const left = ((i + 1) / (BOTTOM_SIGNAL_ORDER.length + 1)) * 100;
           return (
             <div
-              key={def.name}
-              className="flex items-center justify-between gap-1 px-2 py-[2px]"
+              key={name}
+              className="absolute top-1 flex -translate-x-1/2 flex-col items-center gap-0.5"
+              style={{ left: `${left}%` }}
             >
-              <span className="w-20 shrink-0 truncate font-mono text-[11px] text-fg-faint">
-                {def.name}
+              <span
+                className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                  active ? "bg-st-active" : "bg-line-strong"
+                }`}
+              />
+              <span className={`font-mono text-[8px] leading-none ${active ? "text-fg" : "text-fg-faint"}`}>
+                {name}
               </span>
-              <div className="flex items-center gap-1.5">
-                <span
-                  className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                    active ? "bg-st-active" : "bg-line-strong"
-                  }`}
-                />
-                <span
-                  className={`num min-w-[1.75rem] text-right font-mono text-[11px] ${
-                    active ? "text-fg" : "text-fg-faint"
-                  }`}
-                >
-                  {formatSignal(signals[def.name] ?? 0, def.bitWidth, base)}
-                </span>
-              </div>
+              <span
+                className={`num font-mono text-[9px] leading-none ${active ? "text-fg" : "text-fg-faint"}`}
+              >
+                {formatSignal(signals[name] ?? 0, SIGNAL_BITS[name] ?? 1, base)}
+              </span>
             </div>
           );
         })}

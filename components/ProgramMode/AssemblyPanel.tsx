@@ -131,13 +131,22 @@ export default function AssemblyPanel() {
   const assemblySource    = useProgramDataStore((s) => s.assemblySource);
   const setAssemblySource = useProgramDataStore((s) => s.setAssemblySource);
   const assemblyErrors    = useProgramDataStore((s) => s.assemblyErrors);
+  const assembled         = useProgramDataStore((s) => s.assembled);
 
   const isLoaded          = useExecutionStore((s) => s.isLoaded);
   const totalTicks        = useExecutionStore((s) => s.totalTicks);
   const isTimelineActive  = useExecutionStore((s) => s.isTimelineActive);
+  const frames            = useExecutionStore((s) => s.frames);
+  const currentIndex      = useExecutionStore((s) => s.currentIndex);
   const isRunning         = useProgramDataStore((s) => s.isRunning);
 
   const isLocked = isTimelineActive || isRunning;
+
+  // The line executing right now, if any — the PC is stable across every tick
+  // of one instruction, so this only changes at FETCH.
+  const currentPc = isTimelineActive ? frames[currentIndex]?.postTick?.pc : undefined;
+  const currentLine =
+    assembled && currentPc !== undefined ? assembled.lineForAddress[currentPc] : undefined;
 
   const activePreset = PRESET_PROGRAMS.find((p) => p.source === assemblySource) ?? null;
 
@@ -145,17 +154,23 @@ export default function AssemblyPanel() {
   const overlayRef  = useRef<HTMLDivElement>(null);
   const gutterRef   = useRef<HTMLDivElement>(null);
 
-  // Sync scroll: textarea drives gutter + overlay
+  // Sync scroll: textarea drives gutter + overlay. Both axes — a long line
+  // scrolls the textarea horizontally too, and without mirroring scrollLeft
+  // the highlighted text (and the line highlight) drift out from under it.
   const [scrollTop, setScrollTop] = useState(0);
+  const [scrollLeft, setScrollLeft] = useState(0);
   const handleScroll = () => {
-    const top = textareaRef.current?.scrollTop ?? 0;
-    setScrollTop(top);
+    setScrollTop(textareaRef.current?.scrollTop ?? 0);
+    setScrollLeft(textareaRef.current?.scrollLeft ?? 0);
   };
 
   useEffect(() => {
-    if (gutterRef.current)  gutterRef.current.scrollTop  = scrollTop;
-    if (overlayRef.current) overlayRef.current.scrollTop = scrollTop;
-  }, [scrollTop]);
+    if (gutterRef.current) gutterRef.current.scrollTop = scrollTop;
+    if (overlayRef.current) {
+      overlayRef.current.scrollTop = scrollTop;
+      overlayRef.current.scrollLeft = scrollLeft;
+    }
+  }, [scrollTop, scrollLeft]);
 
   function handlePresetChange(id: string) {
     const p = PRESET_PROGRAMS.find((x) => x.id === id);
@@ -216,7 +231,13 @@ export default function AssemblyPanel() {
           aria-hidden
         >
           {Array.from({ length: lineCount }, (_, i) => (
-            <div key={i} className="num text-fg-faint" style={{ lineHeight: "inherit" }}>
+            <div key={i} className="relative num text-fg-faint" style={{ lineHeight: "inherit" }}>
+              {currentLine === i + 1 && (
+                <span
+                  className="absolute -left-0.5 top-0 bottom-0 w-0.5 rounded-full bg-st-active"
+                  aria-hidden
+                />
+              )}
               {i + 1}
             </div>
           ))}
@@ -231,11 +252,23 @@ export default function AssemblyPanel() {
             className={`absolute inset-0 overflow-hidden whitespace-pre pointer-events-none select-none ${FONT_CLASS} ${PAD_CLASS}`}
             aria-hidden
           >
-            {lines.map((line, i) => (
-              <div key={i} style={{ lineHeight: "inherit" }}>
-                <HighlightedLine line={line} />
-              </div>
-            ))}
+            {lines.map((line, i) => {
+              const isCurrent = currentLine === i + 1;
+              return (
+                <div
+                  key={i}
+                  className={isCurrent ? "-mx-2 px-2" : undefined}
+                  style={{
+                    lineHeight: "inherit",
+                    background: isCurrent
+                      ? "color-mix(in srgb, var(--st-active) 12%, transparent)"
+                      : undefined,
+                  }}
+                >
+                  <HighlightedLine line={line} />
+                </div>
+              );
+            })}
           </div>
 
           {/* Transparent textarea (editing surface) */}

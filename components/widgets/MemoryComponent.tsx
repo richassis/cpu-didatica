@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { List, Pencil } from "lucide-react";
 import { Props } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
@@ -8,8 +8,6 @@ import { useCanvasEditing } from "@/components/CanvasEditingContext";
 import { useDisplayStore, formatNum, type NumericBase } from "@/lib/displayStore";
 import NodeShell from "@/components/widgets/NodeShell";
 import MemoryViewer from "@/components/MemoryViewer";
-
-const WINDOW = 3; // rows above and below the addressed word
 
 function fmtAddr(addr: number, addrBits: number) {
   return "0x" + addr.toString(16).toUpperCase().padStart(Math.ceil(addrBits / 4), "0");
@@ -30,6 +28,7 @@ export default function MemoryComponent({ component, zoom }: Props) {
   // Poking values is an authoring act, so it belongs to edit mode. In program
   // mode the memory is readable in full and writable nowhere.
   const canEdit = useCanvasEditing();
+  const currentRowRef = useRef<HTMLDivElement>(null);
 
   const revision = useSimulatorStore((s) => s.revision);
   const mem = useSimulatorStore((s) => s.getMemory(id));
@@ -46,9 +45,9 @@ export default function MemoryComponent({ component, zoom }: Props) {
   const dataIn = mem?.in_data.value ?? 0;
   const dataOut = mem?.output ?? 0;
 
-  const startIdx = Math.max(0, addr - WINDOW);
-  const endIdx = Math.min(wordCount - 1, addr + WINDOW);
-  const windowRows = Array.from({ length: endIdx - startIdx + 1 }, (_, i) => startIdx + i);
+  useEffect(() => {
+    currentRowRef.current?.scrollIntoView({ block: "nearest" });
+  }, [addr]);
 
   const readCell = useCallback((addr: number) => mem?.peek(addr) ?? 0, [mem]);
 
@@ -59,6 +58,7 @@ export default function MemoryComponent({ component, zoom }: Props) {
       zoom={zoom}
       sequential
       spine
+      dense
       // Survives to mid zoom, where the address list does not.
       value={formatNum(wrMem ? dataIn : dataOut, base, bitWidth)}
       compactValue
@@ -118,56 +118,44 @@ export default function MemoryComponent({ component, zoom }: Props) {
           ))}
         </div>
       ) : (
-        <>
-          <div className="flex flex-1 flex-col justify-center gap-px px-1.5 py-1 pl-3">
-            {startIdx > 0 && (
-              <div className="py-0.5 text-center font-mono text-[9px] text-fg-faint">
-                + {startIdx} above
-              </div>
-            )}
-
-            {windowRows.map((a) => {
-              const isActive = a === addr;
-              return (
-                <div
-                  key={a}
-                  className={`flex items-center gap-1.5 rounded px-1 transition-colors ${
-                    isActive ? "py-[5px]" : "py-[2px]"
+        <div
+          className="flex min-h-0 flex-1 flex-col overflow-y-auto px-1.5 py-1 pl-3"
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          {Array.from({ length: wordCount }, (_, a) => a).map((a) => {
+            const isActive = a === addr;
+            return (
+              <div
+                key={a}
+                ref={isActive ? currentRowRef : undefined}
+                className="flex shrink-0 items-center gap-1.5 rounded px-1 py-[2px] transition-colors"
+                style={
+                  isActive
+                    ? { background: "color-mix(in srgb, var(--st-data) 8%, transparent)" }
+                    : undefined
+                }
+              >
+                <span
+                  className={`shrink-0 font-mono text-[9px] leading-none ${
+                    isActive ? "text-fg" : "text-transparent"
                   }`}
-                  style={
-                    isActive
-                      ? { background: "color-mix(in srgb, var(--st-data) 8%, transparent)" }
-                      : undefined
-                  }
                 >
-                  <span
-                    className={`shrink-0 font-mono text-[9px] leading-none ${
-                      isActive ? "text-fg" : "text-transparent"
-                    }`}
-                  >
-                    ▶
-                  </span>
-                  <span className="num shrink-0 font-mono text-[10px] text-fg-faint">
-                    {fmtAddr(a, addrBits)}
-                  </span>
-                  <span
-                    className={`num flex-1 text-right font-mono ${
-                      isActive ? "text-[13px] text-fg" : "text-[10px] text-fg-muted"
-                    }`}
-                  >
-                    {formatNum(mem?.peek(a) ?? 0, base, bitWidth)}
-                  </span>
-                </div>
-              );
-            })}
-
-            {endIdx < wordCount - 1 && (
-              <div className="py-0.5 text-center font-mono text-[9px] text-fg-faint">
-                + {wordCount - 1 - endIdx} below
+                  ▶
+                </span>
+                <span className="num shrink-0 font-mono text-[10px] text-fg-faint">
+                  {fmtAddr(a, addrBits)}
+                </span>
+                <span
+                  className={`num flex-1 text-right font-mono ${
+                    isActive ? "text-[11px] text-fg" : "text-[10px] text-fg-muted"
+                  }`}
+                >
+                  {formatNum(mem?.peek(a) ?? 0, base, bitWidth)}
+                </span>
               </div>
-            )}
-          </div>
-        </>
+            );
+          })}
+        </div>
       )}
     </NodeShell>
 

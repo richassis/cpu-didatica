@@ -406,6 +406,18 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
     return () => window.removeEventListener("resize", onResize);
   }, [fitToScreen]);
 
+  // Keep the datapath fitted when its own pane resizes without the window
+  // resizing — Program Mode's code region widens and narrows around Executar,
+  // which changes how much width the datapath gets without ever firing a
+  // window resize event.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => fitToScreen());
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [fitToScreen]);
+
   return (
     <div
       ref={scrollRef}
@@ -437,11 +449,12 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
             // out, a node keeps its silhouette and loses its anatomy; without
             // this the whole datapath is unreadable noise the moment the
             // student pulls back to see it end to end.
-            // "full" starts just under the zoom fitToScreen typically lands on,
-            // so the default view shows the anatomy; the thresholds exist to
-            // declutter when the student pulls back, not to blank the first
-            // screen they see.
-            data-lod={zoom < 0.5 ? "low" : zoom < 0.85 ? "mid" : "full"}
+            // "full" starts just under the zoom fitToScreen typically lands on
+            // (~73% at a common window size), so the default view shows the
+            // full anatomy — memory address lists, the CPU's FSM graph and
+            // signal strip — rather than the "dense" mid-zoom fallback, which
+            // exists for pulling back further, not for the first screen.
+            data-lod={zoom < 0.4 ? "low" : zoom < 0.6 ? "mid" : "full"}
             style={{
               width: CANVAS_WIDTH,
               height: CANVAS_HEIGHT,

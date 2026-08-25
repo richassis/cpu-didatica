@@ -278,8 +278,15 @@ body {
    ──────────────────────────────────────────────────────────────────────── */
 [data-lod="low"] .node-badge,
 [data-lod="low"] .node-value,
-[data-lod="low"] .node-anatomy,
-[data-lod="mid"] .node-anatomy {
+[data-lod="low"] .node-anatomy {
+  display: none;
+}
+
+/* Anatomy that exists specifically to be readable before the student zooms in
+   — address lists, the control unit's FSM graph and signal strip — survives
+   the `mid` band with a denser rendering instead of disappearing with the
+   rest of the anatomy. It still goes with everything else at `low`. */
+[data-lod="mid"] .node-anatomy:not(.node-anatomy--dense) {
   display: none;
 }
 

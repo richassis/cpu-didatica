@@ -19,7 +19,7 @@ import { persist } from "zustand/middleware";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useExecutionStore } from "@/lib/executionStore";
 import { InstructionMemory } from "@/lib/simulator";
-import { assemble, type AssemblyError } from "@/lib/assembler";
+import { assemble, type AssembleResult, type AssemblyError } from "@/lib/assembler";
 import { loadTestProgram } from "@/lib/testProgram";
 import { PRESET_PROGRAMS } from "@/lib/presetPrograms";
 import { triggerDownload } from "@/lib/download";
@@ -66,9 +66,24 @@ interface ProgramDataState {
   /** Errors from the most recent assembly attempt (empty = success or not yet run). */
   assemblyErrors: AssemblyError[];
 
+  /**
+   * Result of assembling the current source, kept fresh as the student types
+   * (debounced) so the bytecode panel can show the program forming without
+   * waiting for Executar. `null` for empty source or while nothing has been
+   * assembled yet.
+   */
+  assembled: AssembleResult | null;
+
   /** Assemble, load, and execute the current program source. */
   runProgram: () => void;
 }
+
+function computeAssembled(source: string): AssembleResult | null {
+  return assemble(source);
+}
+
+/** Debounce handle for live assembly, module-level so it survives across calls. */
+let assembleTimer: ReturnType<typeof setTimeout> | null = null;
 
 export const useProgramDataStore = create<ProgramDataState>()(
   persist(
@@ -77,8 +92,17 @@ export const useProgramDataStore = create<ProgramDataState>()(
       programName: DEFAULT_PROGRAM_BASENAME,
       isRunning: false,
       assemblyErrors: [],
+      assembled: computeAssembled(PRESET_PROGRAMS[0].source),
 
-      setAssemblySource: (src) => set({ assemblySource: src }),
+      setAssemblySource: (src) => {
+        set({ assemblySource: src });
+        if (assembleTimer) clearTimeout(assembleTimer);
+        assembleTimer = setTimeout(() => {
+          assembleTimer = null;
+          const result = computeAssembled(get().assemblySource);
+          set({ assembled: result, assemblyErrors: result?.errors ?? [] });
+        }, 300);
+      },
 
       setProgramName: (name) => set({ programName: name }),
 
@@ -100,7 +124,14 @@ export const useProgramDataStore = create<ProgramDataState>()(
               );
               return;
             }
-            set({ assemblySource: text, programName: programNameFromFile(file.name) });
+            if (assembleTimer) { clearTimeout(assembleTimer); assembleTimer = null; }
+            const result = computeAssembled(text);
+            set({
+              assemblySource: text,
+              programName: programNameFromFile(file.name),
+              assembled: result,
+              assemblyErrors: result?.errors ?? [],
+            });
             resolve();
           };
           reader.onerror = () => reject(reader.error);
@@ -116,7 +147,11 @@ export const useProgramDataStore = create<ProgramDataState>()(
         const { isRunning, assemblySource } = get();
         if (isRunning) return;
 
-        set({ isRunning: true, assemblyErrors: [] });
+        // Flush any pending debounce so the result used to run is exactly the
+        // one shown in the bytecode panel, not a stale one mid-keystroke.
+        if (assembleTimer) { clearTimeout(assembleTimer); assembleTimer = null; }
+        const result = computeAssembled(assemblySource);
+        set({ isRunning: true, assembled: result, assemblyErrors: result?.errors ?? [] });
 
         const execution = useExecutionStore.getState();
         if (execution.isTimelineActive) {
@@ -125,14 +160,12 @@ export const useProgramDataStore = create<ProgramDataState>()(
 
         window.setTimeout(() => {
           try {
-            const result = assemble(assemblySource);
-
             if (result === null) {
               // Empty source — fall back to the built-in test program.
               loadTestProgram();
             } else if (result.errors.length > 0) {
               // Assembly failed: show errors, do not execute.
-              set({ assemblyErrors: result.errors, isRunning: false });
+              set({ isRunning: false });
               return;
             } else {
               // Assembly succeeded: load words into IMEM, reset data memory.
@@ -159,11 +192,15 @@ export const useProgramDataStore = create<ProgramDataState>()(
       version: 1,
       // Only the document, never the run. `isRunning` in particular must not
       // come back from storage, or a reload during a run leaves the Run button
-      // permanently disabled.
+      // permanently disabled. `assembled` is derived, so it is recomputed on
+      // rehydration rather than persisted.
       partialize: (state) => ({
         assemblySource: state.assemblySource,
         programName: state.programName,
       }),
+      onRehydrateStorage: () => (state) => {
+        if (state) state.assembled = computeAssembled(state.assemblySource);
+      },
     }
   )
 );

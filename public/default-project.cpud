@@ -9,9 +9,9 @@
       "type": "CpuComponent",
       "label": "UC",
       "x": 1280,
-      "y": 96,
-      "w": 176,
-      "h": 304,
+      "y": 160,
+      "w": 528,
+      "h": 240,
       "meta": {},
       "state": {
         "ports": {
@@ -89,7 +89,7 @@
       "x": 864,
       "y": 736,
       "w": 160,
-      "h": 192,
+      "h": 288,
       "meta": {
         "bitWidth": 16,
         "wordCount": 256
@@ -519,7 +519,7 @@
       "type": "InstructionMemoryComponent",
       "label": "IMEM1",
       "w": 160,
-      "h": 192,
+      "h": 288,
       "x": 624,
       "y": 448,
       "state": {
@@ -1036,16 +1036,7 @@
       "targetPortName": "operation",
       "label": "",
       "visible": true,
-      "nodes": [
-        {
-          "x": 1440,
-          "y": 448
-        },
-        {
-          "x": 1936,
-          "y": 448
-        }
-      ]
+      "nodes": []
     },
     {
       "id": "108f3344-561d-41de-af52-f6e1c3d9d73b",
@@ -1055,16 +1046,7 @@
       "targetPortName": "in_writeEnable",
       "label": "",
       "visible": true,
-      "nodes": [
-        {
-          "x": 1424,
-          "y": 464
-        },
-        {
-          "x": 1520,
-          "y": 464
-        }
-      ]
+      "nodes": []
     },
     {
       "id": "62efc209-0765-4e58-8eca-92374a1c1635",
@@ -1074,16 +1056,7 @@
       "targetPortName": "sel",
       "label": "",
       "visible": true,
-      "nodes": [
-        {
-          "x": 1296,
-          "y": 416
-        },
-        {
-          "x": 336,
-          "y": 416
-        }
-      ]
+      "nodes": []
     },
     {
       "id": "1ca52b2a-f19c-40f5-9290-cff0749e3370",
@@ -1093,16 +1066,7 @@
       "targetPortName": "writeEnable",
       "label": "",
       "visible": true,
-      "nodes": [
-        {
-          "x": 1312,
-          "y": 432
-        },
-        {
-          "x": 496,
-          "y": 432
-        }
-      ]
+      "nodes": []
     },
     {
       "id": "24f9d965-2d56-4559-af88-99a9057469b3",
@@ -1112,16 +1076,7 @@
       "targetPortName": "writeEnable",
       "label": "",
       "visible": true,
-      "nodes": [
-        {
-          "x": 1328,
-          "y": 448
-        },
-        {
-          "x": 896,
-          "y": 448
-        }
-      ]
+      "nodes": []
     },
     {
       "id": "80a77060-1909-47a5-9d61-63356997205f",
@@ -1131,16 +1086,7 @@
       "targetPortName": "wrMem",
       "label": "",
       "visible": true,
-      "nodes": [
-        {
-          "x": 1360,
-          "y": 480
-        },
-        {
-          "x": 960,
-          "y": 480
-        }
-      ]
+      "nodes": []
     },
     {
       "id": "ec63cf01-8630-4584-9f26-38e6b6a7259e",
@@ -1220,24 +1166,7 @@
       "targetPortName": "data",
       "label": "",
       "visible": true,
-      "nodes": [
-        {
-          "x": 1840,
-          "y": 960
-        },
-        {
-          "x": 832,
-          "y": 960
-        },
-        {
-          "x": 832,
-          "y": 896
-        },
-        {
-          "x": 848,
-          "y": 896
-        }
-      ]
+      "nodes": []
     },
     {
       "id": "5f65b437-f008-46bb-8276-8bc4b09508ec",
@@ -1247,16 +1176,7 @@
       "targetPortName": "addr",
       "label": "",
       "visible": true,
-      "nodes": [
-        {
-          "x": 848,
-          "y": 384
-        },
-        {
-          "x": 848,
-          "y": 832
-        }
-      ]
+      "nodes": []
     },
     {
       "id": "93cd9ecb-237b-41a9-835c-9a665ca3b083",
@@ -1368,16 +1288,7 @@
       "targetPortName": "sel",
       "label": "",
       "visible": true,
-      "nodes": [
-        {
-          "x": 1376,
-          "y": 496
-        },
-        {
-          "x": 1328,
-          "y": 496
-        }
-      ]
+      "nodes": []
     },
     {
       "id": "c00b9a2f-7051-429c-9e25-e2510f631a13",
@@ -1387,16 +1298,7 @@
       "targetPortName": "sel",
       "label": "",
       "visible": true,
-      "nodes": [
-        {
-          "x": 1392,
-          "y": 512
-        },
-        {
-          "x": 1376,
-          "y": 512
-        }
-      ]
+      "nodes": []
     },
     {
       "id": "dc5cc45c-b9ba-4358-ac75-07c603566556",
@@ -1431,16 +1333,7 @@
       "targetPortName": "rdMem",
       "label": "",
       "visible": true,
-      "nodes": [
-        {
-          "x": 1344,
-          "y": 464
-        },
-        {
-          "x": 928,
-          "y": 464
-        }
-      ]
+      "nodes": []
     },
     {
       "id": "dfdb9650-4328-4e5b-8f5e-bfcf00ba38cf",

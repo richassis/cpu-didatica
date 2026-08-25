@@ -20,6 +20,12 @@ export interface TickSnapshot {
   halted: boolean;
   /** CPU internal fields not captured by serializeObjects(). */
   cpuInternalState: CpuInternalStateSnapshot;
+  /**
+   * Value of the PC register at this tick. Thanks to `holdOutputUntilFetch`
+   * this is stable across every tick of one instruction — it only changes at
+   * FETCH — which is exactly what a source-line highlight needs.
+   */
+  pc: number;
 }
 
 /** An ordered group of components that reveal together during a substep. */
@@ -169,17 +175,34 @@ export function applySnapshot(snapshot: TickSnapshot): void {
   }
 }
 
-function captureSnapshot(index: number): TickSnapshot {
+/**
+ * Resolve the PC register's component id from wiring, not from a hardcoded id —
+ * a project's ids are arbitrary (the default project's own IMEM id is a
+ * generated uuid), so the only reliable way to find "the PC" is to follow the
+ * CPU's own `out_wrPC` control signal to whatever register it drives.
+ */
+function resolvePcRegisterId(cpuId: string): string | null {
+  const wire = useSimulatorStore
+    .getState()
+    .getWires()
+    .find((w) => w.sourceComponentId === cpuId && w.sourcePortName === "out_wrPC");
+  return wire?.targetComponentId ?? null;
+}
+
+function captureSnapshot(index: number, pcRegisterId: string | null): TickSnapshot {
   const sim = useSimulatorStore.getState();
   const cpu = sim.getPrimaryCpu();
+  const state = cloneStateMap(sim.serializeObjects());
+  const pc = pcRegisterId ? Number(state.get(pcRegisterId)?.ports.value ?? 0) : 0;
 
   return {
     index,
-    state: cloneStateMap(sim.serializeObjects()),
+    state,
     cpuState: cpu?.state ?? CpuState.FETCH,
     opcode: Number(cpu?.in_opcode?.value ?? 0),
     halted: cpu?.halted ?? false,
     cpuInternalState: toCpuInternalState(index),
+    pc,
   };
 }
 
@@ -209,9 +232,12 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
         if (memEntry) (memEntry[1] as Memory).load(dataWords);
       }
 
+      const cpuForPc = sim.getPrimaryCpu();
+      const pcRegisterId = cpuForPc ? resolvePcRegisterId(cpuForPc.id) : null;
+
       // Frame 0: initial state. No tick has run, so pre === post and there are
       // no substeps to reveal.
-      const initialSnapshot = captureSnapshot(0);
+      const initialSnapshot = captureSnapshot(0, pcRegisterId);
       frames.push({
         index: 0,
         preTick: initialSnapshot,
@@ -225,13 +251,13 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
         if (cpu?.halted) break;
 
         // State BEFORE the tick — what widgets/wires show when this frame opens.
-        const preSnapshot = captureSnapshot(tickCount);
+        const preSnapshot = captureSnapshot(tickCount, pcRegisterId);
 
         sim.tickClock();
         tickCount += 1;
 
         // State AFTER the tick — fully propagated final values.
-        const postSnapshot = captureSnapshot(tickCount);
+        const postSnapshot = captureSnapshot(tickCount, pcRegisterId);
 
         // Group by the state that just executed (CPU.previousState), matching
         // the state the wire-animation overlay groups wires by.
