@@ -7,6 +7,7 @@
  */
 
 import type { ProjectData } from "./projectStore";
+import { EDITOR_ENABLED } from "./editorFlag";
 
 /** ID for the default project - never changes */
 export const DEFAULT_PROJECT_ID = "default-full-datapath";
@@ -28,8 +29,12 @@ export function isDefaultProject(projectId: string | null): boolean {
  */
 export async function createDefaultProject(): Promise<ProjectData> {
   try {
-    // Try to load the default project from the repository
-    const response = await fetch('/default-project.cpud');
+    // In a developer build this file is rewritten by edit mode, so a cached
+    // response means "I edited, refreshed, and got the old datapath back". In
+    // a published build it is immutable per deploy, so let the browser cache it.
+    const response = await fetch('/default-project.cpud', {
+      cache: EDITOR_ENABLED ? 'no-store' : 'default',
+    });
     if (!response.ok) {
       throw new Error(`Failed to load default project: ${response.status}`);
     }

@@ -9,6 +9,7 @@ import { useDisplayStore, formatNum, isInstantSpeed } from "@/lib/displayStore";
 import { useWireCreationStore } from "@/lib/wireCreationStore";
 import { useWireSelectionStore } from "@/lib/wireSelectionStore";
 import { useProjectStore } from "@/lib/projectStore";
+import { useCanvasEditing } from "@/components/CanvasEditingContext";
 import {
   calculatePortPosition,
   getPortPlacement,
@@ -17,6 +18,7 @@ import {
 } from "@/lib/portPositioning";
 import { getWidgetDefinition } from "@/lib/widgetDefinitions";
 import {
+  GRID_SIZE,
   buildWirePath,
   enforceOrthogonal,
   escapePort,
@@ -30,7 +32,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import type { WireDescriptor } from "@/lib/simulator";
 import { Register } from "@/lib/simulator";
 
-const GRID_SIZE = 16;
+
 const HIT_AREA_WIDTH = 14;
 
 type SegmentOrientation = "horizontal" | "vertical";
@@ -60,6 +62,11 @@ export default function EnhancedBusOverlay({
   visible: boolean;
   previewRejected?: boolean;
 }) {
+  // Every wire-editing affordance below hangs off this. The overlay used to
+  // ask nothing at all, so dragging a segment, inserting a corner and deleting
+  // a wire with the Delete key all worked on the read-only canvas.
+  const editing = useCanvasEditing();
+
   const components = useLayoutStore((s) => s.components);
   const zoom = useLayoutStore((s) => s.zoom);
   const objects = useSimulatorStore((s) => s.objects);
@@ -596,12 +603,16 @@ export default function EnhancedBusOverlay({
 
   const commitWireNodes = useCallback(
     (wireId: string, nodes: Point[]) => {
+      // The only writer into the project's wire geometry. Guarding here means
+      // no future caller can route around the UI gating below.
+      if (!editing) return;
       updateWireNodes(wireId, normalizeNodes(nodes));
     },
-    [updateWireNodes]
+    [editing, updateWireNodes]
   );
 
   useEffect(() => {
+    if (!editing) return;
     if (!dragNodeState && !dragSegmentState) return;
 
     const handleMouseMove = (e: MouseEvent) => {
@@ -699,7 +710,7 @@ export default function EnhancedBusOverlay({
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [dragNodeState, dragSegmentState, zoom, wireDataById, commitWireNodes, endDrag]);
+  }, [editing, dragNodeState, dragSegmentState, zoom, wireDataById, commitWireNodes, endDrag]);
 
   const handleDeleteSelection = useCallback(() => {
     if (!selectedWireId) return;
@@ -731,6 +742,10 @@ export default function EnhancedBusOverlay({
   ]);
 
   useEffect(() => {
+    // Without this the Delete key removed wires from anywhere on the page,
+    // including while the student was typing in the assembly editor.
+    if (!editing) return;
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         deselectWire();
@@ -742,7 +757,7 @@ export default function EnhancedBusOverlay({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedWireId, handleDeleteSelection, deselectWire]);
+  }, [editing, selectedWireId, handleDeleteSelection, deselectWire]);
 
   if (!visible) return null;
 
@@ -819,7 +834,8 @@ export default function EnhancedBusOverlay({
 
           return (
             <g key={wire.id}>
-              {editableChain.slice(0, -1).map((point, index) => {
+              {editing &&
+                editableChain.slice(0, -1).map((point, index) => {
                 const next = editableChain[index + 1];
                 const orientation: SegmentOrientation = point.y === next.y ? "horizontal" : "vertical";
                 const insertIndex = index;
@@ -891,11 +907,15 @@ export default function EnhancedBusOverlay({
                 fill="none"
                 stroke="transparent"
                 strokeWidth={HIT_AREA_WIDTH}
-                className="pointer-events-auto cursor-pointer"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  selectWire(wire.id);
-                }}
+                className={`pointer-events-auto ${editing ? "cursor-pointer" : ""}`}
+                onClick={
+                  editing
+                    ? (e) => {
+                        e.stopPropagation();
+                        selectWire(wire.id);
+                      }
+                    : undefined
+                }
                 onMouseEnter={() => setHoveredWire(wire.id)}
                 onMouseLeave={() => setHoveredWire(null)}
               />
@@ -905,19 +925,21 @@ export default function EnhancedBusOverlay({
 
                 return (
                   <g key={`${wire.id}-node-${index}`}>
-                    <rect
-                      x={node.x - 6}
-                      y={node.y - 6}
-                      width={12}
-                      height={12}
-                      fill="transparent"
-                      className="pointer-events-auto cursor-move"
-                      onMouseDown={(e) => {
-                        e.stopPropagation();
-                        selectNode(wire.id, index);
-                        startNodeDrag({ wireId: wire.id, nodeIndex: index });
-                      }}
-                    />
+                    {editing && (
+                      <rect
+                        x={node.x - 6}
+                        y={node.y - 6}
+                        width={12}
+                        height={12}
+                        fill="transparent"
+                        className="pointer-events-auto cursor-move"
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          selectNode(wire.id, index);
+                          startNodeDrag({ wireId: wire.id, nodeIndex: index });
+                        }}
+                      />
+                    )}
                     <rect
                       x={node.x - 4}
                       y={node.y - 4}
@@ -937,7 +959,7 @@ export default function EnhancedBusOverlay({
           );
         })}
       {/* ── Selected wire delete button ──────────────────────── */}
-      {selectedWireId && (() => {
+      {editing && selectedWireId && (() => {
         const wd = wireDataById.get(selectedWireId);
         if (!wd) return null;
         const mid = wd.path[Math.floor(wd.path.length / 2)];
@@ -957,7 +979,7 @@ export default function EnhancedBusOverlay({
       })()}
 
       {/* ── Segment hover handles ──────────────────────────── */}
-      {(selectedWireId || hoveredWireId) && (() => {
+      {editing && (selectedWireId || hoveredWireId) && (() => {
         const wireId = selectedWireId || hoveredWireId;
         if (!wireId) return null;
         const wd = wireDataById.get(wireId);

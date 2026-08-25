@@ -3,7 +3,7 @@
 import { useState, useRef } from "react";
 import { useProjectStore } from "@/lib/projectStore";
 import { isDefaultProject } from "@/lib/defaultProject";
-import { saveProjectToFile, loadProjectFromFile } from "@/lib/projectStore";
+import { saveProjectToFile, loadProjectFromFile, CPUD_FILE_EXTENSION } from "@/lib/projectStore";
 import { 
   Star, 
   ChevronDown, 
@@ -127,7 +127,7 @@ export default function ProjectSwitcher() {
       <input
         ref={fileInputRef}
         type="file"
-        accept=".cpud"
+        accept={CPUD_FILE_EXTENSION}
         className="hidden"
         onChange={handleFileSelected}
       />

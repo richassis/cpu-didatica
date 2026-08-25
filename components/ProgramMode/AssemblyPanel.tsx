@@ -173,7 +173,7 @@ export default function AssemblyPanel() {
         <h2 className="t-panel text-fg">Assembly</h2>
         {isLocked && (
           <span className="rounded-md border border-st-warn px-1.5 py-0.5 font-mono text-[10px] text-st-warn">
-            locked
+            travado
           </span>
         )}
       </div>
@@ -181,7 +181,7 @@ export default function AssemblyPanel() {
       {/* ── Preset selector ── */}
       <div className="shrink-0 border-b border-line px-3 py-2">
         <div className="flex items-center gap-2">
-          <label className="t-section shrink-0">Program</label>
+          <label className="t-section shrink-0">Programa</label>
           <select
             value={activePreset?.id ?? "__custom"}
             onChange={(e) => {
@@ -191,7 +191,7 @@ export default function AssemblyPanel() {
             className="h-9 flex-1 cursor-pointer rounded-lg border border-line bg-sunken px-2 font-mono text-[11px] text-fg focus:border-line-strong focus:outline-none disabled:cursor-not-allowed disabled:opacity-40"
           >
             {!activePreset && (
-              <option value="__custom" disabled>Custom</option>
+              <option value="__custom" disabled>Personalizado</option>
             )}
             {PRESET_PROGRAMS.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
@@ -253,7 +253,7 @@ export default function AssemblyPanel() {
               caret-st-active overflow-auto whitespace-pre ${FONT_CLASS} ${PAD_CLASS}
               ${isLocked ? "cursor-not-allowed" : ""}`}
             style={{ color: "transparent" }}
-            aria-label="Assembly source code"
+            aria-label="Código-fonte assembly"
           />
         </div>
       </div>
@@ -264,7 +264,7 @@ export default function AssemblyPanel() {
           {assemblyErrors.length > 0 && (
             <div className="space-y-0.5 rounded-lg border border-st-error px-2 py-1.5">
               <p className="font-mono text-[11px] text-st-error">
-                Assembly errors ({assemblyErrors.length})
+                Erros de montagem ({assemblyErrors.length})
               </p>
               {assemblyErrors.map((err, i) => (
                 <div key={i} className="font-mono text-[11px] text-fg-muted">
@@ -275,12 +275,12 @@ export default function AssemblyPanel() {
           )}
           {isLoaded && assemblyErrors.length === 0 && (
             <div className="rounded-lg border border-st-active px-2 py-1 font-mono text-[11px] text-st-active">
-              {totalTicks} ticks captured
+              {totalTicks} ticks capturados
             </div>
           )}
           {!assemblySource.trim() && (
             <div className="rounded-lg border border-st-warn px-2 py-1 font-mono text-[11px] text-st-warn">
-              Empty source — falling back to the default test program
+              Código vazio — o programa de teste padrão será usado
             </div>
           )}
         </div>

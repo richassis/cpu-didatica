@@ -4,7 +4,7 @@ import { useState, useRef, useCallback } from "react";
 import { List, Pencil } from "lucide-react";
 import { Props } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
-import { useIsEditMode } from "@/lib/modeStore";
+import { useCanvasEditing } from "@/components/CanvasEditingContext";
 import { useDisplayStore, formatNum, type NumericBase } from "@/lib/displayStore";
 import NodeShell from "@/components/widgets/NodeShell";
 import MemoryViewer from "@/components/MemoryViewer";
@@ -29,7 +29,7 @@ export default function MemoryComponent({ component, zoom }: Props) {
   const [viewerOpen, setViewerOpen] = useState(false);
   // Poking values is an authoring act, so it belongs to edit mode. In program
   // mode the memory is readable in full and writable nowhere.
-  const canEdit = useIsEditMode();
+  const canEdit = useCanvasEditing();
 
   const revision = useSimulatorStore((s) => s.revision);
   const mem = useSimulatorStore((s) => s.getMemory(id));

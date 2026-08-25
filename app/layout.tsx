@@ -23,8 +23,10 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CPU Simulator",
-  description: "Interactive CPU didactic simulator",
+  title: "CPU Didática",
+  description:
+    "Simulador didático de CPU: escreva um programa em assembly e acompanhe, " +
+    "tick a tick, o caminho de dados que o executa.",
 };
 
 export default function RootLayout({
@@ -36,7 +38,7 @@ export default function RootLayout({
     // suppressHydrationWarning: the inline script below stamps `data-theme` on
     // <html> before React hydrates, so the client DOM intentionally differs from
     // the server HTML on this one attribute.
-    <html lang="en" suppressHydrationWarning>
+    <html lang="pt-BR" suppressHydrationWarning>
       <head>
         {/*
           Apply the persisted colour profile before first paint, otherwise the

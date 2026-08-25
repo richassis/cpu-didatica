@@ -1,113 +1,98 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { Upload, Download, Play, Pencil, LoaderCircle } from "lucide-react";
 import { useModeStore } from "@/lib/modeStore";
 import { useProjectStore } from "@/lib/projectStore";
-import { DEFAULT_PROJECT_ID, DEFAULT_PROJECT_NAME, isDefaultProject } from "@/lib/defaultProject";
+import { DEFAULT_PROJECT_ID, isDefaultProject } from "@/lib/defaultProject";
 import { useProgramDataStore } from "@/lib/programDataStore";
+import { EDITOR_ENABLED } from "@/lib/editorFlag";
+import { CODE_FILE_ACCEPT } from "@/lib/codeFile";
+import SaveProgramDialog from "@/components/ProgramMode/SaveProgramDialog";
 import ThemeToggle from "./ThemeToggle";
 
 /**
  * Top bar for Program Mode (the default, end-user view).
  *
- * The I/O buttons are grouped into clusters with their own surface rather than
- * sitting loose side by side, so the bar reads as three regions instead of six
- * equally-weighted controls.
+ * It reads as three regions: what is open on the left, what you can do with it
+ * in the middle, and how to run it on the right. It used to carry four loose
+ * I/O buttons across two formats — the `.cpudat` pair is gone, and the code
+ * pair became "Abrir"/"Salvar" acting on a file with a visible name.
+ *
+ * The "Edit mode" entry point exists only in developer builds. Students never
+ * see it, and `enterEditMode` refuses anyway.
  */
 export default function TopBarProgram() {
   const enterEditMode = useModeStore((s) => s.enterEditMode);
   const activeTabId = useProjectStore((s) => s.activeTabId);
   const setActiveTab = useProjectStore((s) => s.setActiveTab);
   const loadDefaultProject = useProjectStore((s) => s.loadDefaultProject);
+
   const importAssembly = useProgramDataStore((s) => s.importAssembly);
-  const exportAssembly = useProgramDataStore((s) => s.exportAssembly);
-  const importData = useProgramDataStore((s) => s.importData);
-  const exportData = useProgramDataStore((s) => s.exportData);
+  const assemblySource = useProgramDataStore((s) => s.assemblySource);
+  const programName = useProgramDataStore((s) => s.programName);
   const isRunning = useProgramDataStore((s) => s.isRunning);
   const runProgram = useProgramDataStore((s) => s.runProgram);
 
-  const asmFileRef = useRef<HTMLInputElement>(null);
-  const dataFileRef = useRef<HTMLInputElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+
+  const lineCount = assemblySource.split("\n").length;
 
   const handleEnterEditMode = async () => {
-    const shouldEditDefault = window.confirm(
-      `Editar o datapath default ("${DEFAULT_PROJECT_NAME}")?\n` +
-        "As alterações serão salvas no arquivo default-project.cpud."
-    );
-
-    if (!shouldEditDefault) return;
-
     if (!isDefaultProject(activeTabId)) {
       await loadDefaultProject();
       setActiveTab(DEFAULT_PROJECT_ID);
     }
-
     enterEditMode();
   };
 
-  const handleImportAsm = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) importAssembly(file).catch(console.error);
-    e.target.value = "";
-  };
-
-  const handleImportData = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) importData(file).catch(console.error);
+    if (file) {
+      setImportError(null);
+      importAssembly(file).catch((err: unknown) => {
+        setImportError(err instanceof Error ? err.message : "Falha ao abrir o arquivo.");
+      });
+    }
     e.target.value = "";
   };
 
   return (
-    <div className="flex min-h-[48px] items-center justify-between border-b border-line bg-surface px-4 py-2">
-      <span className="t-body select-none text-fg">CPU Didática</span>
+    <div className="relative flex min-h-[48px] items-center justify-between border-b border-line bg-surface px-4 py-2">
+      {/* Left: what is open. The name is the anchor the file actions act on —
+          without it "Salvar" has no visible subject. */}
+      <div className="flex min-w-0 items-center gap-3">
+        <span className="t-body shrink-0 select-none text-fg">CPU Didática</span>
+        <span className="h-5 w-px shrink-0 bg-line" />
+        <span className="truncate font-mono text-[11px] text-fg-faint">
+          {programName}
+          <span className="text-fg-muted"> · {lineCount} linhas</span>
+        </span>
+      </div>
 
       <div className="flex items-center gap-2">
         <input
-          ref={asmFileRef}
+          ref={fileRef}
           type="file"
-          accept=".asm,.s"
+          accept={CODE_FILE_ACCEPT}
           className="hidden"
-          onChange={handleImportAsm}
-        />
-        <input
-          ref={dataFileRef}
-          type="file"
-          accept=".cpudat"
-          className="hidden"
-          onChange={handleImportData}
+          onChange={handleImport}
         />
 
         <Cluster>
           <ClusterButton
-            onClick={() => asmFileRef.current?.click()}
-            title="Import assembly source (.asm / .s)"
+            onClick={() => fileRef.current?.click()}
+            title="Abrir um arquivo de texto com código assembly"
           >
             <Upload size={14} strokeWidth={1.5} />
-            Import .asm
+            Abrir
           </ClusterButton>
           <ClusterDivider />
-          <ClusterButton onClick={exportAssembly} title="Export assembly source as program.asm">
+          <ClusterButton onClick={() => setSaveOpen(true)} title="Salvar o código em um arquivo">
             <Download size={14} strokeWidth={1.5} />
-            Export .asm
-          </ClusterButton>
-        </Cluster>
-
-        <Cluster>
-          <ClusterButton
-            onClick={() => dataFileRef.current?.click()}
-            title="Import data file (.cpudat) — loads GPR and memory values"
-          >
-            <Upload size={14} strokeWidth={1.5} />
-            Import data
-          </ClusterButton>
-          <ClusterDivider />
-          <ClusterButton
-            onClick={exportData}
-            title="Export data file (.cpudat) — saves GPR and memory values"
-          >
-            <Download size={14} strokeWidth={1.5} />
-            Export data
+            Salvar
           </ClusterButton>
         </Cluster>
       </div>
@@ -122,25 +107,43 @@ export default function TopBarProgram() {
           onClick={() => runProgram()}
           disabled={isRunning}
           className="inline-flex h-8 items-center gap-2 rounded-lg border border-line-strong bg-raised px-3 text-xs text-fg transition-colors hover:border-st-active disabled:cursor-not-allowed disabled:opacity-60"
-          title="Carregar programa e executar até HLT"
+          title="Montar o programa e executar até HLT"
         >
           {isRunning ? (
             <LoaderCircle size={14} strokeWidth={1.5} className="animate-spin text-st-active" />
           ) : (
             <Play size={14} strokeWidth={1.5} className="text-st-active" />
           )}
-          {isRunning ? "Running…" : "Run"}
+          {isRunning ? "Executando…" : "Executar"}
         </button>
 
-        <button
-          onClick={handleEnterEditMode}
-          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-line px-2.5 text-xs text-fg-muted transition-colors hover:border-line-strong hover:text-fg"
-          title="Entrar no modo de edição (desenvolvedor)"
-        >
-          <Pencil size={14} strokeWidth={1.5} />
-          Edit mode
-        </button>
+        {EDITOR_ENABLED && (
+          <button
+            onClick={handleEnterEditMode}
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-line px-2.5 text-xs text-fg-muted transition-colors hover:border-line-strong hover:text-fg"
+            title="Entrar no modo de edição (desenvolvedor)"
+          >
+            <Pencil size={14} strokeWidth={1.5} />
+            Edit mode
+          </button>
+        )}
       </div>
+
+      {/* Import failures used to go to console.error, so picking the wrong file
+          looked like nothing happening at all. */}
+      {importError && (
+        <div className="absolute left-1/2 top-full z-50 mt-2 w-[420px] max-w-[90vw] -translate-x-1/2 rounded-lg border border-st-error bg-surface px-3 py-2">
+          <p className="text-[11px] leading-snug text-st-error">{importError}</p>
+          <button
+            onClick={() => setImportError(null)}
+            className="mt-1 text-[11px] text-fg-muted underline-offset-2 hover:underline"
+          >
+            Fechar
+          </button>
+        </div>
+      )}
+
+      {saveOpen && <SaveProgramDialog onClose={() => setSaveOpen(false)} />}
     </div>
   );
 }

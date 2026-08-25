@@ -7,11 +7,14 @@
  */
 
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { persist, createJSONStorage, type StateStorage } from "zustand/middleware";
 import { v4 as uuidv4 } from "uuid";
 import type { ComponentInstance } from "@/lib/store";
 import type { WireDescriptor } from "@/lib/simulator";
 import { useSimulatorStore } from "@/lib/simulatorStore";
+import { GRID_SIZE } from "@/lib/wireRouting";
+import { triggerDownload } from "@/lib/download";
+import { EDITOR_ENABLED } from "@/lib/editorFlag";
 import { 
   createDefaultProject, 
   createEmptyProject, 
@@ -65,7 +68,7 @@ const CURRENT_PROJECT_VERSION = 6;
 /** Adder dimensions before v4, used to recognise instances that need shrinking. */
 const LEGACY_ADDER_SIZE = { w: 128, h: 176 } as const;
 const ADDER_SIZE = { w: 64, h: 96 } as const;
-const GRID_SIZE = 16;
+
 
 const snapToGridSize = (v: number) => Math.round(v / GRID_SIZE) * GRID_SIZE;
 
@@ -143,6 +146,13 @@ interface ProjectState {
   /** Load default project data asynchronously */
   loadDefaultProject: () => Promise<void>;
 }
+
+/** Storage that forgets everything, for builds that persist nothing. */
+const NO_STORAGE: StateStorage = {
+  getItem: () => null,
+  setItem: () => {},
+  removeItem: () => {},
+};
 
 export const useProjectStore = create<ProjectState>()(
   persist(
@@ -516,10 +526,20 @@ export const useProjectStore = create<ProjectState>()(
     }),
     {
       name: "simulator-projects",
+      // Student builds keep no project state at all: the datapath is read from
+      // the shipped file on every load, so there is nothing worth storing and
+      // a stale cache could only make the app disagree with the deploy.
+      storage: createJSONStorage(() => (EDITOR_ENABLED ? window.localStorage : NO_STORAGE)),
       partialize: (state) => ({
         tabs: state.tabs,
         activeTabId: state.activeTabId,
-        projectData: state.projectData,
+        // The reference datapath is never cached, in either build. It lives in
+        // `public/default-project.cpud` and is re-fetched on every load, so
+        // shipping a new layout reaches everyone without a version bump — the
+        // problem `CURRENT_PROJECT_VERSION` used to paper over.
+        projectData: Object.fromEntries(
+          Object.entries(state.projectData).filter(([id]) => id !== DEFAULT_PROJECT_ID)
+        ),
         showWelcome: state.tabs.length === 0,
       }),
       onRehydrateStorage: () => (state) => {
@@ -534,28 +554,15 @@ export const useProjectStore = create<ProjectState>()(
 );
 
 /**
- * Bring cached projects up to `CURRENT_PROJECT_VERSION`.
+ * Bring the developer's own cached projects up to `CURRENT_PROJECT_VERSION`.
  *
- * Projects live in localStorage and the default project is only re-fetched from
- * `/default-project.cpud` when it is absent, so shipping a new .cpud is not
- * enough on its own — without this, existing users would keep the old geometry
- * and would even write it back over the file.
+ * The default project is no longer part of this: it is never persisted, so a
+ * stale copy of the reference datapath cannot exist any more and there is
+ * nothing to migrate. This only touches projects a developer created.
  */
 function migrateProjectData(state: ProjectState): void {
-  for (const [projectId, project] of Object.entries(state.projectData)) {
+  for (const project of Object.values(state.projectData)) {
     if (!project || (project.version ?? 1) >= CURRENT_PROJECT_VERSION) continue;
-
-    // The default project is a reference datapath, not user content: its
-    // structure changed (PC holds its output, the adder became a +1 unit, the
-    // constant-1 source is gone). Patching a stale cached copy component by
-    // component is how it ends up in a half-migrated, subtly broken state, so
-    // drop it instead and let `loadDefaultProject()` fetch the shipped file.
-    // Edits made in edit mode are written back to that file, so nothing that was
-    // saved is lost.
-    if (projectId === DEFAULT_PROJECT_ID) {
-      delete state.projectData[projectId];
-      continue;
-    }
 
     // User projects only get the cosmetic changes.
     for (const component of project.components ?? []) {
@@ -629,15 +636,7 @@ export const CPUD_MIME_TYPE = "application/json";
 export function saveProjectToFile(project: ProjectData): void {
   const json = JSON.stringify(project, null, 2);
   const blob = new Blob([json], { type: CPUD_MIME_TYPE });
-  const url = URL.createObjectURL(blob);
-  
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${project.name}${CPUD_FILE_EXTENSION}`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  triggerDownload(blob, `${project.name}${CPUD_FILE_EXTENSION}`);
 }
 
 /**

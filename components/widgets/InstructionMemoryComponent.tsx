@@ -5,7 +5,8 @@ import { createPortal } from "react-dom";
 import { List } from "lucide-react";
 import { Props } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
-import { useIsEditMode } from "@/lib/modeStore";
+import { useCanvasEditing } from "@/components/CanvasEditingContext";
+import { EDITOR_ENABLED } from "@/lib/editorFlag";
 import NodeShell from "@/components/widgets/NodeShell";
 import MemoryViewer from "@/components/MemoryViewer";
 import InstructionBuilder from "@/components/InstructionBuilder";
@@ -38,7 +39,7 @@ export default function InstructionMemoryComponent({ component, zoom }: Props) {
   const [builderOpen, setBuilderOpen] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState(0);
-  const canEdit = useIsEditMode();
+  const canEdit = useCanvasEditing();
 
   const revision = useSimulatorStore((s) => s.revision);
   const imem = useSimulatorStore((s) => s.getInstructionMemory(id));
@@ -150,7 +151,8 @@ export default function InstructionMemoryComponent({ component, zoom }: Props) {
         />
       )}
 
-      {builderOpen &&
+      {EDITOR_ENABLED &&
+        builderOpen &&
         canEdit &&
         imem &&
         createPortal(
