@@ -19,6 +19,8 @@ import {
 export default function SimulationSettings() {
   const numericBase = useDisplayStore((s) => s.numericBase);
   const setNumericBase = useDisplayStore((s) => s.setNumericBase);
+  const showWiresAndPorts = useDisplayStore((s) => s.showWiresAndPorts);
+  const setShowWiresAndPorts = useDisplayStore((s) => s.setShowWiresAndPorts);
   const showCpuSignalWires = useDisplayStore((s) => s.showCpuSignalWires);
   const setShowCpuSignalWires = useDisplayStore((s) => s.setShowCpuSignalWires);
   const showDataSignalWires = useDisplayStore((s) => s.showDataSignalWires);
@@ -40,7 +42,7 @@ export default function SimulationSettings() {
 
   return (
     <div className="w-72">
-      <Section title="Values" first />
+      <Section title="Valores" first />
       <div className="mb-1 flex items-center gap-1">
         {(["hex", "dec", "bin", "oct"] as const).map((b) => (
           <button
@@ -58,41 +60,61 @@ export default function SimulationSettings() {
         ))}
       </div>
 
-      <Section title="Signals" />
+      <Section title="Sinais" />
       <div className="space-y-1">
+        {/* The master switch. It used to exist only on the edit-mode FAB, which
+            made it the one display setting a student could never reach — while
+            the three it governs were already here. */}
+        <Toggle label="Fios e portas" on={showWiresAndPorts} onChange={setShowWiresAndPorts} />
         <Toggle
-          label="Control signal wires"
+          label="Sinais de controle"
           on={showCpuSignalWires}
           onChange={setShowCpuSignalWires}
+          disabled={!showWiresAndPorts}
         />
-        <Toggle label="Data wires" on={showDataSignalWires} onChange={setShowDataSignalWires} />
-        <Toggle label="Value dots" on={showWireDots} onChange={setShowWireDots} />
-        <Toggle label="Port values" on={showPortValues} onChange={setShowPortValues} />
+        <Toggle
+          label="Fios de dados"
+          on={showDataSignalWires}
+          onChange={setShowDataSignalWires}
+          disabled={!showWiresAndPorts}
+        />
+        <Toggle
+          label="Pontos de valor"
+          on={showWireDots}
+          onChange={setShowWireDots}
+          disabled={!showWiresAndPorts}
+        />
+        <Toggle
+          label="Valores nas portas"
+          on={showPortValues}
+          onChange={setShowPortValues}
+          disabled={!showWiresAndPorts}
+        />
       </div>
 
-      <Section title="Animation" />
+      <Section title="Animação" />
       <div className="space-y-1">
-        <Toggle label="Enabled" on={animationEnabled} onChange={setAnimationEnabled} />
+        <Toggle label="Ativada" on={animationEnabled} onChange={setAnimationEnabled} />
         <Toggle
-          label="Control signals"
+          label="Sinais de controle"
           on={animateCpuSignals}
           onChange={setAnimateCpuSignals}
           disabled={!animationEnabled}
         />
         <Toggle
-          label="Data flow"
+          label="Fluxo de dados"
           on={animateDataSignals}
           onChange={setAnimateDataSignals}
           disabled={!animationEnabled}
         />
       </div>
 
-      <Section title="Speed" />
+      <Section title="Velocidade" />
       <div className="px-1">
         <div className="mb-1.5 flex items-baseline justify-between">
-          <span className="text-xs text-fg-muted">Per step</span>
+          <span className="text-xs text-fg-muted">Por passo</span>
           <span className="num font-mono text-xs text-fg">
-            {instant ? "instant" : `${animationDurationMs} ms`}
+            {instant ? "instantâneo" : `${animationDurationMs} ms`}
           </span>
         </div>
         <input
@@ -103,7 +125,7 @@ export default function SimulationSettings() {
           value={animationDurationMs}
           disabled={!animationEnabled}
           onChange={(e) => setAnimationDurationMs(Number(e.target.value))}
-          aria-label="Animation speed in milliseconds per step"
+          aria-label="Velocidade da animação em milissegundos por passo"
           className="timeline-slider h-4 w-full cursor-pointer appearance-none bg-transparent disabled:opacity-40"
           style={{
             background:
@@ -111,8 +133,8 @@ export default function SimulationSettings() {
           }}
         />
         <div className="flex items-center justify-between font-mono text-[10px] text-fg-faint">
-          <span>instant</span>
-          <span>slow</span>
+          <span>instantâneo</span>
+          <span>lento</span>
         </div>
       </div>
     </div>

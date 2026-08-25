@@ -1,8 +1,8 @@
 import { create } from "zustand";
-import { autoRoute, snapToGrid, type Point, type AABB } from "@/lib/wireRouting";
+import { GRID_SIZE, autoRoute, snapToGrid, type Point, type AABB } from "@/lib/wireRouting";
 import type { PortSide } from "@/lib/portPositioning";
 
-const GRID_SIZE = 16;
+
 
 type Direction = "input" | "output";
 

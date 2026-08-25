@@ -11,11 +11,7 @@ import {
 import {
   Plus,
   Minus,
-  Spline,
-  Cpu,
-  Database,
   Settings2,
-  Maximize2,
   Trash2,
   RotateCcw,
 } from "lucide-react";
@@ -25,9 +21,11 @@ import { useDisplayStore } from "@/lib/displayStore";
 import { useWireCreationStore } from "@/lib/wireCreationStore";
 import { useWireSelectionStore } from "@/lib/wireSelectionStore";
 import { useProjectStore } from "@/lib/projectStore";
-import { useModeStore } from "@/lib/modeStore";
+import { useAuthoring } from "@/lib/modeStore";
+import { CanvasEditingProvider } from "@/components/CanvasEditingContext";
+import { EDITOR_ENABLED } from "@/lib/editorFlag";
 import { useExecutionStore } from "@/lib/executionStore";
-import { snapToGrid } from "@/lib/wireRouting";
+import { GRID_SIZE, snapToGrid } from "@/lib/wireRouting";
 import { calculatePortPosition, type PortSide } from "@/lib/portPositioning";
 import WidgetRenderer from "./WidgetRenderer";
 import AddComponentModal from "./AddComponentModal";
@@ -35,7 +33,7 @@ import SimulationSettings from "./SimulationSettings";
 import EnhancedBusOverlay from "./EnhancedBusOverlay";
 import { useEffect, useRef, useState, useCallback } from "react";
 
-export const GRID_SIZE = 16;
+
 
 interface SimulatorCanvasProps {
   isReadOnly?: boolean;
@@ -52,19 +50,15 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
 
   // UI state
   const showWiresAndPorts = useDisplayStore((s) => s.showWiresAndPorts);
-  const setShowWiresAndPorts = useDisplayStore((s) => s.setShowWiresAndPorts);
-  const showCpuSignalWires = useDisplayStore((s) => s.showCpuSignalWires);
-  const setShowCpuSignalWires = useDisplayStore((s) => s.setShowCpuSignalWires);
-  const showDataSignalWires = useDisplayStore((s) => s.showDataSignalWires);
-  const setShowDataSignalWires = useDisplayStore((s) => s.setShowDataSignalWires);
   const [showAddModal, setShowAddModal] = useState(false);
   const [fabOpen, setFabOpen] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const [showDisplaySettings, setShowDisplaySettings] = useState(false);
 
-  // Mode state - determines what actions are allowed
-  const mode = useModeStore((s) => s.mode);
-  const isEditMode = mode === "edit" && !isReadOnly;
+  // Mode state — determines what actions are allowed. `useAuthoring()` already
+  // folds in the build flag, so a published build can never land here true.
+  const authoring = useAuthoring();
+  const isEditMode = authoring && !isReadOnly;
 
   const executionTick = useExecutionStore((s) => s.currentIndex);
 
@@ -434,7 +428,8 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
         deselectWire();
       }}
     >
-      <DndContext sensors={isReadOnly ? [] : sensors} onDragEnd={handleDragEnd}>
+      <CanvasEditingProvider value={isEditMode}>
+      <DndContext sensors={isEditMode ? sensors : []} onDragEnd={handleDragEnd}>
         <div style={{ width: CANVAS_WIDTH * zoom, height: CANVAS_HEIGHT * zoom }}>
           <div
             className="relative origin-top-left"
@@ -467,18 +462,29 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
           </div>
         </div>
       </DndContext>
+      </CanvasEditingProvider>
 
       {/* ── FAB actions menu (bottom-right) ───────────────── */}
-      {!isReadOnly && (
-        <div
-          className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2"
-          onMouseDown={(e) => e.stopPropagation()} // prevent outside-click handler
-        >
+      {/* ── Bottom-right controls ─────────────────────────
+          The zoom cluster is a *viewing* control, not an authoring one, so it
+          renders in both modes. It used to sit inside the authoring guard,
+          which left program mode — the mode built for reading the datapath —
+          with no way to zoom or refit at all. Everything above it is authoring
+          and stays behind the guard. */}
+      <div
+        className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2"
+        onMouseDown={(e) => e.stopPropagation()} // prevent outside-click handler
+      >
         {/* Action items — slide up when open. Every item is neutral: these are
             commands, not states, so none of them is entitled to an accent. The
             only exception is the second press of Clear canvas, which is
-            destructive and says so. */}
-        {fabOpen && (
+            destructive and says so.
+
+            The wire-visibility toggles that used to live here are gone: they
+            duplicated switches in SimulationSettings, and the one that was
+            *only* here — the master "show wires" — was unreachable for
+            students. All four now live in the settings panel. */}
+        {!isReadOnly && fabOpen && (
           <div className="mb-1 flex flex-col items-end gap-2">
             {isEditMode && (
               <FabItem
@@ -489,43 +495,10 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
             )}
 
             <FabItem
-              label={showWiresAndPorts ? "Hide wires" : "Show wires"}
-              icon={<Spline size={16} strokeWidth={1.5} />}
-              on={showWiresAndPorts}
-              onClick={() => { setShowWiresAndPorts(!showWiresAndPorts); setFabOpen(false); }}
-            />
-
-            {showWiresAndPorts && (
-              <FabItem
-                label={showCpuSignalWires ? "Hide CPU signals" : "Show CPU signals"}
-                icon={<Cpu size={16} strokeWidth={1.5} />}
-                on={showCpuSignalWires}
-                onClick={() => { setShowCpuSignalWires(!showCpuSignalWires); setFabOpen(false); }}
-              />
-            )}
-
-            {showWiresAndPorts && (
-              <FabItem
-                label={showDataSignalWires ? "Hide data signals" : "Show data signals"}
-                icon={<Database size={16} strokeWidth={1.5} />}
-                on={showDataSignalWires}
-                onClick={() => { setShowDataSignalWires(!showDataSignalWires); setFabOpen(false); }}
-              />
-            )}
-
-            <FabItem
               label="Display settings"
               icon={<Settings2 size={16} strokeWidth={1.5} />}
               onClick={() => { setShowDisplaySettings(true); setFabOpen(false); }}
             />
-
-            {components.length > 0 && (
-              <FabItem
-                label="Fit to screen"
-                icon={<Maximize2 size={16} strokeWidth={1.5} />}
-                onClick={() => { fitToScreen(); setFabOpen(false); }}
-              />
-            )}
 
             {isEditMode && components.length > 0 && (
               <FabItem
@@ -540,7 +513,7 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
 
         {/* Display Settings Panel — the same component program mode mounts, so
             there is one definition of what a simulation setting is. */}
-        {showDisplaySettings && (
+        {!isReadOnly && showDisplaySettings && (
           <div
             className="mb-2 rounded-2xl border border-line bg-surface p-4"
             onMouseDown={(e) => e.stopPropagation()}
@@ -550,7 +523,8 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
         )}
 
         {/* Zoom controls — the only way to zoom. Wheel zoom and drag-to-pan are
-            gone on purpose: they used to fire by accident all the time. */}
+            gone on purpose: they used to fire by accident all the time. The
+            percentage doubles as "fit to screen". */}
         <div
           className="flex items-center gap-1 overflow-hidden rounded-full border border-line bg-surface px-1"
           onMouseDown={(e) => e.stopPropagation()}
@@ -560,35 +534,36 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
             disabled={zoom <= ZOOM_MIN}
             className="flex h-8 w-8 items-center justify-center rounded-full text-fg-muted transition-colors hover:text-fg disabled:opacity-30"
             title="Diminuir zoom"
-            aria-label="Zoom out"
+            aria-label="Diminuir zoom"
           ><Minus size={14} strokeWidth={1.5} /></button>
           <button
             onClick={fitToScreen}
             className="num min-w-[3.5rem] text-center font-mono text-xs text-fg-muted transition-colors hover:text-fg"
             title="Ajustar à tela"
-            aria-label="Fit to screen"
+            aria-label="Ajustar à tela"
           >{Math.round(zoom * 100)}%</button>
           <button
             onClick={() => recentre(Math.min(ZOOM_MAX, zoom + ZOOM_STEP))}
             disabled={zoom >= ZOOM_MAX}
             className="flex h-8 w-8 items-center justify-center rounded-full text-fg-muted transition-colors hover:text-fg disabled:opacity-30"
             title="Aumentar zoom"
-            aria-label="Zoom in"
+            aria-label="Aumentar zoom"
           ><Plus size={14} strokeWidth={1.5} /></button>
         </div>
 
         {/* Main FAB button */}
-        <button
-          onClick={() => { setFabOpen((v) => !v); setConfirmClear(false); setShowDisplaySettings(false); }}
-          className={`flex h-12 w-12 items-center justify-center rounded-full border border-line-strong bg-surface text-fg transition-transform ${
-            fabOpen ? "rotate-45" : ""
-          }`}
-          aria-label="Actions"
-        >
-          <Plus size={20} strokeWidth={1.5} />
-        </button>
-        </div>
-      )}
+        {!isReadOnly && (
+          <button
+            onClick={() => { setFabOpen((v) => !v); setConfirmClear(false); setShowDisplaySettings(false); }}
+            className={`flex h-12 w-12 items-center justify-center rounded-full border border-line-strong bg-surface text-fg transition-transform ${
+              fabOpen ? "rotate-45" : ""
+            }`}
+            aria-label="Actions"
+          >
+            <Plus size={20} strokeWidth={1.5} />
+          </button>
+        )}
+      </div>
 
       {/* ── Clock toolbar (bottom-left) ─────────────────────
           Edit mode only. In program mode the tick is read from the
@@ -624,7 +599,9 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
       </div>
       )}
 
-      <AddComponentModal open={showAddModal} onClose={() => setShowAddModal(false)} />
+      {EDITOR_ENABLED && isEditMode && (
+        <AddComponentModal open={showAddModal} onClose={() => setShowAddModal(false)} />
+      )}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import SimulatorCanvas from "@/components/SimulatorCanvas";
 import { ProgramModeLayout } from "@/components/ProgramMode";
 import TopBar from "@/components/TopBar";
@@ -9,7 +9,8 @@ import { useLayoutStore } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useModeStore } from "@/lib/modeStore";
 import { DEFAULT_PROJECT_ID, isDefaultProject } from "@/lib/defaultProject";
-import { enforceOrthogonal, simplifyOrthogonalPath } from "@/lib/wireRouting";
+import { EDITOR_ENABLED } from "@/lib/editorFlag";
+import { purgeLegacyStorage } from "@/lib/legacyStorage";
 import type { WireDescriptor } from "@/lib/simulator";
 
 export default function Home() {
@@ -32,14 +33,29 @@ export default function Home() {
   const getComponentTickOrderByState = useSimulatorStore((s) => s.getComponentTickOrderByState);
   const mode = useModeStore((s) => s.mode);
 
-  const [isHydrated, setIsHydrated] = useState(false);
+  /**
+   * False while the server renders and through the first client render, true
+   * afterwards — everything below reads localStorage or the simulator objects,
+   * neither of which exists on the server.
+   *
+   * `useSyncExternalStore` with a never-firing subscription rather than the
+   * usual `useState` + mount effect: it gives the same answer without a
+   * setState in an effect, and so without the cascading render that pattern
+   * costs on every load.
+   */
+  const isHydrated = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
+
   const previousActiveTabRef = useRef<string | null>(null);
   const pendingHydrationTabRef = useRef<string | null>(null);
   const lastDefaultPersistRef = useRef<string | null>(null);
 
-  // Wait for hydration
+  // Drop keys older builds wrote and nothing reads any more.
   useEffect(() => {
-    setIsHydrated(true);
+    purgeLegacyStorage();
   }, []);
 
   // Load default project data if needed
@@ -51,85 +67,6 @@ export default function Home() {
       loadDefaultProject();
     }
   }, [isHydrated, activeTabId, projectData, loadDefaultProject]);
-
-  // Migrate legacy enhanced wire storage into the currently active project once.
-  useEffect(() => {
-    if (!isHydrated || !activeTabId) return;
-
-    const raw = window.localStorage.getItem("enhanced-wire-storage");
-    if (!raw) return;
-
-    const current = projectData[activeTabId];
-    if (!current) return;
-
-    try {
-      const parsed = JSON.parse(raw) as {
-        state?: { wires?: Array<Record<string, unknown>> };
-        wires?: Array<Record<string, unknown>>;
-      };
-
-      const legacyWires = parsed.state?.wires ?? parsed.wires ?? [];
-      if (legacyWires.length === 0) {
-        window.localStorage.removeItem("enhanced-wire-storage");
-        return;
-      }
-
-      const mergedWires = [...current.wires];
-      let changed = false;
-
-      for (const legacy of legacyWires) {
-        const start = legacy.start as { componentId?: string; portName?: string; direction?: string } | undefined;
-        const end = legacy.end as { componentId?: string; portName?: string; direction?: string } | null | undefined;
-
-        if (!start || !end) continue;
-
-        let source = start;
-        let target = end;
-
-        if (start.direction === "input" && end.direction === "output") {
-          source = end;
-          target = start;
-        }
-
-        if (!source.componentId || !source.portName || !target.componentId || !target.portName) {
-          continue;
-        }
-
-        const index = mergedWires.findIndex(
-          (wire) =>
-            wire.sourceComponentId === source.componentId &&
-            wire.sourcePortName === source.portName &&
-            wire.targetComponentId === target.componentId &&
-            wire.targetPortName === target.portName
-        );
-
-        if (index < 0) continue;
-
-        const existingNodes = mergedWires[index].nodes ?? [];
-        if (existingNodes.length > 0) continue;
-
-        const legacyNodes = ((legacy.nodes as Array<{ x?: number; y?: number }> | undefined) ?? [])
-          .filter((node) => typeof node.x === "number" && typeof node.y === "number")
-          .map((node) => ({ x: node.x as number, y: node.y as number }));
-
-        if (legacyNodes.length === 0) continue;
-
-        mergedWires[index] = {
-          ...mergedWires[index],
-          nodes: simplifyOrthogonalPath(enforceOrthogonal(legacyNodes)),
-        };
-        changed = true;
-      }
-
-      if (changed) {
-        updateProjectData(activeTabId, { wires: mergedWires });
-      }
-    } catch (error) {
-      console.warn("Failed to migrate enhanced wire storage:", error);
-    } finally {
-      window.localStorage.removeItem("enhanced-wire-storage");
-    }
-  }, [isHydrated, activeTabId, projectData, updateProjectData]);
 
   // Sync layout store with project data when switching tabs
   useEffect(() => {
@@ -204,7 +141,13 @@ export default function Home() {
   ]);
 
   // Persist current runtime/layout state into the active project.
+  //
+  // Authoring only. In a published build the layout never changes — it is read
+  // from the shipped file and displayed — so there is nothing to write back,
+  // and this guard is what keeps the whole save path (including the
+  // `/api/default-project` URL) out of the student's bundle.
   useEffect(() => {
+    if (!EDITOR_ENABLED) return;
     if (!isHydrated || !activeTabId) return;
 
     const saveState = () => {
@@ -276,8 +219,8 @@ export default function Home() {
 
   if (!isHydrated) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-canvas">
-        <div className="text-fg-muted">Loading...</div>
+      <div className="flex flex-1 items-center justify-center bg-canvas">
+        <div className="text-sm text-fg-muted">Carregando…</div>
       </div>
     );
   }
@@ -285,7 +228,7 @@ export default function Home() {
   return (
     <div className="flex flex-col flex-1 min-h-0">
       <TopBar />
-      {mode === "edit" ? <SimulatorCanvas /> : <ProgramModeLayout />}
+      {EDITOR_ENABLED && mode === "edit" ? <SimulatorCanvas /> : <ProgramModeLayout />}
     </div>
   );
 }

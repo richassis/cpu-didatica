@@ -7,6 +7,8 @@ import { Settings2 } from "lucide-react";
 import type { ComponentInstance } from "@/lib/store";
 import { useNodeState, type NodeState } from "@/lib/useNodeState";
 import ConfigModal from "@/components/ConfigModal";
+import { useCanvasEditing } from "@/components/CanvasEditingContext";
+import { EDITOR_ENABLED } from "@/lib/editorFlag";
 import PortsOverlay from "@/components/PortsOverlay";
 import {
   Silhouette,
@@ -88,7 +90,20 @@ export default function NodeShell({
   const derivedState = useNodeState(id);
   const nodeState = state ?? derivedState;
 
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id });
+  // Everything below that can change the datapath hangs off this. The shell
+  // used to offer all of it unconditionally, which is how a read-only canvas
+  // still handed out "Remove component" on a double-click.
+  const editing = useCanvasEditing();
+
+  // The hook is called unconditionally — rules of hooks — and made inert with
+  // dnd-kit's own `disabled` flag rather than by withholding its listeners.
+  //
+  // `data-draggable` stays on the element in both modes: the canvas click
+  // handler reads it to decide what does *not* deselect a wire.
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id,
+    disabled: !editing,
+  });
   // The canvas is CSS-scaled, so dnd-kit's pixel delta has to be divided back
   // out or the node races ahead of the cursor at any zoom other than 100%.
   const correctedTransform = transform
@@ -103,7 +118,10 @@ export default function NodeShell({
     height: h,
     transform: CSS.Translate.toString(correctedTransform),
     zIndex: isDragging ? 50 : 10,
-    touchAction: "none",
+    // `touchAction: none` exists to stop the browser panning while a node is
+    // dragged. On a read-only canvas there is no drag, and it would only mean
+    // a tablet cannot scroll with a finger on top of a component.
+    touchAction: editing ? "none" : undefined,
   };
 
   const Glyph = GLYPHS[type];
@@ -113,17 +131,21 @@ export default function NodeShell({
       <div
         ref={setNodeRef}
         style={style}
-        {...listeners}
-        {...attributes}
+        {...(editing ? listeners : {})}
+        {...(editing ? attributes : {})}
         data-draggable
         data-state={nodeState}
-        className={`node group relative flex select-none flex-col cursor-grab active:cursor-grabbing ${
-          silhouette ? "" : "node--boxed"
-        } ${control ? "node--control" : ""}`}
-        onDoubleClick={(e) => {
-          e.stopPropagation();
-          setConfigOpen(true);
-        }}
+        className={`node group relative flex select-none flex-col ${
+          editing ? "cursor-grab active:cursor-grabbing" : ""
+        } ${silhouette ? "" : "node--boxed"} ${control ? "node--control" : ""}`}
+        onDoubleClick={
+          editing
+            ? (e) => {
+                e.stopPropagation();
+                setConfigOpen(true);
+              }
+            : undefined
+        }
         title={label}
       >
         {silhouette && silhouette !== "custom" && <Silhouette kind={silhouette} />}
@@ -146,17 +168,19 @@ export default function NodeShell({
         <div className="relative z-10 flex shrink-0 items-center gap-1 pl-6 pr-1 pt-0.5">
           <span className="node-title t-node min-w-0 flex-1 truncate leading-none">{label}</span>
           {actions}
-          <button
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              setConfigOpen(true);
-            }}
-            className="shrink-0 rounded p-0.5 text-fg-faint opacity-0 transition-opacity hover:text-fg focus-visible:opacity-100 group-hover:opacity-100"
-            aria-label={`Configure ${label}`}
-          >
-            <Settings2 size={12} strokeWidth={1.5} />
-          </button>
+          {editing && (
+            <button
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                setConfigOpen(true);
+              }}
+              className="shrink-0 rounded p-0.5 text-fg-faint opacity-0 transition-opacity hover:text-fg focus-visible:opacity-100 group-hover:opacity-100"
+              aria-label={`Configure ${label}`}
+            >
+              <Settings2 size={12} strokeWidth={1.5} />
+            </button>
+          )}
         </div>
 
         {value !== undefined && (
@@ -177,7 +201,12 @@ export default function NodeShell({
 
         <PortsOverlay componentId={id} />
       </div>
-      {configOpen && <ConfigModal component={component} onClose={() => setConfigOpen(false)} />}
+      {/* `EDITOR_ENABLED` is redundant with `editing` at runtime — the provider
+          already folds it in — but stating it here is a literal the bundler can
+          fold, which is what keeps ConfigModal out of the student's bundle. */}
+      {EDITOR_ENABLED && editing && configOpen && (
+        <ConfigModal component={component} onClose={() => setConfigOpen(false)} />
+      )}
     </>
   );
 }

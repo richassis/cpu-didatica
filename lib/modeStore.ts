@@ -17,6 +17,7 @@
  */
 
 import { create } from "zustand";
+import { EDITOR_ENABLED } from "./editorFlag";
 
 export type SimulatorMode = "program" | "edit";
 
@@ -55,6 +56,9 @@ export const useModeStore = create<ModeState>()((set, get) => ({
   },
 
   enterEditMode: () => {
+    // The single choke point. Builds without the editor can never reach edit
+    // mode, so a stray button surviving somewhere cannot expose authoring.
+    if (!EDITOR_ENABLED) return;
     set({ mode: "edit" });
   },
 
@@ -78,8 +82,13 @@ export function useIsEditMode(): boolean {
 }
 
 /**
- * @deprecated Use useIsEditMode() instead.
+ * The one question every authoring affordance asks: may this control mutate
+ * the datapath?
+ *
+ * Folds `EDITOR_ENABLED` into the mode check so no call site has to remember
+ * the build flag. In a published build this is a compile-time `false`.
  */
-export function useCanEdit(): boolean {
-  return useIsEditMode();
+export function useAuthoring(): boolean {
+  const isEdit = useModeStore((s) => s.mode === "edit");
+  return EDITOR_ENABLED && isEdit;
 }

@@ -6,7 +6,7 @@ import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useWireCreationStore } from "@/lib/wireCreationStore";
 import type { HoveredPort } from "@/lib/wireCreationStore";
 import { useDisplayStore } from "@/lib/displayStore";
-import { useModeStore } from "@/lib/modeStore";
+import { useCanvasEditing } from "@/components/CanvasEditingContext";
 import { getWidgetDefinition } from "@/lib/widgetDefinitions";
 import { findPortPosition, getPortPlacement, resolvePortConfig } from "@/lib/portPositioning";
 import type { PortSide } from "@/lib/portPositioning";
@@ -41,9 +41,9 @@ export default function PortsOverlay({ componentId }: Props) {
   const hoveredTargetPort = useWireCreationStore((s) => s.hoveredTargetPort);
 
   const showWiresAndPorts = useDisplayStore((s) => s.showWiresAndPorts);
-  const isEditMode = useModeStore((s) => s.mode === "edit");
-  // Port drag-to-connect is only available in Edit Mode on a non-read-only canvas
-  const isEditableCanvas = isEditMode;
+  // Port drag-to-connect is authoring, so it follows the canvas rather than the
+  // mode: the program-mode viewer mounts a read-only canvas even in edit mode.
+  const isEditableCanvas = useCanvasEditing();
 
   const isCreating = phase === "dragging";
 

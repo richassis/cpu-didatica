@@ -139,9 +139,16 @@ export function getPointOnOrthogonalPath(
 }
 
 /**
+ * The canvas grid. Everything that places a component or a wire corner snaps to
+ * it, so it is declared once here — beside `snapToGrid`, its only consumer —
+ * rather than being re-typed as a literal 16 in every store and overlay.
+ */
+export const GRID_SIZE = 16;
+
+/**
  * Snaps a value to the nearest grid point.
  */
-export function snapToGrid(value: number, gridSize: number): number {
+export function snapToGrid(value: number, gridSize: number = GRID_SIZE): number {
   return Math.round(value / gridSize) * gridSize;
 }
 

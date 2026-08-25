@@ -1,6 +1,7 @@
 "use client";
 
 import { useModeStore } from "@/lib/modeStore";
+import { EDITOR_ENABLED } from "@/lib/editorFlag";
 import TopBarProgram from "./TopBarProgram";
 import TopBarEdit from "./TopBarEdit";
 
@@ -12,5 +13,5 @@ import TopBarEdit from "./TopBarEdit";
  */
 export default function TopBar() {
   const mode = useModeStore((s) => s.mode);
-  return mode === "edit" ? <TopBarEdit /> : <TopBarProgram />;
+  return EDITOR_ENABLED && mode === "edit" ? <TopBarEdit /> : <TopBarProgram />;
 }

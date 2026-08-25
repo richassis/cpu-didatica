@@ -1,11 +1,10 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
 import { v4 as uuidv4 } from "uuid";
 import { useSimulatorStore } from "@/lib/simulatorStore";
-import { snapToGrid } from "@/lib/wireRouting";
+import { GRID_SIZE, snapToGrid } from "@/lib/wireRouting";
 import type { WireDescriptor } from "@/lib/simulator";
 
-const GRID_SIZE = 16;
+
 
 /**
  * Plain-JSON snapshot of a single component's runtime state.
@@ -55,7 +54,7 @@ export const CANVAS_HEIGHT = 3000;
 interface LayoutState {
   zoom: number;
   components: ComponentInstance[];
-  /** Serialised wire descriptors — persisted alongside components. */
+  /** Serialised wire descriptors, mirrored from the active project. */
   wires: WireDescriptor[];
   /**
    * Current scroll offset of the canvas scroll container (in CSS px).
@@ -72,7 +71,7 @@ interface LayoutState {
   removeComponent: (id: string) => void;
   clearComponents: () => void;
   setZoom: (zoom: number) => void;
-  /** Snapshot the current bus wires into persisted state. Called by simulatorStore after every wire change. */
+  /** Snapshot the current bus wires into layout state. Called by simulatorStore after every wire change. */
   saveWires: () => void;
   /** Snapshot current runtime values of all data-layer objects into each component's state field. */
   saveState: () => void;
@@ -81,9 +80,17 @@ interface LayoutState {
 const MIN_ZOOM = 0.4;
 const MAX_ZOOM = 1.5;
 
-export const useLayoutStore = create<LayoutState>()(
-  persist(
-    (set) => ({
+/**
+ * The canvas layout.
+ *
+ * Deliberately NOT persisted. `components`/`wires` here are a mirror of
+ * `projectData[activeTabId]`, which `app/page.tsx` re-hydrates on mount and on
+ * every project switch — persisting the mirror created a second source of
+ * truth that raced the project load, and that race is how a stale datapath
+ * survived a redeploy. `zoom` is equally pointless to keep: `fitToScreen()`
+ * runs on mount and overrides whatever was stored.
+ */
+export const useLayoutStore = create<LayoutState>()((set) => ({
       zoom: 1,
       components: [],
       wires: [],
@@ -173,53 +180,7 @@ export const useLayoutStore = create<LayoutState>()(
           ),
         }));
       },
-    }),
-    {
-      name: "simulator-layout",
-      // Don't persist transient viewport state
-      partialize: (state) => ({
-        zoom: state.zoom,
-        components: state.components,
-        wires: state.wires,
-      }),
-      onRehydrateStorage: () => (state) => {
-        // After rehydrating persisted components from localStorage,
-        // bootstrap the data-layer objects so UI reads work immediately.
-        if (!state) return;
-        const sim = useSimulatorStore.getState();
-        for (const c of state.components) {
-          if (!sim.objects.has(c.id)) {
-            sim.createObject(c.id, c.type, c.label, c.meta);
-          }
-        }
-        // Restore wire connections after all components are registered.
-        if (state.wires.length > 0) {
-          sim.restoreWires(state.wires);
-        }
-        // Restore runtime values (port values, register banks, memory cells)
-        const stateEntries = state.components
-          .filter((c) => c.state)
-          .map((c) => [c.id, c.state!] as const);
-        if (stateEntries.length > 0) {
-          sim.applyObjectStates(new Map(stateEntries));
-        }
-        
-        // Restore tick step configurations
-        const cpu = sim.getPrimaryCpu();
-        if (cpu) {
-          for (const c of state.components) {
-            if (c.tickSteps) {
-              cpu.setComponentTickSteps(c.id, c.tickSteps);
-            }
-            if (c.tickOrderByState) {
-              cpu.setComponentTickOrderByState(c.id, c.tickOrderByState);
-            }
-          }
-        }
-      },
-    }
-  )
-);
+}));
 
 export const ZOOM_STEP = 0.05;
 export const ZOOM_MIN = MIN_ZOOM;

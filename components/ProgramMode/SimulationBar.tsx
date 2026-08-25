@@ -105,7 +105,7 @@ export default function SimulationBar() {
           <div
             role="dialog"
             aria-modal="false"
-            aria-label={panel === "settings" ? "Simulation settings" : "Legend"}
+            aria-label={panel === "settings" ? "Ajustes da simulação" : "Legenda"}
             className="mb-2 ml-auto w-fit rounded-2xl border border-line bg-surface p-4"
           >
             {panel === "settings" ? <SimulationSettings /> : <Legend />}
@@ -119,14 +119,14 @@ export default function SimulationBar() {
                 <TransportButton
                   onClick={manual(goToStart)}
                   disabled={!canGoBack}
-                  title="Go to start"
+                  title="Ir para o início"
                 >
                   <SkipBack size={14} strokeWidth={1.5} />
                 </TransportButton>
                 <TransportButton
                   onClick={manual(stepBackward)}
                   disabled={!canGoBack}
-                  title="Back one tick"
+                  title="Voltar um tick"
                 >
                   <ChevronLeft size={16} strokeWidth={1.5} />
                 </TransportButton>
@@ -136,8 +136,8 @@ export default function SimulationBar() {
                     buttons rather than one hidden mode. */}
                 <button
                   onClick={togglePlay}
-                  title={isPlaying ? "Pause" : "Play through every tick"}
-                  aria-label={isPlaying ? "Pause" : "Play"}
+                  title={isPlaying ? "Pausar" : "Percorrer todos os ticks"}
+                  aria-label={isPlaying ? "Pausar" : "Reproduzir"}
                   className="flex h-8 items-center gap-1.5 rounded-lg border border-line-strong px-3 text-xs text-fg transition-colors hover:border-st-active"
                 >
                   {isPlaying ? (
@@ -145,20 +145,20 @@ export default function SimulationBar() {
                   ) : (
                     <Play size={14} strokeWidth={1.5} className="text-st-active" />
                   )}
-                  {isPlaying ? "Pause" : "Play"}
+                  {isPlaying ? "Pausar" : "Reproduzir"}
                 </button>
 
                 <TransportButton
                   onClick={manual(stepForward)}
                   disabled={!canGoForward}
-                  title="Forward one tick"
+                  title="Avançar um tick"
                 >
                   <ChevronRight size={16} strokeWidth={1.5} />
                 </TransportButton>
                 <TransportButton
                   onClick={manual(goToEnd)}
                   disabled={!canGoForward}
-                  title="Jump to the end, without animating"
+                  title="Ir para o fim, sem animar"
                 >
                   <SkipForward size={14} strokeWidth={1.5} />
                 </TransportButton>
@@ -170,19 +170,19 @@ export default function SimulationBar() {
                 </span>
               </>
             ) : (
-              <span className="text-xs text-fg-faint">Run a program to step through it.</span>
+              <span className="text-xs text-fg-faint">Execute um programa para percorrê-lo tick a tick.</span>
             )}
 
             <div className="ml-auto flex items-center gap-2">
               <PanelButton
-                label="Settings"
+                label="Ajustes"
                 active={panel === "settings"}
                 onClick={() => setPanel((p) => (p === "settings" ? null : "settings"))}
               >
                 <Settings2 size={14} strokeWidth={1.5} />
               </PanelButton>
               <PanelButton
-                label="Legend"
+                label="Legenda"
                 active={panel === "legend"}
                 onClick={() => setPanel((p) => (p === "legend" ? null : "legend"))}
               >
@@ -192,11 +192,11 @@ export default function SimulationBar() {
               {isTimelineActive && (
                 <button
                   onClick={manual(exitTimeline)}
-                  title="End the execution timeline"
+                  title="Encerrar a linha do tempo"
                   className="ml-1 flex h-8 items-center gap-1.5 rounded-lg border border-st-error px-3 text-xs text-st-error transition-colors hover:bg-st-error/10"
                 >
                   <X size={13} strokeWidth={1.5} />
-                  Exit
+                  Encerrar
                 </button>
               )}
             </div>

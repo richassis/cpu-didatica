@@ -57,9 +57,9 @@ export default function Legend() {
     <div className="w-[380px]">
       <div className="grid grid-cols-2 gap-x-4 gap-y-3">
             <div>
-              <div className="t-section mb-2">Shape — what it is</div>
+              <div className="t-section mb-2">Forma — o que é</div>
               <div className="space-y-2">
-                <ShapeSample label="Register" note="single value slot">
+                <ShapeSample label="Registrador" note="guarda um único valor">
                   <span className="node--boxed absolute inset-0 rounded-[6px]" />
                   <ClockNotch />
                   <span className="absolute left-0 top-0 flex h-4 w-4 items-center justify-center text-fg-faint">
@@ -67,7 +67,7 @@ export default function Legend() {
                   </span>
                 </ShapeSample>
 
-                <ShapeSample label="Memory" note="spine on the left edge">
+                <ShapeSample label="Memória" note="lombada na borda esquerda">
                   <span className="node--boxed absolute inset-0 rounded-[6px]" />
                   <MemorySpine />
                   <ClockNotch />
@@ -76,60 +76,81 @@ export default function Legend() {
                   </span>
                 </ShapeSample>
 
-                <ShapeSample label="ALU" note="notched trapezoid">
+                <ShapeSample label="ULA" note="trapézio com entalhe">
                   <Silhouette kind="alu" />
                 </ShapeSample>
 
-                <ShapeSample label="Multiplexer" note="trapezoid, no notch">
+                <ShapeSample label="Multiplexador" note="trapézio, sem entalhe">
                   <Silhouette kind="mux" />
                 </ShapeSample>
 
-                <ShapeSample label="Decoder" note="inverted trapezoid">
+                <ShapeSample label="Decodificador" note="trapézio invertido">
                   <Silhouette kind="decoder" />
                 </ShapeSample>
 
-                <ShapeSample label="Control unit" note="dashed — commands the datapath">
+                <ShapeSample label="Unidade de controle" note="tracejada — comanda o caminho de dados">
                   <span className="node--boxed node--control absolute inset-0 rounded-[6px]" />
                 </ShapeSample>
               </div>
             </div>
 
             <div>
-              <div className="t-section mb-2">Colour — what is happening</div>
+              <div className="t-section mb-2">Cor — o que está acontecendo</div>
               <div className="space-y-2">
                 <StateSample
                   color="var(--st-active)"
-                  label="Active"
-                  note="executing this tick"
+                  label="Ativo"
+                  note="executando neste tick"
                 />
                 <StateSample
                   color="var(--st-data)"
-                  label="Data"
-                  note="wire or register holding a value"
+                  label="Dado"
+                  note="fio ou registrador com valor"
                 />
-                <StateSample color="var(--st-warn)" label="Watch" note="flag set" />
-                <StateSample color="var(--st-error)" label="Error" note="halt, overflow, bad address" />
+                <StateSample color="var(--st-warn)" label="Atenção" note="flag ativada" />
+                <StateSample color="var(--st-error)" label="Erro" note="halt, overflow, endereço inválido" />
                 <StateSample
                   color="var(--border-strong)"
-                  label="Idle"
-                  note="not involved this tick"
+                  label="Ocioso"
+                  note="fora deste tick"
                 />
               </div>
 
               <div className="mt-4 border-t border-line pt-3">
-                <div className="t-section mb-1.5">Clock notch ▷</div>
+                <div className="t-section mb-1.5">Entalhe de clock ▷</div>
                 <p className="text-[10px] leading-snug text-fg-faint">
-                  Components carrying the notch are sequential — they latch on the clock.
-                  Those without it are combinational.
+                  Componentes com o entalhe são sequenciais — travam no clock.
+                  Os que não têm são combinacionais.
                 </p>
               </div>
             </div>
           </div>
 
+      <div className="mt-4 border-t border-line pt-3">
+        <div className="t-section mb-1.5">Atalhos</div>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+          <Shortcut keys="Espaço" note="reproduzir / pausar" />
+          <Shortcut keys="← →" note="um tick para trás / frente" />
+          <Shortcut keys="Home" note="início" />
+          <Shortcut keys="End" note="fim" />
+        </div>
+      </div>
+
       <p className="mt-3 border-t border-line pt-3 text-[10px] leading-snug text-fg-faint">
-        The two columns are independent. Shape never changes during execution, and
-        colour never tells you which component you are looking at.
+        As duas colunas são independentes. A forma nunca muda durante a execução, e
+        a cor nunca diz qual componente você está olhando.
       </p>
+    </div>
+  );
+}
+
+function Shortcut({ keys, note }: { keys: string; note: string }) {
+  return (
+    <div className="flex items-baseline gap-2">
+      <kbd className="shrink-0 rounded border border-line px-1 font-mono text-[10px] text-fg-muted">
+        {keys}
+      </kbd>
+      <span className="truncate text-[10px] text-fg-faint">{note}</span>
     </div>
   );
 }
