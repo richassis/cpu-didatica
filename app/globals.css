@@ -21,19 +21,19 @@
 :root {
   /* Surfaces — near-black with a cold bias. Never #000, never Tailwind slate. */
   --canvas:         #0E1214;
-  --surface:        #161B1E;
-  --surface-raised: rgba(255, 255, 255, 0.04);
+  --surface:        #1B2226;
+  --surface-raised: rgba(255, 255, 255, 0.13);
   --surface-sunken: rgba(0, 0, 0, 0.25);
 
   /* Stroke */
-  --border:        rgba(255, 255, 255, 0.08);
-  --border-strong: rgba(255, 255, 255, 0.16);
+  --border:        rgba(255, 255, 255, 0.20);
+  --border-strong: rgba(255, 255, 255, 0.36);
   --grid-dot:      rgba(255, 255, 255, 0.05);
 
   /* Text */
   --text:       #FFFFFF;
-  --text-muted: #8B9296;
-  --text-faint: #5A6165;
+  --text-muted: #9BA2A6;
+  --text-faint: #6B7278;
 
   /* State — four, plus one used at most once per screen. Adding a sixth means
      removing one of these. */
@@ -61,18 +61,18 @@
 }
 
 [data-theme="light"] {
-  --canvas:         #F2F4F5;
+  --canvas:         #EAEDEE;
   --surface:        #FFFFFF;
-  --surface-raised: rgba(14, 18, 20, 0.03);
+  --surface-raised: rgba(14, 18, 20, 0.11);
   --surface-sunken: rgba(14, 18, 20, 0.05);
 
-  --border:        rgba(14, 18, 20, 0.10);
-  --border-strong: rgba(14, 18, 20, 0.20);
+  --border:        rgba(14, 18, 20, 0.22);
+  --border-strong: rgba(14, 18, 20, 0.40);
   --grid-dot:      rgba(14, 18, 20, 0.08);
 
   --text:       #0E1214;
-  --text-muted: #5A6165;
-  --text-faint: #8B9296;
+  --text-muted: #4A5155;
+  --text-faint: #767D81;
 
   --st-active: #00875A;
   --st-data:   #1B5FD9;

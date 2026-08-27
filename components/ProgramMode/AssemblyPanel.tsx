@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { useProgramDataStore } from "@/lib/programDataStore";
 import { useExecutionStore } from "@/lib/executionStore";
 import { PRESET_PROGRAMS } from "@/lib/presetPrograms";
@@ -127,7 +128,7 @@ const FONT_CLASS  = "font-mono text-[13px] leading-[1.6]";
 const PAD_CLASS   = "px-2 pt-1 pb-4";
 const GUTTER_W    = 36; // px
 
-export default function AssemblyPanel() {
+export default function AssemblyPanel({ onToggleCollapse }: { onToggleCollapse: () => void }) {
   const assemblySource    = useProgramDataStore((s) => s.assemblySource);
   const setAssemblySource = useProgramDataStore((s) => s.setAssemblySource);
   const assemblyErrors    = useProgramDataStore((s) => s.assemblyErrors);
@@ -184,14 +185,22 @@ export default function AssemblyPanel() {
     <aside className="flex h-full w-full flex-col overflow-hidden border-r border-line bg-surface">
 
       {/* ── Header ── */}
-      <div className="flex shrink-0 items-center justify-between border-b border-line px-4 py-2">
-        <h2 className="t-panel text-fg">Assembly</h2>
-        {isLocked && (
-          <span className="rounded-md border border-st-warn px-1.5 py-0.5 font-mono text-[10px] text-st-warn">
-            travado
-          </span>
-        )}
-      </div>
+      <button
+        onClick={onToggleCollapse}
+        aria-expanded="true"
+        title="Recolher Assembly"
+        className="flex shrink-0 items-center justify-between border-b border-line px-4 py-2 text-left transition-colors hover:bg-raised"
+      >
+        <span className="flex items-center gap-2">
+          <h2 className="t-panel text-fg">Assembly</h2>
+          {isLocked && (
+            <span className="rounded-md border border-st-warn px-1.5 py-0.5 font-mono text-[10px] text-st-warn">
+              travado
+            </span>
+          )}
+        </span>
+        <ChevronDown size={14} strokeWidth={1.5} className="shrink-0 text-fg-faint" />
+      </button>
 
       {/* ── Preset selector ── */}
       <div className="shrink-0 border-b border-line px-3 py-2">
@@ -313,7 +322,7 @@ export default function AssemblyPanel() {
           )}
           {!assemblySource.trim() && (
             <div className="rounded-lg border border-st-warn px-2 py-1 font-mono text-[11px] text-st-warn">
-              Código vazio — o programa de teste padrão será usado
+              Código vazio — nada a montar
             </div>
           )}
         </div>

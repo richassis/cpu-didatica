@@ -227,7 +227,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     // the block is called on screen.
     label: "Control unit (UC)",
     namePrefix: "UC",
-    defaultWidth: 528,  // 33 grid cells — wide enough for the FSM graph and 10 bottom ports at 48px pitch
+    defaultWidth: 704,  // 44 grid cells — 10 bottom ports at 64px pitch, room for the FSM columns
     defaultHeight: 240, // 15 grid cells
     description: "Control unit (UC) — FSM state and control signals",
     // CPU: input ports (opcode/flags) on left, all control signal outputs on

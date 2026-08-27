@@ -114,12 +114,12 @@ export default function InstructionMemoryComponent({ component, zoom }: Props) {
                 >
                   ▶
                 </span>
-                <span className="num shrink-0 font-mono text-[10px] text-fg-faint">
+                <span className="num shrink-0 font-mono text-[11px] text-fg-faint">
                   {fmtAddr(a, addrBits)}
                 </span>
                 <span
                   className={`num flex-1 text-right font-mono ${
-                    isCurrent ? "text-[11px] text-fg" : "text-[10px] text-fg-muted"
+                    isCurrent ? "text-[12.5px] text-fg" : "text-[11px] text-fg-muted"
                   }`}
                 >
                   {formatNum(imem?.peek(a) ?? 0, base, bitWidth)}

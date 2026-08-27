@@ -8,9 +8,9 @@
       "id": "cpu-1",
       "type": "CpuComponent",
       "label": "UC",
-      "x": 1280,
+      "x": 1136,
       "y": 160,
-      "w": 528,
+      "w": 704,
       "h": 240,
       "meta": {},
       "state": {

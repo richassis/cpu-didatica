@@ -139,7 +139,7 @@ export default function CpuComponent({ component, zoom }: Props) {
       {/* Signal strip: one dot per bottom control port, positioned with the
           same (i+1)/(n+1) formula the port itself is auto-placed with, so a
           dot sits directly under its port regardless of the node's width. */}
-      <div className="relative h-9 shrink-0 border-t border-line">
+      <div className="relative h-11 shrink-0 border-t border-line">
         {BOTTOM_SIGNAL_ORDER.map((name, i) => {
           const active = isOn(name);
           const left = ((i + 1) / (BOTTOM_SIGNAL_ORDER.length + 1)) * 100;
@@ -150,15 +150,15 @@ export default function CpuComponent({ component, zoom }: Props) {
               style={{ left: `${left}%` }}
             >
               <span
-                className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                className={`h-2.5 w-2.5 shrink-0 rounded-full ${
                   active ? "bg-st-active" : "bg-line-strong"
                 }`}
               />
-              <span className={`font-mono text-[8px] leading-none ${active ? "text-fg" : "text-fg-faint"}`}>
+              <span className={`font-mono text-[11px] leading-none ${active ? "text-fg" : "text-fg-faint"}`}>
                 {name}
               </span>
               <span
-                className={`num font-mono text-[9px] leading-none ${active ? "text-fg" : "text-fg-faint"}`}
+                className={`num font-mono text-[12.5px] leading-none ${active ? "text-fg" : "text-fg-faint"}`}
               >
                 {formatSignal(signals[name] ?? 0, SIGNAL_BITS[name] ?? 1, base)}
               </span>

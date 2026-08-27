@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Upload, Download, Play, Pencil, LoaderCircle } from "lucide-react";
+import { Upload, Download, Pencil } from "lucide-react";
 import { useModeStore } from "@/lib/modeStore";
 import { useProjectStore } from "@/lib/projectStore";
 import { DEFAULT_PROJECT_ID, isDefaultProject } from "@/lib/defaultProject";
@@ -14,10 +14,13 @@ import ThemeToggle from "./ThemeToggle";
 /**
  * Top bar for Program Mode (the default, end-user view).
  *
- * It reads as three regions: what is open on the left, what you can do with it
- * in the middle, and how to run it on the right. It used to carry four loose
- * I/O buttons across two formats — the `.cpudat` pair is gone, and the code
- * pair became "Abrir"/"Salvar" acting on a file with a visible name.
+ * It reads as two regions: what is open on the left, and what you can do with
+ * the file in the middle. It used to carry four loose I/O buttons across two
+ * formats — the `.cpudat` pair is gone, and the code pair became "Abrir"/
+ * "Salvar" acting on a file with a visible name. Montar/Executar used to live
+ * here too; they moved to `BuildBar`, right above the panels they act on, so
+ * that mounting and running read as steps in the code region rather than
+ * commands issued from the global chrome.
  *
  * The "Edit mode" entry point exists only in developer builds. Students never
  * see it, and `enterEditMode` refuses anyway.
@@ -31,8 +34,6 @@ export default function TopBarProgram() {
   const importAssembly = useProgramDataStore((s) => s.importAssembly);
   const assemblySource = useProgramDataStore((s) => s.assemblySource);
   const programName = useProgramDataStore((s) => s.programName);
-  const isRunning = useProgramDataStore((s) => s.isRunning);
-  const runProgram = useProgramDataStore((s) => s.runProgram);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const [saveOpen, setSaveOpen] = useState(false);
@@ -99,23 +100,6 @@ export default function TopBarProgram() {
 
       <div className="flex items-center gap-2">
         <ThemeToggle />
-
-        {/* The button stays neutral; the accent lives in the icon. A solid
-            saturated fill on a 90px control would eat most of the colour
-            budget for the whole screen. */}
-        <button
-          onClick={() => runProgram()}
-          disabled={isRunning}
-          className="inline-flex h-8 items-center gap-2 rounded-lg border border-line-strong bg-raised px-3 text-xs text-fg transition-colors hover:border-st-active disabled:cursor-not-allowed disabled:opacity-60"
-          title="Montar o programa e executar até HLT"
-        >
-          {isRunning ? (
-            <LoaderCircle size={14} strokeWidth={1.5} className="animate-spin text-st-active" />
-          ) : (
-            <Play size={14} strokeWidth={1.5} className="text-st-active" />
-          )}
-          {isRunning ? "Executando…" : "Executar"}
-        </button>
 
         {EDITOR_ENABLED && (
           <button
