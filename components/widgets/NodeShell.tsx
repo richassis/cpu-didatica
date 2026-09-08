@@ -59,6 +59,13 @@ interface NodeShellProps {
   actions?: ReactNode;
   /** Internal anatomy. Hidden below 100% zoom by the LOD rules. */
   children?: ReactNode;
+  /**
+   * Anatomy that stays visible at `mid` zoom instead of only `full` — for
+   * content the LOD rules exist to reveal in the first place (address lists,
+   * the FSM graph, the signal strip), rather than incidental detail that is
+   * fine to lose first. Still hidden at `low`.
+   */
+  dense?: boolean;
 }
 
 /**
@@ -84,6 +91,7 @@ export default function NodeShell({
   compactValue = false,
   actions,
   children,
+  dense = false,
 }: NodeShellProps) {
   const { id, x, y, w, h, label, type } = component;
   const [configOpen, setConfigOpen] = useState(false);
@@ -194,7 +202,11 @@ export default function NodeShell({
         )}
 
         {children && (
-          <div className="node-anatomy relative z-10 flex min-h-0 flex-1 flex-col">
+          <div
+            className={`node-anatomy relative z-10 flex min-h-0 flex-1 flex-col ${
+              dense ? "node-anatomy--dense" : ""
+            }`}
+          >
             {children}
           </div>
         )}

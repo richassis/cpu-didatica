@@ -127,7 +127,7 @@ function GprRow({ index, value, bitWidth, base, editMode, tag, onPoke }: GprRowP
       className="flex items-center gap-1.5 rounded px-1.5 py-[3px] transition-colors"
       style={tag ? { background: "color-mix(in srgb, var(--st-data) 8%, transparent)" } : undefined}
     >
-      <span className="w-5 shrink-0 font-mono text-[11px] text-fg-faint">R{index}</span>
+      <span className="w-5 shrink-0 font-mono text-[12.5px] text-fg-faint">R{index}</span>
       {editMode ? (
         <input
           ref={inputRef}
@@ -153,7 +153,7 @@ function GprRow({ index, value, bitWidth, base, editMode, tag, onPoke }: GprRowP
         />
       ) : (
         <>
-          <span className={`num flex-1 text-right font-mono text-[11px] ${tag ? "text-fg" : "text-fg-muted"}`}>
+          <span className={`num flex-1 text-right font-mono text-[12.5px] ${tag ? "text-fg" : "text-fg-muted"}`}>
             {displayed}
           </span>
           {tag && <span className="w-4 shrink-0 font-mono text-[9px] text-fg-faint">{tag}</span>}

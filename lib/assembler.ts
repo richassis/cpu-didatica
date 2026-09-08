@@ -40,11 +40,39 @@ export interface AssemblyError {
   message: string;
 }
 
+/** One assembled instruction, for the bytecode listing. */
+export interface AssembledLine {
+  /** 1-based source line number. */
+  line: number;
+  /** Address in instruction memory. */
+  addr: number;
+  /** Assembled 16-bit word. */
+  word: number;
+  mnemonic: string;
+}
+
+/** A named data-section entry, for the bytecode listing's data table. */
+export interface DataSymbol {
+  name: string;
+  addr: number;
+  value: number;
+}
+
 export interface AssembleResult {
   words: number[];
   /** Initial values for data memory (index = data address). */
   dataWords: number[];
   errors: AssemblyError[];
+  /** One entry per assembled instruction, ordered by address. */
+  listing: AssembledLine[];
+  /** Instruction address → source line, sparse (index only where an instruction was assembled). */
+  lineForAddress: number[];
+  /** Source line → instruction address. */
+  addressForLine: Map<number, number>;
+  /** Code label name → instruction address. */
+  codeLabels: Record<string, number>;
+  /** .data section entries in declaration order. */
+  dataSymbols: DataSymbol[];
 }
 
 // ── Internal types ───────────────────────────────────────────────────────────
@@ -121,6 +149,8 @@ interface Pass1Result {
   pending: PendingInstruction[];
   errors: AssemblyError[];
   dataWords: number[];
+  codeLabels: Record<string, number>;
+  dataSymbols: DataSymbol[];
 }
 
 function pass1(lines: string[]): Pass1Result {
@@ -128,6 +158,8 @@ function pass1(lines: string[]): Pass1Result {
   const pending: PendingInstruction[] = [];
   const errors: AssemblyError[] = [];
   const dataWords: number[] = [];
+  const codeLabels: Record<string, number> = {};
+  const dataSymbols: DataSymbol[] = [];
 
   let codeAddr = 0;
   let dataAddr = 0;
@@ -177,6 +209,7 @@ function pass1(lines: string[]): Pass1Result {
         }
       }
       dataWords[dataAddr] = initialValue;
+      dataSymbols.push({ name, addr: dataAddr, value: initialValue });
       dataAddr++;
       continue;
     }
@@ -192,6 +225,7 @@ function pass1(lines: string[]): Pass1Result {
         errors.push({ line: lineNum, message: `Label duplicado: "${name}"` });
       } else {
         labels.set(name, codeAddr);
+        codeLabels[name] = codeAddr;
       }
       rest = labelMatch[2].trim();
       if (!rest) continue; // label-only line, no instruction
@@ -215,7 +249,7 @@ function pass1(lines: string[]): Pass1Result {
     codeAddr++;
   }
 
-  return { labels, pending, errors, dataWords };
+  return { labels, pending, errors, dataWords, codeLabels, dataSymbols };
 }
 
 // ── Pass 2 ───────────────────────────────────────────────────────────────────
@@ -255,8 +289,9 @@ function checkRange(
 function pass2(
   pending: PendingInstruction[],
   labels: Map<string, number>,
-): { words: number[]; errors: AssemblyError[] } {
+): { words: number[]; errors: AssemblyError[]; listing: AssembledLine[] } {
   const errors: AssemblyError[] = [];
+  const listing: AssembledLine[] = [];
 
   // Determine the total instruction count (max codeAddr + 1)
   const size = pending.length > 0
@@ -385,10 +420,12 @@ function pass2(
 
     if (word !== null) {
       words[codeAddr] = word;
+      listing.push({ line: lineNum, addr: codeAddr, word, mnemonic });
     }
   }
 
-  return { words, errors };
+  listing.sort((a, b) => a.addr - b.addr);
+  return { words, errors, listing };
 }
 
 // ── Public entry point ────────────────────────────────────────────────────────
@@ -409,9 +446,21 @@ export function assemble(source: string): AssembleResult | null {
   const p1 = pass1(lines);
   const p2 = pass2(p1.pending, p1.labels);
 
+  const lineForAddress: number[] = [];
+  const addressForLine = new Map<number, number>();
+  for (const entry of p2.listing) {
+    lineForAddress[entry.addr] = entry.line;
+    addressForLine.set(entry.line, entry.addr);
+  }
+
   return {
     words: p2.words,
     dataWords: p1.dataWords,
     errors: [...p1.errors, ...p2.errors],
+    listing: p2.listing,
+    lineForAddress,
+    addressForLine,
+    codeLabels: p1.codeLabels,
+    dataSymbols: p1.dataSymbols,
   };
 }

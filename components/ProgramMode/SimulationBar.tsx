@@ -83,11 +83,16 @@ export default function SimulationBar() {
 
   const progress = totalTicks > 0 ? (currentIndex / totalTicks) * 100 : 0;
 
-  /** Where the executing instruction changes — aiming points on the track. */
+  /**
+   * Where the executing instruction changes — aiming points on the track.
+   * Keyed on `pc` rather than opcode: the PC is stable across every tick of
+   * one instruction and only changes at FETCH, so it also tells apart two
+   * consecutive instructions that happen to share an opcode (a loop body).
+   */
   const phaseMarks = useMemo(() => {
     const marks: number[] = [];
     for (let i = 1; i < frames.length; i++) {
-      if (frames[i]?.postTick?.opcode !== frames[i - 1]?.postTick?.opcode) {
+      if (frames[i]?.postTick?.pc !== frames[i - 1]?.postTick?.pc) {
         marks.push((i / Math.max(1, totalTicks)) * 100);
       }
     }

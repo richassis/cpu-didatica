@@ -56,7 +56,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     label: "Memory",
     namePrefix: "MEM",
     defaultWidth: 160,  // 10 grid cells
-    defaultHeight: 192, // 12 grid cells
+    defaultHeight: 288, // 18 grid cells — tall enough for the address list to read as a list
     description: "Unified memory — addr/data/rdMem/wrMem ports, 256×16b default",
     // Memory: addresses on left, data output on right, control signals on top
     portConfig: {
@@ -75,7 +75,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     label: "Instruction Memory",
     namePrefix: "IMEM",
     defaultWidth: 192,  // 12 grid cells (increased from 10)
-    defaultHeight: 240, // 15 grid cells (increased from 12)
+    defaultHeight: 288, // 18 grid cells — tall enough for the address list to read as a list
     description: "Read-only instruction memory — addr input, instruction output",
     // InstructionMemory: address on left, output on right
     portConfig: {
@@ -227,10 +227,11 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     // the block is called on screen.
     label: "Control unit (UC)",
     namePrefix: "UC",
-    defaultWidth: 176,  // 11 grid cells
-    defaultHeight: 304, // 19 grid cells
+    defaultWidth: 704,  // 44 grid cells — 10 bottom ports at 64px pitch, room for the FSM columns
+    defaultHeight: 240, // 15 grid cells
     description: "Control unit (UC) — FSM state and control signals",
-    // CPU: input ports (opcode/flags) on left, all control signal outputs on top
+    // CPU: input ports (opcode/flags) on left, all control signal outputs on
+    // the bottom, aligned under the FSM graph they drive.
     portConfig: {
       defaultInputSide: "left",
       defaultOutputSide: "right",
@@ -239,7 +240,11 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
         "in_flagZero":     { side: "left", hidden: true },
         "in_flagCarry":    { side: "left", hidden: true },
         "in_flagNegative": { side: "left", hidden: true },
-        // All CPU outputs are control signals → go to top
+        // Debug-only outputs, already shown by the FSM graph itself — hidden
+        // rather than left as unconnected dots on the right edge.
+        "out_state":  { side: "right", hidden: true },
+        "out_halted": { side: "right", hidden: true },
+        // All CPU outputs are control signals → go to bottom
         "out_wrIR": { side: "bottom" },
         "out_wrReg": { side: "bottom" },
         "out_muxAReg": { side: "bottom" },

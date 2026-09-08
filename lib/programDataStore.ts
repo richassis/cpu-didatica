@@ -19,8 +19,7 @@ import { persist } from "zustand/middleware";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useExecutionStore } from "@/lib/executionStore";
 import { InstructionMemory } from "@/lib/simulator";
-import { assemble, type AssemblyError } from "@/lib/assembler";
-import { loadTestProgram } from "@/lib/testProgram";
+import { assemble, type AssembleResult, type AssemblyError } from "@/lib/assembler";
 import { PRESET_PROGRAMS } from "@/lib/presetPrograms";
 import { triggerDownload } from "@/lib/download";
 import {
@@ -66,8 +65,29 @@ interface ProgramDataState {
   /** Errors from the most recent assembly attempt (empty = success or not yet run). */
   assemblyErrors: AssemblyError[];
 
-  /** Assemble, load, and execute the current program source. */
+  /**
+   * Result of the most recent explicit Montar. `null` until the student
+   * presses Montar (or opens a file), or again after an empty source.
+   * Never recomputed as a side effect of typing — see `mountedSource`.
+   */
+  assembled: AssembleResult | null;
+
+  /**
+   * The exact source text `assembled` was produced from. Compared against
+   * the live `assemblySource` to tell a fresh listing from a stale one
+   * (`mountStatus` below) — typing does not re-assemble on its own anymore.
+   */
+  mountedSource: string | null;
+
+  /** Assemble the current source and record the result (the "Montar" action). */
+  mountProgram: () => void;
+
+  /** Load the last mounted program and execute it. Requires a clean mount. */
   runProgram: () => void;
+}
+
+function computeAssembled(source: string): AssembleResult | null {
+  return assemble(source);
 }
 
 export const useProgramDataStore = create<ProgramDataState>()(
@@ -77,6 +97,8 @@ export const useProgramDataStore = create<ProgramDataState>()(
       programName: DEFAULT_PROGRAM_BASENAME,
       isRunning: false,
       assemblyErrors: [],
+      assembled: null,
+      mountedSource: null,
 
       setAssemblySource: (src) => set({ assemblySource: src }),
 
@@ -100,7 +122,15 @@ export const useProgramDataStore = create<ProgramDataState>()(
               );
               return;
             }
-            set({ assemblySource: text, programName: programNameFromFile(file.name) });
+            // Opened desmontado — pressing Montar is the same next step as
+            // after typing, whether the source came from the keyboard or a file.
+            set({
+              assemblySource: text,
+              programName: programNameFromFile(file.name),
+              assembled: null,
+              assemblyErrors: [],
+              mountedSource: null,
+            });
             resolve();
           };
           reader.onerror = () => reject(reader.error);
@@ -112,11 +142,20 @@ export const useProgramDataStore = create<ProgramDataState>()(
         triggerDownload(new Blob([assemblySource], { type: CODE_FILE_MIME }), fileName);
       },
 
-      runProgram: () => {
-        const { isRunning, assemblySource } = get();
-        if (isRunning) return;
+      mountProgram: () => {
+        const src = get().assemblySource;
+        const result = computeAssembled(src);
+        set({ assembled: result, assemblyErrors: result?.errors ?? [], mountedSource: src });
+      },
 
-        set({ isRunning: true, assemblyErrors: [] });
+      runProgram: () => {
+        const { isRunning, assembled } = get();
+        // Executar requires a clean, up-to-date mount — mountStatus(get()) !== "ok"
+        // guards this from the UI already, but the action re-checks so it can
+        // never run a stale or errored build if called directly.
+        if (isRunning || mountStatus(get()) !== "ok" || !assembled) return;
+
+        set({ isRunning: true });
 
         const execution = useExecutionStore.getState();
         if (execution.isTimelineActive) {
@@ -125,29 +164,18 @@ export const useProgramDataStore = create<ProgramDataState>()(
 
         window.setTimeout(() => {
           try {
-            const result = assemble(assemblySource);
+            // Assembly succeeded: load words into IMEM, reset data memory.
+            const sim = useSimulatorStore.getState();
 
-            if (result === null) {
-              // Empty source — fall back to the built-in test program.
-              loadTestProgram();
-            } else if (result.errors.length > 0) {
-              // Assembly failed: show errors, do not execute.
-              set({ assemblyErrors: result.errors, isRunning: false });
-              return;
-            } else {
-              // Assembly succeeded: load words into IMEM, reset data memory.
-              const sim = useSimulatorStore.getState();
-
-              const imemEntry = Array.from(sim.objects.entries())
-                .find(([, obj]) => obj instanceof InstructionMemory);
-              if (imemEntry) {
-                (imemEntry[1] as InstructionMemory).load(result.words);
-              }
-
-              sim.touch();
+            const imemEntry = Array.from(sim.objects.entries())
+              .find(([, obj]) => obj instanceof InstructionMemory);
+            if (imemEntry) {
+              (imemEntry[1] as InstructionMemory).load(assembled.words);
             }
 
-            execution.loadAndExecute(result?.dataWords ?? []);
+            sim.touch();
+
+            execution.loadAndExecute(assembled.dataWords);
           } finally {
             set({ isRunning: false });
           }
@@ -159,7 +187,9 @@ export const useProgramDataStore = create<ProgramDataState>()(
       version: 1,
       // Only the document, never the run. `isRunning` in particular must not
       // come back from storage, or a reload during a run leaves the Run button
-      // permanently disabled.
+      // permanently disabled. `assembled`/`mountedSource` are not persisted
+      // either — a reload comes back with the source but not yet mounted,
+      // same as opening a file.
       partialize: (state) => ({
         assemblySource: state.assemblySource,
         programName: state.programName,
@@ -167,3 +197,22 @@ export const useProgramDataStore = create<ProgramDataState>()(
     }
   )
 );
+
+/**
+ * Whether the current source has a usable, up-to-date mount. Derived rather
+ * than stored so the Montar/Executar bar and the Montagem panel read the
+ * exact same rule instead of duplicating it.
+ *
+ *  - "none":   nothing mounted yet (fresh session, or after opening a file).
+ *  - "stale":  the source has changed since the last Montar.
+ *  - "errors": the last Montar failed (or produced nothing, i.e. empty source).
+ *  - "ok":     mounted, matches the current source, no errors — Executar may run.
+ */
+export function mountStatus(
+  s: Pick<ProgramDataState, "mountedSource" | "assemblySource" | "assembled" | "assemblyErrors">
+): "none" | "stale" | "errors" | "ok" {
+  if (s.mountedSource === null) return "none";
+  if (s.mountedSource !== s.assemblySource) return "stale";
+  if (s.assembled === null || s.assemblyErrors.length > 0) return "errors";
+  return "ok";
+}
