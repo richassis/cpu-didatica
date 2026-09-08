@@ -2,7 +2,7 @@
   "id": "default-full-datapath",
   "name": "Full Datapath",
   "createdAt": "2026-04-07T03:40:44.124Z",
-  "updatedAt": "2026-06-12T20:32:22.205Z",
+  "updatedAt": "2026-09-08T14:33:49.081Z",
   "components": [
     {
       "id": "cpu-1",
@@ -15,7 +15,7 @@
       "meta": {},
       "state": {
         "ports": {
-          "in_opcode": 1,
+          "in_opcode": 3,
           "in_flagZero": 0,
           "in_flagCarry": 0,
           "in_flagNegative": 0,
@@ -27,7 +27,7 @@
           "out_muxAReg": 1,
           "out_muxDReg": 2,
           "out_wrReg": 0,
-          "out_opULA": 0,
+          "out_opULA": 1,
           "out_muxAMem": 1,
           "out_state": 0,
           "out_halted": false
@@ -43,21 +43,20 @@
       "w": 144,
       "h": 48,
       "meta": {
-        "bitWidth": 16,
-        "holdOutputUntilFetch": true
-      },
-      "state": {
-        "ports": {
-          "data": 1,
-          "value": 0,
-          "writeEnable": 0
-        }
+        "bitWidth": 16
       },
       "tickSteps": [
         0
       ],
       "tickOrderByState": {
         "0": 0
+      },
+      "state": {
+        "ports": {
+          "data": 0,
+          "value": 0,
+          "writeEnable": 0
+        }
       }
     },
     {
@@ -71,16 +70,16 @@
       "meta": {
         "bitWidth": 16
       },
+      "tickSteps": [
+        1
+      ],
       "state": {
         "ports": {
-          "data": 2048,
+          "data": 4106,
           "value": 0,
           "writeEnable": 0
         }
-      },
-      "tickSteps": [
-        1
-      ]
+      }
     },
     {
       "id": "memory-1",
@@ -94,21 +93,27 @@
         "bitWidth": 16,
         "wordCount": 256
       },
+      "tickSteps": [
+        3
+      ],
+      "tickOrderByState": {
+        "3": 1
+      },
       "state": {
         "ports": {
           "addr": 0,
           "data": 0,
           "rdMem": 0,
           "wrMem": 0,
-          "out": 10
+          "out": 0
         },
         "cells": [
-          1,
-          2,
-          12,
-          13,
-          14,
-          15,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
           0,
           0,
           0,
@@ -360,12 +365,6 @@
           0,
           0
         ]
-      },
-      "tickSteps": [
-        3
-      ],
-      "tickOrderByState": {
-        "3": 1
       }
     },
     {
@@ -377,27 +376,6 @@
       "w": 176,
       "h": 256,
       "meta": {},
-      "state": {
-        "ports": {
-          "in_readAddrA": 0,
-          "in_readAddrB": 0,
-          "in_writeAddr": 0,
-          "in_writeData": 10,
-          "in_writeEnable": 0,
-          "out_readDataA": 0,
-          "out_readDataB": 0
-        },
-        "registers": [
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ]
-      },
       "tickSteps": [
         4,
         5,
@@ -407,6 +385,27 @@
         "4": 1,
         "5": 1,
         "6": 1
+      },
+      "state": {
+        "ports": {
+          "in_readAddrA": 2,
+          "in_readAddrB": 0,
+          "in_writeAddr": 0,
+          "in_writeData": 0,
+          "in_writeEnable": 0,
+          "out_readDataA": 16,
+          "out_readDataB": 10
+        },
+        "registers": [
+          10,
+          6,
+          16,
+          4,
+          0,
+          0,
+          0,
+          0
+        ]
       }
     },
     {
@@ -418,48 +417,48 @@
       "w": 128,
       "h": 176,
       "meta": {},
+      "tickSteps": [
+        9
+      ],
+      "tickOrderByState": {
+        "2": 0
+      },
       "state": {
         "ports": {
           "a": 0,
           "b": 0,
           "operation": 0,
           "result": 0,
-          "zero": 1,
+          "zero": 0,
           "carry": 0,
           "negative": 0
         }
-      },
-      "tickSteps": [
-        2
-      ],
-      "tickOrderByState": {
-        "2": 1
       }
     },
     {
       "id": "decoder-1",
       "type": "DecoderComponent",
       "label": "Decoder",
-      "x": 1040,
+      "x": 1056,
       "y": 496,
       "w": 144,
       "h": 192,
       "meta": {},
-      "state": {
-        "ports": {
-          "instruction": 0,
-          "opcode": 1,
-          "operand": 0,
-          "gprAddrA": 0,
-          "gprAddrB": 0,
-          "dst": 0
-        }
-      },
       "tickSteps": [
         1
       ],
       "tickOrderByState": {
         "1": 1
+      },
+      "state": {
+        "ports": {
+          "instruction": 0,
+          "opcode": 3,
+          "operand": 0,
+          "gprAddrA": 2,
+          "gprAddrB": 0,
+          "dst": 0
+        }
       }
     },
     {
@@ -474,18 +473,18 @@
         "bitWidth": 16,
         "step": 1
       },
+      "tickSteps": [
+        0
+      ],
+      "tickOrderByState": {
+        "0": 1
+      },
       "state": {
         "ports": {
           "in": 0,
           "result": 1,
           "carry": 0
         }
-      },
-      "tickSteps": [
-        0
-      ],
-      "tickOrderByState": {
-        "0": 1
       }
     },
     {
@@ -499,19 +498,19 @@
       "meta": {
         "numInputs": 2
       },
-      "state": {
-        "ports": {
-          "in_0": 0,
-          "in_1": 1,
-          "sel": 1,
-          "result": 1
-        }
-      },
       "tickSteps": [
         0
       ],
       "tickOrderByState": {
         "0": 2
+      },
+      "state": {
+        "ports": {
+          "in_0": 0,
+          "in_1": 0,
+          "sel": 0,
+          "result": 0
+        }
       }
     },
     {
@@ -522,40 +521,46 @@
       "h": 288,
       "x": 624,
       "y": 448,
+      "tickSteps": [
+        0
+      ],
+      "tickOrderByState": {
+        "0": 1
+      },
       "state": {
         "ports": {
           "addr": 0,
-          "out": 2048
+          "out": 4106
         },
         "cells": [
           4106,
-          4355,
+          4358,
           8226,
           10275,
-          12324,
-          14373,
-          16390,
           6656,
           6913,
-          3840,
-          4096,
-          10240,
-          18446,
+          3072,
+          11333,
+          18442,
+          24576,
           26624,
-          4106,
-          4372,
-          10272,
-          22547,
-          26624,
-          4096,
-          16384,
-          4353,
-          8224,
-          20505,
-          26624,
-          24603,
-          26624,
-          26624,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
           0,
           0,
           0,
@@ -785,12 +790,6 @@
           0,
           0
         ]
-      },
-      "tickSteps": [
-        0
-      ],
-      "tickOrderByState": {
-        "0": 1
       }
     },
     {
@@ -805,15 +804,6 @@
         "bitWidth": 16,
         "numInputs": 3
       },
-      "state": {
-        "ports": {
-          "in_0": 0,
-          "in_1": 0,
-          "sel": 2,
-          "result": 10,
-          "in_2": 0
-        }
-      },
       "tickSteps": [
         7,
         8,
@@ -821,7 +811,17 @@
       ],
       "tickOrderByState": {
         "7": 1,
-        "8": 1
+        "8": 1,
+        "9": 1
+      },
+      "state": {
+        "ports": {
+          "in_0": 0,
+          "in_1": 0,
+          "sel": 0,
+          "result": 0,
+          "in_2": 0
+        }
       }
     },
     {
@@ -835,16 +835,16 @@
       "meta": {
         "bitWidth": 16
       },
+      "tickSteps": [
+        7
+      ],
       "state": {
         "ports": {
-          "data": 10,
+          "data": 0,
           "value": 0,
           "writeEnable": 1
         }
-      },
-      "tickSteps": [
-        3
-      ]
+      }
     },
     {
       "id": "344c9b2a-790d-499f-9663-7baf38f3d829",
@@ -858,14 +858,6 @@
         "bitWidth": 16,
         "numInputs": 2
       },
-      "state": {
-        "ports": {
-          "in_0": 0,
-          "in_1": 0,
-          "sel": 1,
-          "result": 0
-        }
-      },
       "tickSteps": [
         7,
         8,
@@ -875,6 +867,14 @@
         "4": 0,
         "7": 1,
         "8": 1
+      },
+      "state": {
+        "ports": {
+          "in_0": 0,
+          "in_1": 0,
+          "sel": 0,
+          "result": 0
+        }
       }
     },
     {
@@ -888,17 +888,17 @@
       "meta": {
         "bitWidth": 16
       },
+      "tickSteps": [
+        2,
+        4
+      ],
       "state": {
         "ports": {
-          "data": 0,
+          "data": 16,
           "value": 0,
           "writeEnable": 1
         }
-      },
-      "tickSteps": [
-        5,
-        6
-      ]
+      }
     },
     {
       "id": "0fe712f0-8b31-40c6-adf8-eb71600f42da",
@@ -911,16 +911,16 @@
       "meta": {
         "bitWidth": 16
       },
+      "tickSteps": [
+        2
+      ],
       "state": {
         "ports": {
-          "data": 0,
+          "data": 10,
           "value": 0,
           "writeEnable": 1
         }
-      },
-      "tickSteps": [
-        6
-      ]
+      }
     },
     {
       "id": "fb653707-7a61-4e5c-8ce4-5f1346e715b2",
@@ -934,17 +934,17 @@
         "bitWidth": 16,
         "mirrorPorts": true
       },
+      "tickSteps": [
+        3,
+        10
+      ],
       "state": {
         "ports": {
           "data": 0,
           "value": 0,
           "writeEnable": 1
         }
-      },
-      "tickSteps": [
-        3,
-        10
-      ]
+      }
     }
   ],
   "wires": [
@@ -1066,7 +1066,12 @@
       "targetPortName": "writeEnable",
       "label": "",
       "visible": true,
-      "nodes": []
+      "nodes": [
+        {
+          "x": 1248,
+          "y": 432
+        }
+      ]
     },
     {
       "id": "24f9d965-2d56-4559-af88-99a9057469b3",
@@ -1076,7 +1081,20 @@
       "targetPortName": "writeEnable",
       "label": "",
       "visible": true,
-      "nodes": []
+      "nodes": [
+        {
+          "x": 1328,
+          "y": 432
+        },
+        {
+          "x": 912,
+          "y": 432
+        },
+        {
+          "x": 912,
+          "y": 480
+        }
+      ]
     },
     {
       "id": "80a77060-1909-47a5-9d61-63356997205f",
@@ -1108,20 +1126,12 @@
       "visible": true,
       "nodes": [
         {
-          "x": 1264,
-          "y": 560
+          "x": 1232,
+          "y": 416
         },
         {
-          "x": 1200,
-          "y": 560
-        },
-        {
-          "x": 1200,
-          "y": 320
-        },
-        {
-          "x": 672,
-          "y": 320
+          "x": 880,
+          "y": 416
         }
       ]
     },
@@ -1153,16 +1163,6 @@
       "sourceComponentId": "gpr-1",
       "sourcePortName": "out_readDataA",
       "targetComponentId": "8447ad64-3e71-4ffc-97f1-7d93bad0bb6e",
-      "targetPortName": "data",
-      "label": "",
-      "visible": true,
-      "nodes": []
-    },
-    {
-      "id": "22827d37-6afe-4127-aec7-90e9c586f145",
-      "sourceComponentId": "8447ad64-3e71-4ffc-97f1-7d93bad0bb6e",
-      "sourcePortName": "value",
-      "targetComponentId": "memory-1",
       "targetPortName": "data",
       "label": "",
       "visible": true,
@@ -1411,6 +1411,25 @@
       "label": "",
       "visible": false,
       "nodes": []
+    },
+    {
+      "id": "c49044a2-1e0a-4874-af5b-c563561ff387",
+      "sourceComponentId": "8447ad64-3e71-4ffc-97f1-7d93bad0bb6e",
+      "sourcePortName": "value",
+      "targetComponentId": "memory-1",
+      "targetPortName": "data",
+      "label": "",
+      "visible": true,
+      "nodes": [
+        {
+          "x": 1376,
+          "y": 528
+        },
+        {
+          "x": 1376,
+          "y": 1040
+        }
+      ]
     }
   ],
   "canvasSize": {
@@ -1430,8 +1449,7 @@
         "0": 0
       },
       "config": {
-        "bitWidth": 16,
-        "holdOutputUntilFetch": true
+        "bitWidth": 16
       }
     },
     {

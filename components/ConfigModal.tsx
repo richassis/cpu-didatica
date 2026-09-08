@@ -50,7 +50,6 @@ export default function ConfigModal({ component, onClose }: Props) {
     numInputs: typeof component.meta?.numInputs === "number" ? component.meta.numInputs : undefined,
     wordCount: typeof component.meta?.wordCount === "number" ? component.meta.wordCount : undefined,
     hasWriteEnable: typeof component.meta?.hasWriteEnable === "boolean" ? component.meta.hasWriteEnable : undefined,
-    holdOutputUntilFetch: typeof component.meta?.holdOutputUntilFetch === "boolean" ? component.meta.holdOutputUntilFetch : undefined,
     constantValue: typeof component.meta?.constantValue === "number" ? component.meta.constantValue : undefined,
     step: typeof component.meta?.step === "number" ? component.meta.step : undefined,
     mirrorPorts:
@@ -181,7 +180,6 @@ export default function ConfigModal({ component, onClose }: Props) {
     if (config.numInputs !== undefined) meta.numInputs = config.numInputs;
     if (config.wordCount !== undefined) meta.wordCount = config.wordCount;
     if (config.hasWriteEnable !== undefined) meta.hasWriteEnable = config.hasWriteEnable;
-    if (config.holdOutputUntilFetch !== undefined) meta.holdOutputUntilFetch = config.holdOutputUntilFetch;
     if (config.constantValue !== undefined) meta.constantValue = config.constantValue;
     if (config.step !== undefined) meta.step = config.step;
     if (config.mirrorPorts !== undefined) meta.mirrorPorts = config.mirrorPorts;
@@ -191,19 +189,12 @@ export default function ConfigModal({ component, onClose }: Props) {
     const currentHasWriteEnable =
       typeof component.meta?.hasWriteEnable === "boolean" ? component.meta.hasWriteEnable : true;
     const nextHasWriteEnable = config.hasWriteEnable ?? true;
-    const currentHoldOutput =
-      typeof component.meta?.holdOutputUntilFetch === "boolean"
-        ? component.meta.holdOutputUntilFetch
-        : false;
-    const nextHoldOutput = config.holdOutputUntilFetch ?? false;
 
     const muxNeedsRecreate =
       component.type === "MuxComponent" &&
       config.numInputs !== undefined &&
       config.numInputs !== currentNumInputs;
 
-    // `holdOutputUntilFetch` is fixed at construction time, so changing it needs
-    // the same recreate path as a port-structure change.
     // `step` is fixed at construction time, like the Mux input count.
     const incrementerNeedsRecreate =
       component.type === "IncrementerComponent" &&
@@ -212,7 +203,7 @@ export default function ConfigModal({ component, onClose }: Props) {
 
     const registerNeedsRecreate =
       (component.type === "Register" || component.type === "PipelineRegister") &&
-      (nextHasWriteEnable !== currentHasWriteEnable || nextHoldOutput !== currentHoldOutput);
+      nextHasWriteEnable !== currentHasWriteEnable;
 
     const needsRecreate = muxNeedsRecreate || registerNeedsRecreate || incrementerNeedsRecreate;
     

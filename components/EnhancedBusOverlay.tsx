@@ -119,7 +119,6 @@ export default function EnhancedBusOverlay({
   const animationRef = useRef<number | null>(null);
   const wireDataByIdRef = useRef<Map<string, WireRenderData>>(new Map());
   const lastAnimatedCycleRef = useRef<number | null>(null);
-  const previousCpuSignalValuesRef = useRef<Map<string, string>>(new Map());
   /** Substep order values already revealed in the current animation pass. */
   const revealedGroupsRef = useRef<Set<number>>(new Set());
 
@@ -331,7 +330,28 @@ export default function EnhancedBusOverlay({
     const currentWireData = Array.from(wireDataByIdRef.current.values());
     const cpu = getPrimaryCpu();
     const executedState = cpu?.previousState ?? cpu?.state;
-    const changedCpuSignals = new Set(cpu?.getChangedControlSignalPorts() ?? []);
+
+    // Whether a CPU control signal actually changed value on the tick this
+    // frame represents. In the timeline we compare the frame's own pre/post
+    // snapshots — the authoritative record — instead of the CPU's live
+    // `getChangedControlSignalPorts()`, which is only repopulated during batch
+    // execution and by replay time holds a stale set from the final tick (which
+    // is why wrPC/wrIR appeared to re-fire on essentially every frame). Outside
+    // the timeline (edit-mode single stepping) that live set is still fresh.
+    const execState = useExecutionStore.getState();
+    const currentFrame = execState.isTimelineActive
+      ? execState.frames[execState.currentIndex]
+      : undefined;
+    const liveChangedSignals = new Set(cpu?.getChangedControlSignalPorts() ?? []);
+    const cpuControlSignalChanged = (
+      sourceComponentId: string,
+      sourcePortName: string
+    ): boolean => {
+      if (!currentFrame) return liveChangedSignals.has(sourcePortName);
+      const pre = currentFrame.preTick.state.get(sourceComponentId)?.ports[sourcePortName];
+      const post = currentFrame.postTick.state.get(sourceComponentId)?.ports[sourcePortName];
+      return pre !== post;
+    };
 
     const visibleWireIds = currentWireData
       .filter((wireData) => {
@@ -364,23 +384,16 @@ export default function EnhancedBusOverlay({
       return;
     }
 
-    const cpuValueChanges = new Set<string>();
-    for (const id of visibleWireIds) {
-      const wireData = wireDataByIdRef.current.get(id);
-      if (!wireData?.isCpuControlSignal) continue;
-
-      const previousValue = previousCpuSignalValuesRef.current.get(id);
-      if (previousValue !== undefined && previousValue !== wireData.value) {
-        cpuValueChanges.add(id);
-      }
-      previousCpuSignalValuesRef.current.set(id, wireData.value);
-    }
-
-    // Changed CPU signal wire IDs (those whose source port value changed this tick).
+    // Changed CPU signal wire IDs (those whose source port value changed on the
+    // tick this frame represents — a signal driven to the same value it already
+    // held does not animate).
     const changedCpuIds = visibleWireIds.filter((id) => {
       const wireData = wireDataByIdRef.current.get(id);
       if (!wireData?.isCpuControlSignal) return false;
-      return changedCpuSignals.has(wireData.wire.sourcePortName) || cpuValueChanges.has(id);
+      return cpuControlSignalChanged(
+        wireData.wire.sourceComponentId,
+        wireData.wire.sourcePortName
+      );
     });
     const allNonCpuIds = visibleWireIds.filter((id) => !wireDataByIdRef.current.get(id)?.isCpuControlSignal);
 

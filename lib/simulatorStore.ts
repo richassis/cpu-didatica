@@ -136,6 +136,13 @@ interface SimulatorState {
   getPrimaryCpu: () => CPU | null;
 
   /**
+   * Get the primary data Memory instance (first MemoryComponent found).
+   * Returns null if none exists. Instruction memory is a different class and
+   * is never returned here.
+   */
+  getPrimaryMemory: () => Memory | null;
+
+  /**
    * Advance the simulation by one tick via the CPU.
    * The CPU controls which components tick based on its current state.
    */
@@ -230,12 +237,6 @@ interface SimulatorState {
    * Immediately persists updated state.
    */
   pokeInstructionMemory: (id: string, addr: number, value: number) => void;
-
-  /**
-   * Directly write a value into a GPR register, bypassing tick logic.
-   * Immediately persists updated state.
-   */
-  pokeGprRegister: (id: string, index: number, value: number) => void;
 }
 
 export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
@@ -255,9 +256,7 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
       case "PipelineRegister": {
         const bitWidth = typeof meta?.bitWidth === "number" ? meta.bitWidth : 16;
         const hasWriteEnable = typeof meta?.hasWriteEnable === "boolean" ? meta.hasWriteEnable : true;
-        const holdOutputUntilFetch =
-          typeof meta?.holdOutputUntilFetch === "boolean" ? meta.holdOutputUntilFetch : false;
-        newObj = new Register(id, label, bitWidth, 0, hasWriteEnable, holdOutputUntilFetch);
+        newObj = new Register(id, label, bitWidth, 0, hasWriteEnable);
         break;
       }
       case "ConstantComponent": {
@@ -479,6 +478,16 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
     return null;
   },
 
+  getPrimaryMemory: () => {
+    const { objects } = get();
+    for (const obj of objects.values()) {
+      if (obj instanceof Memory) {
+        return obj;
+      }
+    }
+    return null;
+  },
+
   tickClock: () => {
     const { objects } = get();
     
@@ -645,10 +654,6 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
       if (obj instanceof Memory || obj instanceof InstructionMemory) {
         entry.cells = obj.dump();
       }
-      // Register: also save a value held back from the output port (the PC)
-      if (obj instanceof Register && obj.pendingValue !== null) {
-        entry.pending = obj.pendingValue;
-      }
       result.set(id, entry);
     }
     return result;
@@ -665,9 +670,6 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
       }
       if ((obj instanceof Memory || obj instanceof InstructionMemory) && state.cells) {
         obj.load(state.cells);
-      }
-      if (obj instanceof Register) {
-        obj.setPendingValue(state.pending ?? null);
       }
       // Restore port values (output ports only — inputs are driven by wires)
       if (isConnectable(obj)) {
@@ -697,15 +699,6 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
     const obj = get().objects.get(id);
     if (obj instanceof InstructionMemory) {
       obj.poke(addr, value);
-      set((s) => ({ revision: s.revision + 1 }));
-      getLayoutStore().getState().saveState();
-    }
-  },
-
-  pokeGprRegister: (id, index, value) => {
-    const obj = get().objects.get(id);
-    if (obj instanceof Gpr) {
-      obj.write(index, value);
       set((s) => ({ revision: s.revision + 1 }));
       getLayoutStore().getState().saveState();
     }

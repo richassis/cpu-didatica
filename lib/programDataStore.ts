@@ -146,6 +146,15 @@ export const useProgramDataStore = create<ProgramDataState>()(
         const src = get().assemblySource;
         const result = computeAssembled(src);
         set({ assembled: result, assemblyErrors: result?.errors ?? [], mountedSource: src });
+
+        // Montar is a fresh start: clear any residue left on the datapath by a
+        // previous run so the canvas doesn't show stale values before Executar.
+        const execution = useExecutionStore.getState();
+        if (execution.isTimelineActive) {
+          execution.exitTimeline();
+        } else {
+          useSimulatorStore.getState().resetClock();
+        }
       },
 
       runProgram: () => {
@@ -170,7 +179,11 @@ export const useProgramDataStore = create<ProgramDataState>()(
             const imemEntry = Array.from(sim.objects.entries())
               .find(([, obj]) => obj instanceof InstructionMemory);
             if (imemEntry) {
-              (imemEntry[1] as InstructionMemory).load(assembled.words);
+              const imem = imemEntry[1] as InstructionMemory;
+              // Clear first so a shorter program can't leave a previous one's
+              // instructions sitting past its end.
+              imem.clear();
+              imem.load(assembled.words);
             }
 
             sim.touch();

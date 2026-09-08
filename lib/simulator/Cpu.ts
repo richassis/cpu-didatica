@@ -235,6 +235,10 @@ export interface CpuInternalStateSnapshot {
   halted: boolean;
   totalTicks: number;
   previousState: CpuState;
+  /** ULA flags as latched on the last EXECUTE — the status-register view. */
+  latchedFlagZero: boolean;
+  latchedFlagCarry: boolean;
+  latchedFlagNegative: boolean;
 }
 
 
@@ -468,6 +472,24 @@ export class CPU implements Clockable, Connectable {
   }
 
   /**
+   * ULA flags as latched on the last EXECUTE. These behave like a status
+   * register — cleared at reset, updated only when an ALU operation runs, and
+   * held between operations — which is what the flag displays should show
+   * instead of the ULA's live combinational outputs.
+   */
+  get latchedFlagZero(): boolean {
+    return this._latchedFlagZero;
+  }
+
+  get latchedFlagCarry(): boolean {
+    return this._latchedFlagCarry;
+  }
+
+  get latchedFlagNegative(): boolean {
+    return this._latchedFlagNegative;
+  }
+
+  /**
    * Returns CPU control output port names that changed on the latest tick.
    * Example values: "out_wrIR", "out_rdMem".
    */
@@ -541,7 +563,12 @@ export class CPU implements Clockable, Connectable {
     this._previousState = snapshot.previousState;
     this.out_state.set(snapshot.state);
     this.out_halted.set(snapshot.halted);
-    this.latchFlagsFromInputs();
+    // Restore the latched flags from the snapshot rather than re-reading the
+    // ULA's live outputs — during replay those reflect whatever is on the wire
+    // now, not what was latched on the EXECUTE this frame belongs to.
+    this._latchedFlagZero = snapshot.latchedFlagZero ?? false;
+    this._latchedFlagCarry = snapshot.latchedFlagCarry ?? false;
+    this._latchedFlagNegative = snapshot.latchedFlagNegative ?? false;
   }
 
   /** Initialize previous signal values for change detection. */
@@ -612,17 +639,6 @@ export class CPU implements Clockable, Connectable {
       if (entry.type === "PipelineRegister") {
         (entry.component as unknown as { setWriteActive?: (a: boolean) => void })
           .setWriteActive?.(isReadReg);
-      }
-    }
-
-    // Registers configured to hold their output (the PC) release the value they
-    // latched during the previous instruction. This runs before the evaluate
-    // phase so the instruction memory and the PC+1 adder already see the new
-    // address on this very tick.
-    if (this._previousState === CpuState.FETCH) {
-      for (const entry of this._registeredComponents.values()) {
-        (entry.component as unknown as { releaseHeldOutput?: () => void })
-          .releaseHeldOutput?.();
       }
     }
 

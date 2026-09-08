@@ -94,9 +94,9 @@ export default function CpuComponent({ component, zoom }: Props) {
           )}
           <FlagSquares
             flags={[
-              { label: "Z", on: !!cpu && cpu.in_flagZero.value !== 0, title: "Zero flag" },
-              { label: "C", on: !!cpu && cpu.in_flagCarry.value !== 0, title: "Carry flag" },
-              { label: "N", on: !!cpu && cpu.in_flagNegative.value !== 0, title: "Negative flag" },
+              { label: "Z", on: !!cpu && cpu.latchedFlagZero, title: "Zero flag" },
+              { label: "C", on: !!cpu && cpu.latchedFlagCarry, title: "Carry flag" },
+              { label: "N", on: !!cpu && cpu.latchedFlagNegative, title: "Negative flag" },
             ]}
           />
           <button

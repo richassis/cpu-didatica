@@ -65,7 +65,7 @@ export class Ula implements Clockable, Connectable {
       "Computation result"
     );
     this.out_zero = new OutputPort<number>(
-      "zero", "number", 1, 1,
+      "zero", "number", 1, 0,
       "Zero flag (result == 0)"
     );
     this.out_carry = new OutputPort<number>(
@@ -197,13 +197,13 @@ export class Ula implements Clockable, Connectable {
     return this.evaluate();
   }
 
-  /** Reset to default state. */
+  /** Reset to default state. Flags start cleared — nothing has been computed. */
   reset(): void {
     this.a = 0;
     this.b = 0;
     this.operation = UlaOperation.ADD;
     this.out_result.set(0);
-    this.out_zero.set(1);
+    this.out_zero.set(0);
     this.out_carry.set(0);
     this.out_negative.set(0);
   }

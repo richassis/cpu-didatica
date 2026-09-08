@@ -3,6 +3,7 @@
 import { ChevronDown } from "lucide-react";
 import { useProgramDataStore, mountStatus } from "@/lib/programDataStore";
 import { useExecutionStore } from "@/lib/executionStore";
+import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayStore, formatNum } from "@/lib/displayStore";
 
 function fmtAddr(addr: number) {
@@ -33,6 +34,15 @@ export default function AssembledPanel({ onToggleCollapse }: { onToggleCollapse:
   const frames = useExecutionStore((s) => s.frames);
   const currentIndex = useExecutionStore((s) => s.currentIndex);
   const base = useDisplayStore((s) => s.numericBase);
+
+  // While a program runs, the data table mirrors data memory as it changes —
+  // a symbol bound to an address must show what that address currently holds,
+  // not the value the assembler wrote there. `revision` bumps on every reveal.
+  const revision = useSimulatorStore((s) => s.revision);
+  const memory = useSimulatorStore((s) => s.getPrimaryMemory());
+  void revision;
+  const dataValueFor = (addr: number, assembledValue: number) =>
+    isTimelineActive && memory ? memory.peek(addr) : assembledValue;
 
   const currentPc = isTimelineActive ? frames[currentIndex]?.postTick?.pc : undefined;
   const status = mountStatus({ mountedSource, assemblySource, assembled, assemblyErrors });
@@ -122,7 +132,7 @@ export default function AssembledPanel({ onToggleCollapse }: { onToggleCollapse:
                       <td className="px-1.5 py-0.5 text-fg-muted">{sym.name}</td>
                       <td className="num px-1.5 py-0.5 text-fg-faint">{fmtAddr(sym.addr)}</td>
                       <td className="num px-1.5 py-0.5 text-fg-muted">
-                        {formatNum(sym.value, base, 16)}
+                        {formatNum(dataValueFor(sym.addr, sym.value), base, 16)}
                       </td>
                     </tr>
                   ))}

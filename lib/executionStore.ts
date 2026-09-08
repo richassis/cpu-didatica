@@ -21,9 +21,11 @@ export interface TickSnapshot {
   /** CPU internal fields not captured by serializeObjects(). */
   cpuInternalState: CpuInternalStateSnapshot;
   /**
-   * Value of the PC register at this tick. Thanks to `holdOutputUntilFetch`
-   * this is stable across every tick of one instruction — it only changes at
-   * FETCH — which is exactly what a source-line highlight needs.
+   * Address of the instruction being executed at this tick — stable across
+   * every tick of one instruction, only advancing at FETCH. This is NOT the
+   * live PC register value (which now increments to PC+1 during the instruction
+   * it fetched); it is carried forward from the PC value used at the last
+   * FETCH, which is what a source-line / IMEM highlight needs.
    */
   pc: number;
 }
@@ -114,6 +116,9 @@ function toCpuInternalState(index: number): CpuInternalStateSnapshot {
       halted: false,
       totalTicks: index,
       previousState: CpuState.RESET,
+      latchedFlagZero: false,
+      latchedFlagCarry: false,
+      latchedFlagNegative: false,
     };
   }
 
@@ -123,6 +128,9 @@ function toCpuInternalState(index: number): CpuInternalStateSnapshot {
     halted: cpu.halted,
     totalTicks: cpu.totalTicks,
     previousState: cpu.previousState,
+    latchedFlagZero: cpu.latchedFlagZero,
+    latchedFlagCarry: cpu.latchedFlagCarry,
+    latchedFlagNegative: cpu.latchedFlagNegative,
   };
 }
 
@@ -189,11 +197,20 @@ function resolvePcRegisterId(cpuId: string): string | null {
   return wire?.targetComponentId ?? null;
 }
 
-function captureSnapshot(index: number, pcRegisterId: string | null): TickSnapshot {
+/** Live value of the PC register right now, or 0 when the PC can't be resolved. */
+function readPcRegister(pcRegisterId: string | null): number {
+  if (!pcRegisterId) return 0;
+  return useSimulatorStore.getState().getRegister(pcRegisterId)?.value ?? 0;
+}
+
+/**
+ * @param instructionAddr address of the instruction being executed this tick —
+ *        the caller carries this forward and only advances it at FETCH.
+ */
+function captureSnapshot(index: number, instructionAddr: number): TickSnapshot {
   const sim = useSimulatorStore.getState();
   const cpu = sim.getPrimaryCpu();
   const state = cloneStateMap(sim.serializeObjects());
-  const pc = pcRegisterId ? Number(state.get(pcRegisterId)?.ports.value ?? 0) : 0;
 
   return {
     index,
@@ -202,7 +219,7 @@ function captureSnapshot(index: number, pcRegisterId: string | null): TickSnapsh
     opcode: Number(cpu?.in_opcode?.value ?? 0),
     halted: cpu?.halted ?? false,
     cpuInternalState: toCpuInternalState(index),
-    pc,
+    pc: instructionAddr,
   };
 }
 
@@ -225,7 +242,9 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
     try {
       sim.resetClock();
 
-      // Reload initial data memory values after resetClock() wiped everything
+      // resetClock() zeroes the data memory (Memory.reset()). Reload the
+      // program's initial data values on top of the clean slate; with no .data
+      // section `dataWords` is empty and the memory simply stays zeroed.
       if (dataWords.length > 0) {
         const memEntry = Array.from(sim.objects.entries())
           .find(([, obj]) => obj instanceof Memory);
@@ -235,9 +254,14 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
       const cpuForPc = sim.getPrimaryCpu();
       const pcRegisterId = cpuForPc ? resolvePcRegisterId(cpuForPc.id) : null;
 
+      // The address of the instruction being executed. Carried forward across
+      // ticks and only advanced at FETCH, so it stays put while the PC register
+      // itself runs ahead to PC+1 during the instruction it fetched.
+      let instructionAddr = readPcRegister(pcRegisterId);
+
       // Frame 0: initial state. No tick has run, so pre === post and there are
       // no substeps to reveal.
-      const initialSnapshot = captureSnapshot(0, pcRegisterId);
+      const initialSnapshot = captureSnapshot(0, instructionAddr);
       frames.push({
         index: 0,
         preTick: initialSnapshot,
@@ -251,17 +275,27 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
         if (cpu?.halted) break;
 
         // State BEFORE the tick — what widgets/wires show when this frame opens.
-        const preSnapshot = captureSnapshot(tickCount, pcRegisterId);
+        const preSnapshot = captureSnapshot(tickCount, instructionAddr);
 
+        // PC value used by this tick's FETCH (before the tick increments it).
+        const pcBeforeTick = readPcRegister(pcRegisterId);
         sim.tickClock();
         tickCount += 1;
 
-        // State AFTER the tick — fully propagated final values.
-        const postSnapshot = captureSnapshot(tickCount, pcRegisterId);
-
         // Group by the state that just executed (CPU.previousState), matching
         // the state the wire-animation overlay groups wires by.
-        const executedState = postSnapshot.cpuInternalState.previousState;
+        const executedState =
+          sim.getPrimaryCpu()?.previousState ?? CpuState.RESET;
+
+        // A FETCH just latched the instruction at the pre-tick PC value; that is
+        // the instruction every following tick executes until the next FETCH.
+        if (executedState === CpuState.FETCH) {
+          instructionAddr = pcBeforeTick;
+        }
+
+        // State AFTER the tick — fully propagated final values.
+        const postSnapshot = captureSnapshot(tickCount, instructionAddr);
+
         const substepGroups = buildSubstepGroups(sim.getPrimaryCpu(), executedState);
 
         frames.push({
