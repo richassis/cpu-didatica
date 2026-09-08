@@ -6,6 +6,7 @@ import { List } from "lucide-react";
 import { Props } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useExecutionStore } from "@/lib/executionStore";
+import { useMemoryPanelStore } from "@/lib/memoryPanelStore";
 import { useCanvasEditing } from "@/components/CanvasEditingContext";
 import { useDisplayStore, formatNum } from "@/lib/displayStore";
 import { EDITOR_ENABLED } from "@/lib/editorFlag";
@@ -38,6 +39,11 @@ export default function InstructionMemoryComponent({ component, zoom }: Props) {
   const [viewerOpen, setViewerOpen] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState(0);
   const canEdit = useCanvasEditing();
+  const openMemoryPanel = useMemoryPanelStore((s) => s.openMemoryPanel);
+
+  // In program mode the full listing opens in the side panel (datapath stays
+  // visible); in edit mode it stays a modal, since edit mode has no side panel.
+  const openListing = () => (canEdit ? setViewerOpen(true) : openMemoryPanel(id));
   const base = useDisplayStore((s) => s.numericBase);
   const currentRowRef = useRef<HTMLDivElement>(null);
 
@@ -86,7 +92,7 @@ export default function InstructionMemoryComponent({ component, zoom }: Props) {
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.stopPropagation();
-                setViewerOpen(true);
+                openListing();
               }}
               className="shrink-0 rounded p-0.5 text-fg-faint transition-colors hover:text-fg"
               title="View the whole program"
@@ -110,7 +116,7 @@ export default function InstructionMemoryComponent({ component, zoom }: Props) {
                   e.stopPropagation();
                   setSelectedAddress(a);
                   if (canEdit) setBuilderOpen(true);
-                  else setViewerOpen(true);
+                  else openMemoryPanel(id);
                 }}
                 className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded px-1 py-[2px] transition-colors"
                 style={

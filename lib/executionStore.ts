@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { CpuState, Memory } from "@/lib/simulator";
+import type { WireDescriptor } from "@/lib/simulator";
 import type { ComponentState } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import type { CPU, CpuInternalStateSnapshot } from "@/lib/simulator/Cpu";
@@ -56,6 +57,12 @@ export interface TickFrame {
   postTick: TickSnapshot;
   /** Substep groups for the state executed by this tick. */
   substepGroups: SubstepGroup[];
+  /**
+   * Component ids that *received* something this tick (latched a new value, or
+   * were the target of an asserted write-enable) but aren't in a substep group
+   * because they don't *send* this state. See `computeActivatedComponents`.
+   */
+  activatedComponentIds: string[];
 }
 
 interface ExecutionDerivedState {
@@ -173,6 +180,69 @@ function buildSubstepGroups(cpu: CPU | null, executedState: CpuState): SubstepGr
     .map(([order, componentIds]) => ({ order, componentIds }));
 }
 
+function arrChanged(x?: number[], y?: number[]): boolean {
+  if (x === y) return false;
+  if (!x || !y || x.length !== y.length) return true;
+  for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return true;
+  return false;
+}
+
+/**
+ * Components that took part in this tick beyond sending a value from a substep
+ * group — so the node lighting can also mark the ones that *received* something.
+ * Two sources, both deliberately narrow so the whole datapath doesn't light
+ * every tick from combinational ripple:
+ *
+ *  1. Clocked storage that latched a NEW value — a register whose output moved,
+ *     a GPR that was written, a memory cell that was written.
+ *  2. A component on the receiving end of a write-enable control signal that is
+ *     ASSERTED this tick (a wire out of the CPU driven non-zero) — that signal
+ *     means "you are latching now". "O recebimento de sinal de controle também
+ *     deve acender o componente." The clearing edge doesn't count, and mux
+ *     selects don't either — a mux lights from its own `tickSteps`.
+ */
+const ENABLE_SIGNAL_PORTS = new Set(["out_wrPC", "out_wrIR", "out_wrReg", "out_wrMem"]);
+function computeActivatedComponents(
+  cpu: CPU | null,
+  wires: WireDescriptor[],
+  pre: TickSnapshot,
+  post: TickSnapshot,
+): string[] {
+  if (!cpu) return [];
+  const ids = new Set<string>();
+
+  for (const comp of cpu.getRegisteredComponents()) {
+    const a = pre.state.get(comp.id);
+    const b = post.state.get(comp.id);
+    if (!a || !b) continue;
+
+    let latched = false;
+    switch (comp.type) {
+      case "Register":
+      case "PipelineRegister":
+        latched = a.ports.value !== b.ports.value;
+        break;
+      case "GprComponent":
+        latched = arrChanged(a.registers, b.registers);
+        break;
+      case "MemoryComponent":
+        latched = arrChanged(a.cells, b.cells);
+        break;
+    }
+    if (latched) ids.add(comp.id);
+  }
+
+  for (const w of wires) {
+    if (w.sourceComponentId !== cpu.id) continue;
+    if (!ENABLE_SIGNAL_PORTS.has(w.sourcePortName)) continue;
+    const before = pre.state.get(w.sourceComponentId)?.ports[w.sourcePortName];
+    const after = post.state.get(w.sourceComponentId)?.ports[w.sourcePortName];
+    if (before !== after && after) ids.add(w.targetComponentId);
+  }
+
+  return [...ids];
+}
+
 export function applySnapshot(snapshot: TickSnapshot): void {
   const sim = useSimulatorStore.getState();
   sim.applyObjectStates(cloneStateMap(snapshot.state));
@@ -253,6 +323,7 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
 
       const cpuForPc = sim.getPrimaryCpu();
       const pcRegisterId = cpuForPc ? resolvePcRegisterId(cpuForPc.id) : null;
+      const wires = sim.getWires();
 
       // The address of the instruction being executed. Carried forward across
       // ticks and only advanced at FETCH, so it stays put while the PC register
@@ -267,6 +338,7 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
         preTick: initialSnapshot,
         postTick: initialSnapshot,
         substepGroups: [],
+        activatedComponentIds: [],
       });
 
       let tickCount = 0;
@@ -303,6 +375,12 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
           preTick: preSnapshot,
           postTick: postSnapshot,
           substepGroups,
+          activatedComponentIds: computeActivatedComponents(
+            sim.getPrimaryCpu(),
+            wires,
+            preSnapshot,
+            postSnapshot,
+          ),
         });
 
         if (sim.getPrimaryCpu()?.halted) {
@@ -350,10 +428,15 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
       maskStore.revealAll();
     }
 
-    if (frame.substepGroups.length > 0) {
+    if (frame.substepGroups.length > 0 || frame.activatedComponentIds.length > 0) {
       // Progressive reveal: start widgets/wires at the pre-tick state, then let
       // the wire animation reveal post-tick values substep by substep.
-      maskStore.init(frame.preTick, frame.postTick, frame.substepGroups);
+      maskStore.init(
+        frame.preTick,
+        frame.postTick,
+        frame.substepGroups,
+        frame.activatedComponentIds,
+      );
     } else {
       // No substeps (e.g. frame 0) — apply the final state directly.
       maskStore.deactivate();

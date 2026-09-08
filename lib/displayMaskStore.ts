@@ -35,6 +35,13 @@ interface DisplayMaskState {
   substepGroups: SubstepGroup[];
 
   /**
+   * Component ids that changed state this tick but are NOT in any substep group
+   * (they received a value rather than sent one). They light up too, staged the
+   * same way — dim until their incoming wire lands, then bright.
+   */
+  activatedComponents: Set<string>;
+
+  /**
    * Initialize for a new tick animation.
    * Applies the baseSnapshot to live simulator objects so widgets start showing old values.
    */
@@ -42,6 +49,7 @@ interface DisplayMaskState {
     baseSnapshot: TickSnapshot,
     targetSnapshot: TickSnapshot,
     substepGroups: SubstepGroup[],
+    activatedComponentIds?: string[],
   ) => void;
 
   /**
@@ -131,8 +139,9 @@ export const useDisplayMaskStore = create<DisplayMaskState>()((set, get) => ({
   targetSnapshot: null,
   revealedComponents: new Set(),
   substepGroups: [],
+  activatedComponents: new Set(),
 
-  init: (baseSnapshot, targetSnapshot, substepGroups) => {
+  init: (baseSnapshot, targetSnapshot, substepGroups, activatedComponentIds = []) => {
     // Apply the BASE snapshot to live simulator objects so all widgets/wires
     // initially show pre-tick (old) values.
     applySnapshot(baseSnapshot);
@@ -149,11 +158,20 @@ export const useDisplayMaskStore = create<DisplayMaskState>()((set, get) => ({
       }
     }
 
+    // A component already in a substep group is staged by its own wire reveal;
+    // only components NOT in one need the separate "activated" (received a
+    // value) treatment.
+    const groupedIds = new Set(substepGroups.flatMap((g) => g.componentIds));
+    const activatedComponents = new Set(
+      activatedComponentIds.filter((id) => !groupedIds.has(id))
+    );
+
     set({
       isActive: true,
       baseSnapshot,
       targetSnapshot,
       substepGroups,
+      activatedComponents,
       revealedComponents: revealed,
     });
   },
@@ -201,6 +219,7 @@ export const useDisplayMaskStore = create<DisplayMaskState>()((set, get) => ({
       targetSnapshot: null,
       revealedComponents: new Set(),
       substepGroups: [],
+      activatedComponents: new Set(),
     });
   },
 

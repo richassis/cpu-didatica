@@ -6,8 +6,10 @@ import AssemblyPanel from "@/components/ProgramMode/AssemblyPanel";
 import AssembledPanel from "@/components/ProgramMode/AssembledPanel";
 import BuildBar from "@/components/ProgramMode/BuildBar";
 import DatapathViewer from "@/components/ProgramMode/DatapathViewer";
+import MemoryPanel from "@/components/ProgramMode/MemoryPanel";
 import SimulationBar from "@/components/ProgramMode/SimulationBar";
 import { useExecutionStore } from "@/lib/executionStore";
+import { useMemoryPanelStore } from "@/lib/memoryPanelStore";
 import useSimulationShortcuts from "@/lib/useSimulationShortcuts";
 
 /** Share of the screen the code region takes before a program is running. */
@@ -45,8 +47,13 @@ const MONTAGEM_W = 220;
  * BuildBar sits above both panels rather than inside either header, so
  * Montar/Executar stay reachable regardless of what is collapsed.
  */
+/** Width the code region takes while a memory is open in the side panel. */
+const MEMORY_PANEL_W = 340;
+
 export default function ProgramModeLayout() {
   const isTimelineActive = useExecutionStore((s) => s.isTimelineActive);
+  const inspectedMemoryId = useMemoryPanelStore((s) => s.inspectedMemoryId);
+  const memoryOpen = inspectedMemoryId !== null;
   const [manualWidth, setManualWidth] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [asmCollapsed, setAsmCollapsed] = useState(false);
@@ -105,11 +112,13 @@ export default function ProgramModeLayout() {
   // Base width before collapse is factored in — a CSS percentage while auto,
   // a pixel value once the student has dragged the separator.
   const baseWidth = manualWidth != null ? `${manualWidth}px` : isTimelineActive ? WIDTH_DURING_RUN : WIDTH_BEFORE_RUN;
-  const codeRegionWidth = asmCollapsed
-    ? `${RAIL_W + (mountCollapsed ? RAIL_W : MONTAGEM_W)}px`
-    : mountCollapsed
-      ? `calc(${baseWidth} - ${MONTAGEM_W - RAIL_W}px)`
-      : baseWidth;
+  const codeRegionWidth = memoryOpen
+    ? `${manualWidth ?? MEMORY_PANEL_W}px`
+    : asmCollapsed
+      ? `${RAIL_W + (mountCollapsed ? RAIL_W : MONTAGEM_W)}px`
+      : mountCollapsed
+        ? `calc(${baseWidth} - ${MONTAGEM_W - RAIL_W}px)`
+        : baseWidth;
 
   return (
     /* The bar is always mounted, so the padding that clears it is unconditional
@@ -127,21 +136,27 @@ export default function ProgramModeLayout() {
         >
           <BuildBar />
 
-          <div className="flex min-h-0 flex-1">
-            {asmCollapsed ? (
-              <CollapsedRail label="Assembly" onExpand={() => setAsmCollapsed(false)} />
-            ) : (
-              <div className="min-h-0 min-w-0 flex-1">
-                <AssemblyPanel onToggleCollapse={() => setAsmCollapsed(true)} />
-              </div>
-            )}
+          {memoryOpen ? (
+            <div className="min-h-0 flex-1">
+              <MemoryPanel />
+            </div>
+          ) : (
+            <div className="flex min-h-0 flex-1">
+              {asmCollapsed ? (
+                <CollapsedRail label="Assembly" onExpand={() => setAsmCollapsed(false)} />
+              ) : (
+                <div className="min-h-0 min-w-0 flex-1">
+                  <AssemblyPanel onToggleCollapse={() => setAsmCollapsed(true)} />
+                </div>
+              )}
 
-            {mountCollapsed ? (
-              <CollapsedRail label="Montagem" onExpand={() => setMountCollapsed(false)} />
-            ) : (
-              <AssembledPanel onToggleCollapse={() => setMountCollapsed(true)} />
-            )}
-          </div>
+              {mountCollapsed ? (
+                <CollapsedRail label="Montagem" onExpand={() => setMountCollapsed(false)} />
+              ) : (
+                <AssembledPanel onToggleCollapse={() => setMountCollapsed(true)} />
+              )}
+            </div>
+          )}
 
           <div
             role="separator"

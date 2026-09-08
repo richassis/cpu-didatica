@@ -84,8 +84,8 @@ export default function Legend() {
                   <Silhouette kind="mux" />
                 </ShapeSample>
 
-                <ShapeSample label="Decodificador" note="trapézio invertido">
-                  <Silhouette kind="decoder" />
+                <ShapeSample label="Decodificador" note="barra vertical fina">
+                  <span className="node--boxed absolute inset-y-0 left-1/2 w-2 -translate-x-1/2 rounded-[3px]" />
                 </ShapeSample>
 
                 <ShapeSample label="Unidade de controle" note="tracejada — comanda o caminho de dados">
@@ -100,12 +100,17 @@ export default function Legend() {
                 <StateSample
                   color="var(--st-active)"
                   label="Ativo"
-                  note="executando neste tick"
+                  note="componente executando neste tick"
                 />
                 <StateSample
                   color="var(--st-data)"
-                  label="Dado"
-                  note="fio ou registrador com valor"
+                  label="Fio de dado"
+                  note="azul em movimento; registrador com valor"
+                />
+                <StateSample
+                  color="var(--st-active)"
+                  label="Fio de controle"
+                  note="verde em movimento; sinal da UC"
                 />
                 <StateSample color="var(--st-warn)" label="Atenção" note="flag ativada" />
                 <StateSample color="var(--st-error)" label="Erro" note="halt, overflow, endereço inválido" />

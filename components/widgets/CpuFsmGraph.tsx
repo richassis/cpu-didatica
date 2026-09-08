@@ -11,40 +11,27 @@ import { Opcode, opcodeToMnemonic } from "@/lib/simulator/ISA";
  * instruction. Teaching the branches not taken is the point — they stay
  * visible, just dim, rather than disappearing the moment they're not current.
  *
- * Branches run top-down as columns beside FETCH/DECODE — the longest branch
- * (ULA) is 3 states, so the whole graph is only 3 levels tall regardless of
- * how many branches exist, instead of growing a new floor per branch.
+ * FETCH and DECODE are stacked at the top, centred over the branch fan; below
+ * DECODE the fan-out spine splits into one column per branch, each running
+ * top-down (the longest, ULA, is 3 states). Every non-HLT branch drops to the
+ * merge spine at the bottom, which loops back up the left rail into FETCH.
  *
- * FETCH and DECODE sit close together, centred on the branch rows, joined by
- * one vertical line at their shared x. That line also carries their exits:
- * above DECODE it jogs into the fan-out spine, below FETCH it jogs down to
- * the merge spine — both jogs leave through the box's own top/bottom edge,
- * which nothing else ever touches, so nothing crosses either box.
+ * The instruction badge (top-left) is the single readout that replaced a static
+ * label over every branch. It stays off for the whole DECODE tick — the opcode
+ * it reads isn't trustworthy until DECODE's wire animation resolves — and
+ * appears the instant the branch's first state goes current.
  *
- * Which mnemonics share a branch used to be printed above every column; that
- * duplicated the one instruction actually running (shown at the top, in
- * green) with five other labels the student wasn't looking at. Gone — one
- * readout, not six. That readout also stays off for the entire DECODE tick:
- * the opcode it reads isn't trustworthy until DECODE's own wire animation has
- * actually resolved, so showing it any earlier just flashes the previous
- * instruction. It appears the instant the branch's first state goes current,
- * never before.
- *
- * Laid out on an abstract viewBox rather than real pixels: nothing here has to
- * line up with a port, so a proportional grid stretched with
- * `preserveAspectRatio="none"` fills whatever size the control unit's body
- * has to give it, at any aspect ratio.
+ * Laid out on an abstract viewBox with `preserveAspectRatio="none"`: nothing
+ * here lines up with a port, so a proportional grid fills whatever size the
+ * control unit's body gives it.
  */
 
 type BranchKey = "LDA" | "LDAI" | "STA" | "ULA" | "JUMP" | "HLT";
 
 interface Branch {
   key: BranchKey;
-  /** Opcodes that select this branch. */
   opcodes: Opcode[];
-  /** States walked after DECODE, top to bottom. */
   states: CpuState[];
-  /** Column (horizontal slot) this branch occupies in the layout. */
   col: number;
 }
 
@@ -72,28 +59,27 @@ const MAX_LEVELS = 3; // the ULA branch: READREG2 → EXECUTE → WRITEREG3
 const BOX_W = 156;
 const BOX_H = 42;
 
-const COL_X0 = 288;
+const RAIL_X = 24; // the return loop runs up this left rail
+
+const COL_X0 = 96;
 const COL_W = 176;
 const COL_X_LAST = COL_X0 + (BRANCHES.length - 1) * COL_W;
 
-const FANOUT_Y = 58;
-const ROW_Y0 = 106;
-const ROW_H = 78;
-const MERGE_Y = ROW_Y0 + (MAX_LEVELS - 1) * ROW_H + BOX_H / 2 + 32;
+// FETCH / DECODE stacked at the top, centred over the branch fan.
+const HEADER_X = (COL_X0 + COL_X_LAST) / 2;
+const FETCH_Y = 44;
+const DECODE_Y = FETCH_Y + 60;
 
-const FETCH_X = 100;
-// FETCH and DECODE sit close together, centred on the row0–row2 span rather
-// than pinned at the graph's own top/bottom — each still exits through its
-// own top/bottom edge, which is what keeps every line crossing-free.
-const ROWS_MID = (ROW_Y0 + (ROW_Y0 + (MAX_LEVELS - 1) * ROW_H)) / 2;
-const DECODE_Y = ROWS_MID - 38;
-const FETCH_Y = ROWS_MID + 38;
+const FANOUT_Y = DECODE_Y + 44;
+const ROW_Y0 = FANOUT_Y + 54;
+const ROW_H = 74;
+const MERGE_Y = ROW_Y0 + (MAX_LEVELS - 1) * ROW_H + BOX_H / 2 + 30;
 
-const INSTR_BADGE_X = (COL_X0 + COL_X_LAST) / 2;
-const INSTR_BADGE_Y = 26;
+const INSTR_BADGE_X = COL_X_LAST + BOX_W / 2 - 68;
+const INSTR_BADGE_Y = FETCH_Y;
 
 const GRAPH_W = COL_X_LAST + BOX_W / 2 + 30;
-const GRAPH_H = MERGE_Y + 26;
+const GRAPH_H = MERGE_Y + 24;
 
 function colX(col: number): number {
   return COL_X0 + col * COL_W;
@@ -178,9 +164,7 @@ export default function CpuFsmGraph({ currentState, nextState, opcode, halted }:
   const activeColX = activeBranch ? colX(activeBranch.col) : null;
 
   // The DECODE→branch trail stays lit for the whole instruction, not just the
-  // one tick it was chosen on — otherwise the wire the box lit up from goes
-  // dark the moment execution moves on, which reads as the connection being
-  // broken rather than as "this is the path we're on".
+  // one tick it was chosen on.
   const onDecodeTrail = !!activeBranch;
 
   return (
@@ -190,18 +174,21 @@ export default function CpuFsmGraph({ currentState, nextState, opcode, halted }:
       className="h-full w-full"
       aria-label="Diagrama de estados da unidade de controle"
     >
-      {/* The fixed link between the two shared steps, plus each box's own
-          exit jog — all three segments share x = FETCH_X and never overlap,
-          so together they read as one line with FETCH/DECODE sitting on it. */}
-      <Edge x1={FETCH_X} y1={FANOUT_Y} x2={FETCH_X} y2={DECODE_Y - BOX_H / 2} active={onDecodeTrail} />
-      <Edge x1={FETCH_X} y1={DECODE_Y + BOX_H / 2} x2={FETCH_X} y2={FETCH_Y - BOX_H / 2} active={isFetchCurrent || isDecodeCurrent} />
-      <Edge x1={FETCH_X} y1={FETCH_Y + BOX_H / 2} x2={FETCH_X} y2={MERGE_Y} active={false} />
+      {/* FETCH → DECODE link, then DECODE → fan-out spine. */}
+      <Edge x1={HEADER_X} y1={FETCH_Y + BOX_H / 2} x2={HEADER_X} y2={DECODE_Y - BOX_H / 2} active={isFetchCurrent || isDecodeCurrent} />
+      <Edge x1={HEADER_X} y1={DECODE_Y + BOX_H / 2} x2={HEADER_X} y2={FANOUT_Y} active={onDecodeTrail} />
 
       {/* Fan-out spine. Track stays neutral end to end; the active overlay
           draws only as far as the column actually selected. */}
-      <Edge x1={FETCH_X} y1={FANOUT_Y} x2={COL_X_LAST} y2={FANOUT_Y} active={false} />
+      <Edge x1={COL_X0} y1={FANOUT_Y} x2={COL_X_LAST} y2={FANOUT_Y} active={false} />
       {onDecodeTrail && activeColX !== null && (
-        <Edge x1={FETCH_X} y1={FANOUT_Y} x2={activeColX} y2={FANOUT_Y} active />
+        <Edge
+          x1={Math.min(HEADER_X, activeColX)}
+          y1={FANOUT_Y}
+          x2={Math.max(HEADER_X, activeColX)}
+          y2={FANOUT_Y}
+          active
+        />
       )}
 
       {BRANCHES.map((branch) => {
@@ -239,8 +226,8 @@ export default function CpuFsmGraph({ currentState, nextState, opcode, halted }:
         );
       })}
 
-      {/* Merge spine: every non-HLT branch returns to FETCH. Corner at
-          FETCH_X, then a vertical run up into FETCH's own bottom edge. */}
+      {/* Merge spine: every non-HLT branch returns to FETCH. Runs left to the
+          rail, up the rail, and into FETCH's left edge. */}
       {(() => {
         const lastReturningCol = colX(BRANCHES.filter((b) => b.key !== "HLT").length - 1);
         const returnActive = !!activeBranch && activeBranch.key !== "HLT" && onDecodeTrail;
@@ -251,7 +238,7 @@ export default function CpuFsmGraph({ currentState, nextState, opcode, halted }:
               <Edge x1={COL_X0} y1={MERGE_Y} x2={colX(activeBranch!.col)} y2={MERGE_Y} active />
             )}
             <path
-              d={`M ${COL_X0} ${MERGE_Y} L ${FETCH_X} ${MERGE_Y} L ${FETCH_X} ${FETCH_Y + BOX_H / 2}`}
+              d={`M ${COL_X0} ${MERGE_Y} L ${RAIL_X} ${MERGE_Y} L ${RAIL_X} ${FETCH_Y} L ${HEADER_X - BOX_W / 2} ${FETCH_Y}`}
               fill="none"
               stroke={returnActive ? "var(--st-active)" : "var(--fg-faint)"}
               strokeWidth={returnActive ? 2 : 1}
@@ -268,12 +255,11 @@ export default function CpuFsmGraph({ currentState, nextState, opcode, halted }:
         </marker>
       </defs>
 
-      <StateBox x={FETCH_X} y={DECODE_Y} label="DECODE" active={isDecodeCurrent} />
-      <StateBox x={FETCH_X} y={FETCH_Y} label={halted ? "HALT" : "FETCH"} active={isFetchCurrent && !halted} />
+      <StateBox x={HEADER_X} y={FETCH_Y} label={halted ? "HALT" : "FETCH"} active={isFetchCurrent && !halted} />
+      <StateBox x={HEADER_X} y={DECODE_Y} label="DECODE" active={isDecodeCurrent} />
 
-      {/* The instruction actually decoded, featured at the top — the single
-          readout that replaced a static label over every branch, and that
-          only appears once DECODE has actually finished. */}
+      {/* The instruction actually decoded, top-right — appears only once DECODE
+          has finished. */}
       {currentMnemonic && (
         <g transform={`translate(${INSTR_BADGE_X - 68}, ${INSTR_BADGE_Y - 19})`}>
           <rect width={136} height={38} rx={19} fill="color-mix(in srgb, var(--st-active) 18%, transparent)" stroke="var(--st-active)" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
@@ -283,7 +269,7 @@ export default function CpuFsmGraph({ currentState, nextState, opcode, halted }:
         </g>
       )}
 
-      {/* Next-state hint: a faint marker at the head of the upcoming edge. */}
+      {/* Next-state hint. */}
       {nextState !== currentState && (
         <text
           x={GRAPH_W - 6}

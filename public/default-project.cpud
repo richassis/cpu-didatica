@@ -2,16 +2,16 @@
   "id": "default-full-datapath",
   "name": "Full Datapath",
   "createdAt": "2026-04-07T03:40:44.124Z",
-  "updatedAt": "2026-09-08T14:33:49.081Z",
+  "updatedAt": "2026-09-08T21:06:06.946Z",
   "components": [
     {
       "id": "cpu-1",
       "type": "CpuComponent",
       "label": "UC",
       "x": 1136,
-      "y": 160,
+      "y": 128,
       "w": 704,
-      "h": 240,
+      "h": 336,
       "meta": {},
       "state": {
         "ports": {
@@ -63,8 +63,8 @@
       "id": "ir-1",
       "type": "Register",
       "label": "IR",
-      "x": 832,
-      "y": 512,
+      "x": 816,
+      "y": 592,
       "w": 144,
       "h": 48,
       "meta": {
@@ -85,7 +85,7 @@
       "id": "memory-1",
       "type": "MemoryComponent",
       "label": "Memory",
-      "x": 864,
+      "x": 816,
       "y": 736,
       "w": 160,
       "h": 288,
@@ -371,7 +371,7 @@
       "id": "gpr-1",
       "type": "GprComponent",
       "label": "GPR",
-      "x": 1440,
+      "x": 1264,
       "y": 544,
       "w": 176,
       "h": 256,
@@ -412,16 +412,16 @@
       "id": "ula-1",
       "type": "UlaComponent",
       "label": "ULA",
-      "x": 1872,
+      "x": 1696,
       "y": 576,
       "w": 128,
       "h": 176,
       "meta": {},
       "tickSteps": [
-        9
+        2
       ],
       "tickOrderByState": {
-        "2": 0
+        "2": 1
       },
       "state": {
         "ports": {
@@ -439,9 +439,9 @@
       "id": "decoder-1",
       "type": "DecoderComponent",
       "label": "Decoder",
-      "x": 1056,
-      "y": 496,
-      "w": 144,
+      "x": 1008,
+      "y": 512,
+      "w": 64,
       "h": 192,
       "meta": {},
       "tickSteps": [
@@ -520,7 +520,7 @@
       "w": 160,
       "h": 288,
       "x": 624,
-      "y": 448,
+      "y": 496,
       "tickSteps": [
         0
       ],
@@ -798,7 +798,7 @@
       "label": "muxDReg",
       "w": 64,
       "h": 96,
-      "x": 1344,
+      "x": 1168,
       "y": 800,
       "meta": {
         "bitWidth": 16,
@@ -830,8 +830,8 @@
       "label": "MDR",
       "w": 144,
       "h": 48,
-      "x": 1088,
-      "y": 832,
+      "x": 1008,
+      "y": 928,
       "meta": {
         "bitWidth": 16
       },
@@ -852,7 +852,7 @@
       "label": "muxAReg",
       "w": 64,
       "h": 96,
-      "x": 1296,
+      "x": 1120,
       "y": 672,
       "meta": {
         "bitWidth": 16,
@@ -883,7 +883,7 @@
       "label": "A",
       "w": 144,
       "h": 48,
-      "x": 1664,
+      "x": 1488,
       "y": 592,
       "meta": {
         "bitWidth": 16
@@ -906,7 +906,7 @@
       "label": "B",
       "w": 144,
       "h": 48,
-      "x": 1664,
+      "x": 1488,
       "y": 704,
       "meta": {
         "bitWidth": 16
@@ -1006,7 +1006,12 @@
       "targetPortName": "in_1",
       "label": "",
       "visible": true,
-      "nodes": []
+      "nodes": [
+        {
+          "x": 1136,
+          "y": 928
+        }
+      ]
     },
     {
       "id": "7c9be75f-735d-4806-8426-972e6866df06",
@@ -1066,12 +1071,7 @@
       "targetPortName": "writeEnable",
       "label": "",
       "visible": true,
-      "nodes": [
-        {
-          "x": 1248,
-          "y": 432
-        }
-      ]
+      "nodes": []
     },
     {
       "id": "24f9d965-2d56-4559-af88-99a9057469b3",
@@ -1081,20 +1081,7 @@
       "targetPortName": "writeEnable",
       "label": "",
       "visible": true,
-      "nodes": [
-        {
-          "x": 1328,
-          "y": 432
-        },
-        {
-          "x": 912,
-          "y": 432
-        },
-        {
-          "x": 912,
-          "y": 480
-        }
-      ]
+      "nodes": []
     },
     {
       "id": "80a77060-1909-47a5-9d61-63356997205f",
@@ -1104,7 +1091,20 @@
       "targetPortName": "wrMem",
       "label": "",
       "visible": true,
-      "nodes": []
+      "nodes": [
+        {
+          "x": 1520,
+          "y": 496
+        },
+        {
+          "x": 976,
+          "y": 496
+        },
+        {
+          "x": 976,
+          "y": 704
+        }
+      ]
     },
     {
       "id": "ec63cf01-8630-4584-9f26-38e6b6a7259e",
@@ -1124,16 +1124,7 @@
       "targetPortName": "data",
       "label": "",
       "visible": true,
-      "nodes": [
-        {
-          "x": 1232,
-          "y": 416
-        },
-        {
-          "x": 880,
-          "y": 416
-        }
-      ]
+      "nodes": []
     },
     {
       "id": "1ba9e4ba-b52a-4255-ae3b-7dce65385d21",
@@ -1143,20 +1134,7 @@
       "targetPortName": "in_2",
       "label": "",
       "visible": true,
-      "nodes": [
-        {
-          "x": 2016,
-          "y": 800
-        },
-        {
-          "x": 2016,
-          "y": 928
-        },
-        {
-          "x": 1296,
-          "y": 928
-        }
-      ]
+      "nodes": []
     },
     {
       "id": "9b3e5139-c5e6-4431-bf01-a25dca58ad0c",
@@ -1169,16 +1147,6 @@
       "nodes": []
     },
     {
-      "id": "5f65b437-f008-46bb-8276-8bc4b09508ec",
-      "sourceComponentId": "fb653707-7a61-4e5c-8ce4-5f1346e715b2",
-      "sourcePortName": "value",
-      "targetComponentId": "memory-1",
-      "targetPortName": "addr",
-      "label": "",
-      "visible": true,
-      "nodes": []
-    },
-    {
       "id": "93cd9ecb-237b-41a9-835c-9a665ca3b083",
       "sourceComponentId": "decoder-1",
       "sourcePortName": "dst",
@@ -1186,16 +1154,7 @@
       "targetPortName": "in_1",
       "label": "",
       "visible": true,
-      "nodes": [
-        {
-          "x": 1200,
-          "y": 640
-        },
-        {
-          "x": 1200,
-          "y": 656
-        }
-      ]
+      "nodes": []
     },
     {
       "id": "4653ffe4-f64c-45e5-897f-56d51caad1bd",
@@ -1206,6 +1165,14 @@
       "label": "",
       "visible": true,
       "nodes": [
+        {
+          "x": 1120,
+          "y": 608
+        },
+        {
+          "x": 1248,
+          "y": 608
+        },
         {
           "x": 1248,
           "y": 592
@@ -1220,16 +1187,7 @@
       "targetPortName": "b",
       "label": "",
       "visible": true,
-      "nodes": [
-        {
-          "x": 1856,
-          "y": 736
-        },
-        {
-          "x": 1856,
-          "y": 672
-        }
-      ]
+      "nodes": []
     },
     {
       "id": "279fd622-a84d-431b-bbc4-ff3c5739ec59",
@@ -1239,12 +1197,7 @@
       "targetPortName": "in_readAddrB",
       "label": "",
       "visible": true,
-      "nodes": [
-        {
-          "x": 1216,
-          "y": 608
-        }
-      ]
+      "nodes": []
     },
     {
       "id": "443b88bf-2de7-4fb0-a1b1-c1344743346d",
@@ -1254,16 +1207,7 @@
       "targetPortName": "in_writeData",
       "label": "",
       "visible": true,
-      "nodes": [
-        {
-          "x": 1424,
-          "y": 864
-        },
-        {
-          "x": 1424,
-          "y": 736
-        }
-      ]
+      "nodes": []
     },
     {
       "id": "36c7d02f-d812-4126-997d-c155f01d1219",
@@ -1273,12 +1217,7 @@
       "targetPortName": "in_writeAddr",
       "label": "",
       "visible": true,
-      "nodes": [
-        {
-          "x": 1424,
-          "y": 720
-        }
-      ]
+      "nodes": []
     },
     {
       "id": "e11c7545-4343-4d21-8230-eff24a450648",
@@ -1308,12 +1247,7 @@
       "targetPortName": "in_0",
       "label": "",
       "visible": true,
-      "nodes": [
-        {
-          "x": 1232,
-          "y": 816
-        }
-      ]
+      "nodes": []
     },
     {
       "id": "eadbc3c9-bb47-4b57-800e-dadb1066b486",
@@ -1343,7 +1277,12 @@
       "targetPortName": "in",
       "label": "",
       "visible": true,
-      "nodes": []
+      "nodes": [
+        {
+          "x": 592,
+          "y": 528
+        }
+      ]
     },
     {
       "id": "ca1ebadc-278b-468a-ba98-c3c2a817c5f1",
@@ -1353,24 +1292,7 @@
       "targetPortName": "in_0",
       "label": "",
       "visible": true,
-      "nodes": [
-        {
-          "x": 848,
-          "y": 368
-        },
-        {
-          "x": 848,
-          "y": 400
-        },
-        {
-          "x": 288,
-          "y": 400
-        },
-        {
-          "x": 288,
-          "y": 528
-        }
-      ]
+      "nodes": []
     },
     {
       "id": "f0706b80-24d4-4779-9fd0-ed36cb485fff",
@@ -1413,7 +1335,22 @@
       "nodes": []
     },
     {
-      "id": "c49044a2-1e0a-4874-af5b-c563561ff387",
+      "id": "ca63ef1e-5846-4ab3-9dfd-570103a0b831",
+      "sourceComponentId": "fb653707-7a61-4e5c-8ce4-5f1346e715b2",
+      "sourcePortName": "value",
+      "targetComponentId": "memory-1",
+      "targetPortName": "addr",
+      "label": "",
+      "visible": true,
+      "nodes": [
+        {
+          "x": 608,
+          "y": 720
+        }
+      ]
+    },
+    {
+      "id": "4a5d04f3-5061-405f-9334-51f61ee37eb6",
       "sourceComponentId": "8447ad64-3e71-4ffc-97f1-7d93bad0bb6e",
       "sourcePortName": "value",
       "targetComponentId": "memory-1",
@@ -1422,18 +1359,22 @@
       "visible": true,
       "nodes": [
         {
-          "x": 1376,
-          "y": 528
+          "x": 1664,
+          "y": 1040
         },
         {
-          "x": 1376,
+          "x": 816,
           "y": 1040
+        },
+        {
+          "x": 816,
+          "y": 1152
         }
       ]
     }
   ],
   "canvasSize": {
-    "width": 4000,
+    "width": 2400,
     "height": 3000
   },
   "zoom": 0.75,

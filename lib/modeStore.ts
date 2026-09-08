@@ -18,6 +18,7 @@
 
 import { create } from "zustand";
 import { EDITOR_ENABLED } from "./editorFlag";
+import { useMemoryPanelStore } from "./memoryPanelStore";
 
 export type SimulatorMode = "program" | "edit";
 
@@ -59,6 +60,8 @@ export const useModeStore = create<ModeState>()((set, get) => ({
     // The single choke point. Builds without the editor can never reach edit
     // mode, so a stray button surviving somewhere cannot expose authoring.
     if (!EDITOR_ENABLED) return;
+    // The memory side panel only exists in Program Mode's layout.
+    useMemoryPanelStore.getState().closeMemoryPanel();
     set({ mode: "edit" });
   },
 
