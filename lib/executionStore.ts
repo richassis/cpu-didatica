@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { CpuState, Memory } from "@/lib/simulator";
+import type { WireDescriptor } from "@/lib/simulator";
 import type { ComponentState } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import type { CPU, CpuInternalStateSnapshot } from "@/lib/simulator/Cpu";
@@ -21,9 +22,11 @@ export interface TickSnapshot {
   /** CPU internal fields not captured by serializeObjects(). */
   cpuInternalState: CpuInternalStateSnapshot;
   /**
-   * Value of the PC register at this tick. Thanks to `holdOutputUntilFetch`
-   * this is stable across every tick of one instruction — it only changes at
-   * FETCH — which is exactly what a source-line highlight needs.
+   * Address of the instruction being executed at this tick — stable across
+   * every tick of one instruction, only advancing at FETCH. This is NOT the
+   * live PC register value (which now increments to PC+1 during the instruction
+   * it fetched); it is carried forward from the PC value used at the last
+   * FETCH, which is what a source-line / IMEM highlight needs.
    */
   pc: number;
 }
@@ -54,6 +57,12 @@ export interface TickFrame {
   postTick: TickSnapshot;
   /** Substep groups for the state executed by this tick. */
   substepGroups: SubstepGroup[];
+  /**
+   * Component ids that *received* something this tick (latched a new value, or
+   * were the target of an asserted write-enable) but aren't in a substep group
+   * because they don't *send* this state. See `computeActivatedComponents`.
+   */
+  activatedComponentIds: string[];
 }
 
 interface ExecutionDerivedState {
@@ -114,6 +123,9 @@ function toCpuInternalState(index: number): CpuInternalStateSnapshot {
       halted: false,
       totalTicks: index,
       previousState: CpuState.RESET,
+      latchedFlagZero: false,
+      latchedFlagCarry: false,
+      latchedFlagNegative: false,
     };
   }
 
@@ -123,6 +135,9 @@ function toCpuInternalState(index: number): CpuInternalStateSnapshot {
     halted: cpu.halted,
     totalTicks: cpu.totalTicks,
     previousState: cpu.previousState,
+    latchedFlagZero: cpu.latchedFlagZero,
+    latchedFlagCarry: cpu.latchedFlagCarry,
+    latchedFlagNegative: cpu.latchedFlagNegative,
   };
 }
 
@@ -165,6 +180,69 @@ function buildSubstepGroups(cpu: CPU | null, executedState: CpuState): SubstepGr
     .map(([order, componentIds]) => ({ order, componentIds }));
 }
 
+function arrChanged(x?: number[], y?: number[]): boolean {
+  if (x === y) return false;
+  if (!x || !y || x.length !== y.length) return true;
+  for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return true;
+  return false;
+}
+
+/**
+ * Components that took part in this tick beyond sending a value from a substep
+ * group — so the node lighting can also mark the ones that *received* something.
+ * Two sources, both deliberately narrow so the whole datapath doesn't light
+ * every tick from combinational ripple:
+ *
+ *  1. Clocked storage that latched a NEW value — a register whose output moved,
+ *     a GPR that was written, a memory cell that was written.
+ *  2. A component on the receiving end of a write-enable control signal that is
+ *     ASSERTED this tick (a wire out of the CPU driven non-zero) — that signal
+ *     means "you are latching now". "O recebimento de sinal de controle também
+ *     deve acender o componente." The clearing edge doesn't count, and mux
+ *     selects don't either — a mux lights from its own `tickSteps`.
+ */
+const ENABLE_SIGNAL_PORTS = new Set(["out_wrPC", "out_wrIR", "out_wrReg", "out_wrMem"]);
+function computeActivatedComponents(
+  cpu: CPU | null,
+  wires: WireDescriptor[],
+  pre: TickSnapshot,
+  post: TickSnapshot,
+): string[] {
+  if (!cpu) return [];
+  const ids = new Set<string>();
+
+  for (const comp of cpu.getRegisteredComponents()) {
+    const a = pre.state.get(comp.id);
+    const b = post.state.get(comp.id);
+    if (!a || !b) continue;
+
+    let latched = false;
+    switch (comp.type) {
+      case "Register":
+      case "PipelineRegister":
+        latched = a.ports.value !== b.ports.value;
+        break;
+      case "GprComponent":
+        latched = arrChanged(a.registers, b.registers);
+        break;
+      case "MemoryComponent":
+        latched = arrChanged(a.cells, b.cells);
+        break;
+    }
+    if (latched) ids.add(comp.id);
+  }
+
+  for (const w of wires) {
+    if (w.sourceComponentId !== cpu.id) continue;
+    if (!ENABLE_SIGNAL_PORTS.has(w.sourcePortName)) continue;
+    const before = pre.state.get(w.sourceComponentId)?.ports[w.sourcePortName];
+    const after = post.state.get(w.sourceComponentId)?.ports[w.sourcePortName];
+    if (before !== after && after) ids.add(w.targetComponentId);
+  }
+
+  return [...ids];
+}
+
 export function applySnapshot(snapshot: TickSnapshot): void {
   const sim = useSimulatorStore.getState();
   sim.applyObjectStates(cloneStateMap(snapshot.state));
@@ -189,11 +267,20 @@ function resolvePcRegisterId(cpuId: string): string | null {
   return wire?.targetComponentId ?? null;
 }
 
-function captureSnapshot(index: number, pcRegisterId: string | null): TickSnapshot {
+/** Live value of the PC register right now, or 0 when the PC can't be resolved. */
+function readPcRegister(pcRegisterId: string | null): number {
+  if (!pcRegisterId) return 0;
+  return useSimulatorStore.getState().getRegister(pcRegisterId)?.value ?? 0;
+}
+
+/**
+ * @param instructionAddr address of the instruction being executed this tick —
+ *        the caller carries this forward and only advances it at FETCH.
+ */
+function captureSnapshot(index: number, instructionAddr: number): TickSnapshot {
   const sim = useSimulatorStore.getState();
   const cpu = sim.getPrimaryCpu();
   const state = cloneStateMap(sim.serializeObjects());
-  const pc = pcRegisterId ? Number(state.get(pcRegisterId)?.ports.value ?? 0) : 0;
 
   return {
     index,
@@ -202,7 +289,7 @@ function captureSnapshot(index: number, pcRegisterId: string | null): TickSnapsh
     opcode: Number(cpu?.in_opcode?.value ?? 0),
     halted: cpu?.halted ?? false,
     cpuInternalState: toCpuInternalState(index),
-    pc,
+    pc: instructionAddr,
   };
 }
 
@@ -225,7 +312,9 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
     try {
       sim.resetClock();
 
-      // Reload initial data memory values after resetClock() wiped everything
+      // resetClock() zeroes the data memory (Memory.reset()). Reload the
+      // program's initial data values on top of the clean slate; with no .data
+      // section `dataWords` is empty and the memory simply stays zeroed.
       if (dataWords.length > 0) {
         const memEntry = Array.from(sim.objects.entries())
           .find(([, obj]) => obj instanceof Memory);
@@ -234,15 +323,22 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
 
       const cpuForPc = sim.getPrimaryCpu();
       const pcRegisterId = cpuForPc ? resolvePcRegisterId(cpuForPc.id) : null;
+      const wires = sim.getWires();
+
+      // The address of the instruction being executed. Carried forward across
+      // ticks and only advanced at FETCH, so it stays put while the PC register
+      // itself runs ahead to PC+1 during the instruction it fetched.
+      let instructionAddr = readPcRegister(pcRegisterId);
 
       // Frame 0: initial state. No tick has run, so pre === post and there are
       // no substeps to reveal.
-      const initialSnapshot = captureSnapshot(0, pcRegisterId);
+      const initialSnapshot = captureSnapshot(0, instructionAddr);
       frames.push({
         index: 0,
         preTick: initialSnapshot,
         postTick: initialSnapshot,
         substepGroups: [],
+        activatedComponentIds: [],
       });
 
       let tickCount = 0;
@@ -251,17 +347,27 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
         if (cpu?.halted) break;
 
         // State BEFORE the tick — what widgets/wires show when this frame opens.
-        const preSnapshot = captureSnapshot(tickCount, pcRegisterId);
+        const preSnapshot = captureSnapshot(tickCount, instructionAddr);
 
+        // PC value used by this tick's FETCH (before the tick increments it).
+        const pcBeforeTick = readPcRegister(pcRegisterId);
         sim.tickClock();
         tickCount += 1;
 
-        // State AFTER the tick — fully propagated final values.
-        const postSnapshot = captureSnapshot(tickCount, pcRegisterId);
-
         // Group by the state that just executed (CPU.previousState), matching
         // the state the wire-animation overlay groups wires by.
-        const executedState = postSnapshot.cpuInternalState.previousState;
+        const executedState =
+          sim.getPrimaryCpu()?.previousState ?? CpuState.RESET;
+
+        // A FETCH just latched the instruction at the pre-tick PC value; that is
+        // the instruction every following tick executes until the next FETCH.
+        if (executedState === CpuState.FETCH) {
+          instructionAddr = pcBeforeTick;
+        }
+
+        // State AFTER the tick — fully propagated final values.
+        const postSnapshot = captureSnapshot(tickCount, instructionAddr);
+
         const substepGroups = buildSubstepGroups(sim.getPrimaryCpu(), executedState);
 
         frames.push({
@@ -269,6 +375,12 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
           preTick: preSnapshot,
           postTick: postSnapshot,
           substepGroups,
+          activatedComponentIds: computeActivatedComponents(
+            sim.getPrimaryCpu(),
+            wires,
+            preSnapshot,
+            postSnapshot,
+          ),
         });
 
         if (sim.getPrimaryCpu()?.halted) {
@@ -316,10 +428,15 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
       maskStore.revealAll();
     }
 
-    if (frame.substepGroups.length > 0) {
+    if (frame.substepGroups.length > 0 || frame.activatedComponentIds.length > 0) {
       // Progressive reveal: start widgets/wires at the pre-tick state, then let
       // the wire animation reveal post-tick values substep by substep.
-      maskStore.init(frame.preTick, frame.postTick, frame.substepGroups);
+      maskStore.init(
+        frame.preTick,
+        frame.postTick,
+        frame.substepGroups,
+        frame.activatedComponentIds,
+      );
     } else {
       // No substeps (e.g. frame 0) — apply the final state directly.
       maskStore.deactivate();

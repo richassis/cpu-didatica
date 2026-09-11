@@ -62,8 +62,11 @@ export interface ProjectData {
  * v6 — the control unit is labelled UC. It is the unit that commands the
  *      datapath; the CPU is every module together, memories aside. Only the
  *      display label changes — the component type is untouched.
+ * v7 — the PC no longer holds its output back until FETCH; it updates as soon
+ *      as the value reaches it, like every other register. The
+ *      `holdOutputUntilFetch` meta flag is dropped wherever it survives.
  */
-const CURRENT_PROJECT_VERSION = 6;
+const CURRENT_PROJECT_VERSION = 7;
 
 /** Adder dimensions before v4, used to recognise instances that need shrinking. */
 const LEGACY_ADDER_SIZE = { w: 128, h: 176 } as const;
@@ -585,6 +588,11 @@ function migrateProjectData(state: ProjectState): void {
         component.y = snapToGridSize(component.y + (LEGACY_ADDER_SIZE.h - ADDER_SIZE.h) / 2);
         component.w = ADDER_SIZE.w;
         component.h = ADDER_SIZE.h;
+      }
+
+      // v7: the PC hold behaviour is gone — drop the dead meta flag.
+      if (component.meta && "holdOutputUntilFetch" in component.meta) {
+        delete component.meta.holdOutputUntilFetch;
       }
     }
 

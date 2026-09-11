@@ -16,7 +16,7 @@ import { create } from "zustand";
 import type { TickSnapshot, SubstepGroup } from "./executionStore";
 import { applySnapshot } from "./executionStore";
 import { useSimulatorStore } from "./simulatorStore";
-import { Gpr, Memory, InstructionMemory, Register } from "./simulator";
+import { Gpr, Memory, InstructionMemory } from "./simulator";
 
 interface DisplayMaskState {
   /** Whether progressive reveal is active (only during timeline animation). */
@@ -35,6 +35,13 @@ interface DisplayMaskState {
   substepGroups: SubstepGroup[];
 
   /**
+   * Component ids that changed state this tick but are NOT in any substep group
+   * (they received a value rather than sent one). They light up too, staged the
+   * same way — dim until their incoming wire lands, then bright.
+   */
+  activatedComponents: Set<string>;
+
+  /**
    * Initialize for a new tick animation.
    * Applies the baseSnapshot to live simulator objects so widgets start showing old values.
    */
@@ -42,6 +49,7 @@ interface DisplayMaskState {
     baseSnapshot: TickSnapshot,
     targetSnapshot: TickSnapshot,
     substepGroups: SubstepGroup[],
+    activatedComponentIds?: string[],
   ) => void;
 
   /**
@@ -97,10 +105,6 @@ function applyComponentTargetState(componentId: string, targetSnapshot: TickSnap
   if ((obj instanceof Memory || obj instanceof InstructionMemory) && targetState.cells) {
     obj.load(targetState.cells);
   }
-  // Restore a value held back from the output port (PC-style registers).
-  if (obj instanceof Register) {
-    obj.setPendingValue(targetState.pending ?? null);
-  }
 
   // Restore output port values from the post-tick snapshot.
   // Use setWithoutPropagate so updating one component (e.g. IR in FETCH) does
@@ -135,8 +139,9 @@ export const useDisplayMaskStore = create<DisplayMaskState>()((set, get) => ({
   targetSnapshot: null,
   revealedComponents: new Set(),
   substepGroups: [],
+  activatedComponents: new Set(),
 
-  init: (baseSnapshot, targetSnapshot, substepGroups) => {
+  init: (baseSnapshot, targetSnapshot, substepGroups, activatedComponentIds = []) => {
     // Apply the BASE snapshot to live simulator objects so all widgets/wires
     // initially show pre-tick (old) values.
     applySnapshot(baseSnapshot);
@@ -153,11 +158,20 @@ export const useDisplayMaskStore = create<DisplayMaskState>()((set, get) => ({
       }
     }
 
+    // A component already in a substep group is staged by its own wire reveal;
+    // only components NOT in one need the separate "activated" (received a
+    // value) treatment.
+    const groupedIds = new Set(substepGroups.flatMap((g) => g.componentIds));
+    const activatedComponents = new Set(
+      activatedComponentIds.filter((id) => !groupedIds.has(id))
+    );
+
     set({
       isActive: true,
       baseSnapshot,
       targetSnapshot,
       substepGroups,
+      activatedComponents,
       revealedComponents: revealed,
     });
   },
@@ -205,6 +219,7 @@ export const useDisplayMaskStore = create<DisplayMaskState>()((set, get) => ({
       targetSnapshot: null,
       revealedComponents: new Set(),
       substepGroups: [],
+      activatedComponents: new Set(),
     });
   },
 

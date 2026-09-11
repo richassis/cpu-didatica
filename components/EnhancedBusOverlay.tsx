@@ -119,7 +119,6 @@ export default function EnhancedBusOverlay({
   const animationRef = useRef<number | null>(null);
   const wireDataByIdRef = useRef<Map<string, WireRenderData>>(new Map());
   const lastAnimatedCycleRef = useRef<number | null>(null);
-  const previousCpuSignalValuesRef = useRef<Map<string, string>>(new Map());
   /** Substep order values already revealed in the current animation pass. */
   const revealedGroupsRef = useRef<Set<number>>(new Set());
 
@@ -331,7 +330,28 @@ export default function EnhancedBusOverlay({
     const currentWireData = Array.from(wireDataByIdRef.current.values());
     const cpu = getPrimaryCpu();
     const executedState = cpu?.previousState ?? cpu?.state;
-    const changedCpuSignals = new Set(cpu?.getChangedControlSignalPorts() ?? []);
+
+    // Whether a CPU control signal actually changed value on the tick this
+    // frame represents. In the timeline we compare the frame's own pre/post
+    // snapshots — the authoritative record — instead of the CPU's live
+    // `getChangedControlSignalPorts()`, which is only repopulated during batch
+    // execution and by replay time holds a stale set from the final tick (which
+    // is why wrPC/wrIR appeared to re-fire on essentially every frame). Outside
+    // the timeline (edit-mode single stepping) that live set is still fresh.
+    const execState = useExecutionStore.getState();
+    const currentFrame = execState.isTimelineActive
+      ? execState.frames[execState.currentIndex]
+      : undefined;
+    const liveChangedSignals = new Set(cpu?.getChangedControlSignalPorts() ?? []);
+    const cpuControlSignalChanged = (
+      sourceComponentId: string,
+      sourcePortName: string
+    ): boolean => {
+      if (!currentFrame) return liveChangedSignals.has(sourcePortName);
+      const pre = currentFrame.preTick.state.get(sourceComponentId)?.ports[sourcePortName];
+      const post = currentFrame.postTick.state.get(sourceComponentId)?.ports[sourcePortName];
+      return pre !== post;
+    };
 
     const visibleWireIds = currentWireData
       .filter((wireData) => {
@@ -364,23 +384,16 @@ export default function EnhancedBusOverlay({
       return;
     }
 
-    const cpuValueChanges = new Set<string>();
-    for (const id of visibleWireIds) {
-      const wireData = wireDataByIdRef.current.get(id);
-      if (!wireData?.isCpuControlSignal) continue;
-
-      const previousValue = previousCpuSignalValuesRef.current.get(id);
-      if (previousValue !== undefined && previousValue !== wireData.value) {
-        cpuValueChanges.add(id);
-      }
-      previousCpuSignalValuesRef.current.set(id, wireData.value);
-    }
-
-    // Changed CPU signal wire IDs (those whose source port value changed this tick).
+    // Changed CPU signal wire IDs (those whose source port value changed on the
+    // tick this frame represents — a signal driven to the same value it already
+    // held does not animate).
     const changedCpuIds = visibleWireIds.filter((id) => {
       const wireData = wireDataByIdRef.current.get(id);
       if (!wireData?.isCpuControlSignal) return false;
-      return changedCpuSignals.has(wireData.wire.sourcePortName) || cpuValueChanges.has(id);
+      return cpuControlSignalChanged(
+        wireData.wire.sourceComponentId,
+        wireData.wire.sourcePortName
+      );
     });
     const allNonCpuIds = visibleWireIds.filter((id) => !wireDataByIdRef.current.get(id)?.isCpuControlSignal);
 
@@ -502,7 +515,10 @@ export default function EnhancedBusOverlay({
         for (const id of animCpuIds) {
           progress.set(id, cpuProgress);
         }
-        // Once the CPU phase ends, mark these wires as settled.
+        // Once the CPU phase ends, mark these wires as settled and light up any
+        // component that received a control signal but does not drive a wire
+        // this state (so it never gets a substep reveal of its own). A component
+        // that IS in a substep group is left to its own incoming data wire.
         if (cpuProgress >= 1 && !revealedGroupsRef.current.has(-1)) {
           revealedGroupsRef.current.add(-1);
           setSettledDots((prev) => {
@@ -510,6 +526,18 @@ export default function EnhancedBusOverlay({
             for (const wireId of animCpuIds) next.add(wireId);
             return next;
           });
+
+          const groupedIds = new Set(
+            useDisplayMaskStore.getState().substepGroups.flatMap((g) => g.componentIds)
+          );
+          const cpuTargetIds: string[] = [];
+          for (const wireId of animCpuIds) {
+            const targetId = wireDataByIdRef.current.get(wireId)?.wire.targetComponentId;
+            if (targetId && !groupedIds.has(targetId)) cpuTargetIds.push(targetId);
+          }
+          if (cpuTargetIds.length > 0) {
+            useDisplayMaskStore.getState().revealComponents(cpuTargetIds);
+          }
         }
       }
 
@@ -825,10 +853,14 @@ export default function EnhancedBusOverlay({
           const isAnimating = animatingWires.has(wire.id);
 
           // A wire at rest is a hairline in the border colour — it is context,
-          // not content. It takes the data colour only while it is actually
+          // not content. It takes its flow colour only while it is actually
           // conducting, which is what makes a tick visible from across the room.
-          const baseColor = isAnimating ? "var(--st-data)" : "var(--border)";
-          const pulseColor = "var(--st-data)";
+          // Control signals flow green, data flows blue.
+          const flowColor = wireData.isCpuControlSignal
+            ? "var(--wire-control)"
+            : "var(--wire-data)";
+          const baseColor = isAnimating ? flowColor : "var(--border)";
+          const pulseColor = flowColor;
 
           const editableChain = [wireData.sourceEscape, ...(wire.nodes ?? []), wireData.targetEscape];
 
@@ -1069,7 +1101,7 @@ export default function EnhancedBusOverlay({
               className="font-mono num"
               style={{
                 fontSize: "11px",
-                fill: marker.isResting ? "var(--text-muted)" : "var(--st-data)",
+                fill: marker.isResting ? "var(--text-muted)" : marker.color,
               }}
             >
               {marker.value}

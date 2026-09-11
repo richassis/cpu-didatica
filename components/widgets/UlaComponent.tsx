@@ -29,6 +29,11 @@ function opSymbol(op: number): string {
 export default function UlaComponent({ component, zoom }: Props) {
   const revision = useSimulatorStore((s) => s.revision);
   const ula = useSimulatorStore((s) => s.getUla(component.id));
+  // Flags are a status register: what was latched on the last EXECUTE, cleared
+  // until the first ALU operation. The CPU owns that latch, so read it there
+  // rather than from the ULA's live combinational outputs (which sit at
+  // 0 + 0 = 0 → Z whenever the ULA is idle).
+  const cpu = useSimulatorStore((s) => s.getPrimaryCpu());
   void revision;
 
   const base = useDisplayStore((s) => s.numericBase);
@@ -57,9 +62,9 @@ export default function UlaComponent({ component, zoom }: Props) {
         <div className="mt-1">
           <FlagSquares
             flags={[
-              { label: "Z", on: ula?.zero ?? false, title: "Zero" },
-              { label: "C", on: ula?.carry ?? false, title: "Carry" },
-              { label: "N", on: ula?.negative ?? false, title: "Negative" },
+              { label: "Z", on: cpu?.latchedFlagZero ?? false, title: "Zero" },
+              { label: "C", on: cpu?.latchedFlagCarry ?? false, title: "Carry" },
+              { label: "N", on: cpu?.latchedFlagNegative ?? false, title: "Negative" },
             ]}
           />
         </div>

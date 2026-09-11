@@ -33,7 +33,7 @@ import {
  * clock notch is sequential, whatever does not is combinational.
  */
 
-export type SilhouetteKind = "alu" | "adder" | "mux" | "decoder";
+export type SilhouetteKind = "alu" | "adder" | "mux";
 
 /**
  * `alu` keeps the geometry the old bitmap-filtered asset had: a
@@ -48,8 +48,6 @@ const PATHS: Record<SilhouetteKind, { viewBox: string; d: string }> = {
   },
   adder: { viewBox: "0 0 100 100", d: "M2 2 L98 26 L98 74 L2 98 Z" },
   mux: { viewBox: "0 0 100 100", d: "M2 2 L98 22 L98 78 L2 98 Z" },
-  // Inverted: the narrow side faces the inputs, and the outputs fan out.
-  decoder: { viewBox: "0 0 100 100", d: "M2 26 L98 2 L98 98 L2 74 Z" },
 };
 
 /**

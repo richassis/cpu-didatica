@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { List, Pencil } from "lucide-react";
 import { Props } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
+import { useMemoryPanelStore } from "@/lib/memoryPanelStore";
 import { useCanvasEditing } from "@/components/CanvasEditingContext";
 import { useDisplayStore, formatNum, type NumericBase } from "@/lib/displayStore";
 import NodeShell from "@/components/widgets/NodeShell";
@@ -28,6 +29,11 @@ export default function MemoryComponent({ component, zoom }: Props) {
   // Poking values is an authoring act, so it belongs to edit mode. In program
   // mode the memory is readable in full and writable nowhere.
   const canEdit = useCanvasEditing();
+  const openMemoryPanel = useMemoryPanelStore((s) => s.openMemoryPanel);
+
+  // Program mode: the full listing opens in the side panel so the datapath
+  // stays visible. Edit mode has no side panel, so it stays a modal.
+  const openListing = () => (canEdit ? setViewerOpen(true) : openMemoryPanel(id));
   const currentRowRef = useRef<HTMLDivElement>(null);
 
   const revision = useSimulatorStore((s) => s.revision);
@@ -68,7 +74,7 @@ export default function MemoryComponent({ component, zoom }: Props) {
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation();
-              setViewerOpen(true);
+              openListing();
             }}
             className="shrink-0 rounded p-0.5 text-fg-faint transition-colors hover:text-fg"
             title="View all memory contents"

@@ -56,8 +56,10 @@
   --wire-value-fg: var(--text);
   --wire-data: var(--st-data);
   --wire-data-end: var(--st-data);
-  --wire-control: var(--text-muted);
-  --wire-control-end: var(--text-muted);
+  /* Control-signal wires flow green, data wires flow blue — the two carry
+     different kinds of information and should not read alike in motion. */
+  --wire-control: var(--st-active);
+  --wire-control-end: var(--st-active);
 }
 
 [data-theme="light"] {

@@ -18,12 +18,6 @@ export interface ComponentConfig {
   wordCount?: number;
   /** Whether Register has a write-enable input port. Default true. */
   hasWriteEnable?: boolean;
-  /**
-   * Whether a Register holds its newly latched value back until the next FETCH.
-   * Used by the PC so the next address does not appear mid-instruction.
-   * Default false.
-   */
-  holdOutputUntilFetch?: boolean;
   /** Fixed numeric value for ConstantComponent. Default 1. */
   constantValue?: number;
   /** How much an IncrementerComponent adds to its input. Default 1. */
@@ -182,12 +176,6 @@ export function RegisterComponentConfigPanel(props: PanelProps) {
         hint="Disable for always-write registers"
         checked={props.config.hasWriteEnable ?? true}
         onToggle={(hasWriteEnable) => props.onChange({ hasWriteEnable })}
-      />
-      <ToggleField
-        title="Hold Output Until Fetch"
-        hint="New value only leaves the register on the next FETCH (used by PC)"
-        checked={props.config.holdOutputUntilFetch ?? false}
-        onToggle={(holdOutputUntilFetch) => props.onChange({ holdOutputUntilFetch })}
       />
     </div>
   );

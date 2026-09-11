@@ -46,6 +46,8 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
       defaultOutputSide: "right",
       ports: {
         "in_writeEnable": { side: "top" },  // Control signal → top
+        "out_readDataA": { side: "right", offset: 36 },  // Data output → right
+        "out_readDataB": { side: "right", offset: 66 },  // Data output → right
         // Address and data ports stay on left (default)
         // Output ports stay on right (default)
       },
@@ -82,7 +84,8 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
       defaultInputSide: "left",
       defaultOutputSide: "right",
       ports: {
-        "addr": { side: "left" },    // Address signal → left
+        "addr": { side: "left", offset: 25 },    // Address signal → left,
+        "out": { side: "right", offset: 42 },    // Instruction output → right
       },
     },
   },
@@ -96,8 +99,8 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     // ULA: data operands from left, result on right, operation control on top, flags on right
     portConfig: {
       ports: {
-        "a": { side: "left", offset: 33 },        // Data input → left
-        "b": { side: "left", offset: 67 },        // Data input → left
+        "a": { side: "left", offset: 22.5 },        // Data input → left
+        "b": { side: "left", offset: 86.5 },        // Data input → left
         "operation": { side: "top", offset: 50 }, // Control signal → top
         "result": { side: "right", offset: 52 },  // Data output → right
         "zero":     { side: "bottom", offset: 25,  hidden: true },
@@ -211,13 +214,16 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     type: "DecoderComponent",
     label: "Decoder",
     namePrefix: "DEC",
-    defaultWidth: 144,  // 9 grid cells
+    // A thin vertical bar: plumbing between the IR and the datapath, not a
+    // teaching block. Instruction word in on the left, fields out on the right.
+    defaultWidth: 64,   // 4 grid cells
     defaultHeight: 192, // 12 grid cells
     description: "Instruction decoder — shows opcode, fields, and format",
     // Decoder with standard left/right layout
     portConfig: {
       defaultInputSide: "left",
       defaultOutputSide: "right",
+      ports: {"instruction": {side: "left", offset: 54.5}}
     },
   },
   {
@@ -228,7 +234,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     label: "Control unit (UC)",
     namePrefix: "UC",
     defaultWidth: 704,  // 44 grid cells — 10 bottom ports at 64px pitch, room for the FSM columns
-    defaultHeight: 240, // 15 grid cells
+    defaultHeight: 336, // 21 grid cells — FETCH/DECODE stacked above the branch fan
     description: "Control unit (UC) — FSM state and control signals",
     // CPU: input ports (opcode/flags) on left, all control signal outputs on
     // the bottom, aligned under the FSM graph they drive.
