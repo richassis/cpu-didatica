@@ -118,10 +118,10 @@ export class Decoder implements Clockable, Connectable {
     return {
       instruction: this.in_instruction,
       opcode: this.out_opcode,
-      operand: this.out_operand,
       gprAddrA: this.out_gprAddrA,
       gprAddrB: this.out_gprAddrB,
       dst: this.out_dst,
+      operand: this.out_operand,
     };
   }
 

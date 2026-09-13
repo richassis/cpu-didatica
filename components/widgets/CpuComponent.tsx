@@ -20,7 +20,8 @@ import type { CPU } from "@/lib/simulator/Cpu";
  */
 const BOTTOM_SIGNAL_ORDER = [
   "muxPC", "wrPC", "wrIR", "rdMem", "wrMem",
-  "muxAReg", "muxDReg", "wrReg", "opULA", "muxAMem",
+  "muxAReg", "muxDReg", "wrReg", "opULA", 
+  // "muxAMem",
 ] as const;
 
 const SIGNAL_BITS = Object.fromEntries(CONTROL_SIGNAL_DEFS.map((d) => [d.name, d.bitWidth]));

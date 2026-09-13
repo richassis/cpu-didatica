@@ -256,8 +256,18 @@ export interface CpuInternalStateSnapshot {
  * - in_flagZero (1-bit): Zero flag from ULA
  * - in_flagCarry (1-bit): Carry flag from ULA
  * - in_flagNegative (1-bit): Negative flag from ULA
+ * - in_flagZeroGpr (1-bit, hidden): Zero flag from the GPR's write-data bus
+ *   (LDA/LDAI loading a zero value)
+ * - in_flagNegativeGpr (1-bit, hidden): Negative flag from the GPR's
+ *   write-data bus (LDA/LDAI loading a negative value)
  * - out_wrReg, out_muxAReg, out_muxDReg, etc.: Control signal outputs
  * - out_state (3-bit): Current FSM state (for debugging/UI)
+ *
+ * Status flags (Z/N) are effectively an OR between the ULA's flags and the
+ * GPR's: `latchFlagsIfProduced()` samples whichever source's operation just
+ * finished (ULA after EXECUTE, GPR after a LDA/LDAI write commits in
+ * WRITEREG1/WRITEREG2), so a flag left over on the *other* input from an
+ * earlier, unrelated instruction never bleeds into the freshly latched value.
  */
 export class CPU implements Clockable, Connectable {
   readonly id: string;
@@ -297,6 +307,8 @@ export class CPU implements Clockable, Connectable {
   readonly in_flagZero: InputPort<number>;
   readonly in_flagCarry: InputPort<number>;
   readonly in_flagNegative: InputPort<number>;
+  readonly in_flagZeroGpr: InputPort<number>;
+  readonly in_flagNegativeGpr: InputPort<number>;
 
   // ── Output Ports (Control Signals) ───────────────────────────
   readonly out_wrIR: OutputPort<number>;
@@ -321,6 +333,8 @@ export class CPU implements Clockable, Connectable {
     this.in_flagZero = new InputPort<number>("in_flagZero", "number", 1, 0);
     this.in_flagCarry = new InputPort<number>("in_flagCarry", "number", 1, 0);
     this.in_flagNegative = new InputPort<number>("in_flagNegative", "number", 1, 0);
+    this.in_flagZeroGpr = new InputPort<number>("in_flagZeroGpr", "number", 1, 0);
+    this.in_flagNegativeGpr = new InputPort<number>("in_flagNegativeGpr", "number", 1, 0);
 
     // Control signal output ports
     this.out_wrIR = new OutputPort<number>("out_wrIR", "number", 1, 0);
@@ -430,6 +444,8 @@ export class CPU implements Clockable, Connectable {
       in_flagZero: this.in_flagZero,
       in_flagCarry: this.in_flagCarry,
       in_flagNegative: this.in_flagNegative,
+      in_flagZeroGpr: this.in_flagZeroGpr,
+      in_flagNegativeGpr: this.in_flagNegativeGpr,
       out_muxPC: this.out_muxPC,
       out_wrPC: this.out_wrPC,
       out_wrIR: this.out_wrIR,
@@ -439,7 +455,7 @@ export class CPU implements Clockable, Connectable {
       out_muxDReg: this.out_muxDReg,
       out_wrReg: this.out_wrReg,
       out_opULA: this.out_opULA,
-      out_muxAMem: this.out_muxAMem,
+      // out_muxAMem: this.out_muxAMem,
       out_state: this.out_state,
       out_halted: this.out_halted,
     };
@@ -644,10 +660,8 @@ export class CPU implements Clockable, Connectable {
 
     this.tickAllComponentsPhased();
 
-    // Latch ULA flags only after EXECUTE completes.
-    if (this._previousState === CpuState.EXECUTE) {
-      this.latchFlagsFromInputs();
-    }
+    // Latch status flags right after whichever source just produced them.
+    this.latchFlagsIfProduced();
   }
 
   /**
@@ -971,9 +985,29 @@ export class CPU implements Clockable, Connectable {
     this._latchedFlagNegative = false;
   }
 
-  private latchFlagsFromInputs(): void {
-    this._latchedFlagZero = Boolean(this.in_flagZero.get());
-    this._latchedFlagCarry = Boolean(this.in_flagCarry.get());
-    this._latchedFlagNegative = Boolean(this.in_flagNegative.get());
+  /**
+   * Refreshes the latched Z/C/N flags right after whichever operation just
+   * produced fresh ones — the ULA after EXECUTE (arithmetic/logic ops), or
+   * the GPR after a load commits in WRITEREG1/WRITEREG2 (LDA/LDAI). Each
+   * branch only reads the source that just fired, so a flag left over on the
+   * *other* input from an earlier, unrelated instruction (the ULA's operands
+   * hold their last value between EXECUTEs; the GPR's write bus is whatever
+   * was last written) never bleeds into the freshly latched value — which is
+   * what makes this equivalent to an OR between the ULA's flag and the
+   * GPR's, without either one going stale.
+   */
+  private latchFlagsIfProduced(): void {
+    if (this._previousState === CpuState.EXECUTE) {
+      this._latchedFlagZero = Boolean(this.in_flagZero.get());
+      this._latchedFlagCarry = Boolean(this.in_flagCarry.get());
+      this._latchedFlagNegative = Boolean(this.in_flagNegative.get());
+    } else if (
+      this._previousState === CpuState.WRITEREG1 ||
+      this._previousState === CpuState.WRITEREG2
+    ) {
+      // LDA/LDAI don't touch carry — only the ULA can set it.
+      this._latchedFlagZero = Boolean(this.in_flagZeroGpr.get());
+      this._latchedFlagNegative = Boolean(this.in_flagNegativeGpr.get());
+    }
   }
 }
