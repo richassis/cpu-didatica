@@ -11,7 +11,7 @@ import {
 /** Button labels — "decSigned" is a valid NumericBase but not a word anyone should read. */
 const BASE_LABELS: Record<NumericBase, string> = {
   hex: "hex",
-  dec: "dec",
+  dec: "dec+",
   decSigned: "dec±",
   bin: "bin",
   oct: "oct",
@@ -54,7 +54,8 @@ export default function SimulationSettings() {
     <div className="w-72">
       <Section title="Valores" first />
       <div className="mb-1 flex items-center gap-1">
-        {(["hex", "dec", "decSigned", "bin", "oct"] as const).map((b) => (
+        {/* {(["hex", "dec", "decSigned", "bin", "oct"] as const).map((b) => ( */}
+        {(["hex", "dec", "decSigned", "bin"] as const).map((b) => (
           <button
             key={b}
             onClick={() => setNumericBase(b)}
