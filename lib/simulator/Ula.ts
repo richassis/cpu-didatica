@@ -173,9 +173,15 @@ export class Ula implements Clockable, Connectable {
         break;
     }
 
-    // Mask to bitWidth and update flags
+    // Mask to bitWidth and update flags. `raw & this.max` is two's-complement
+    // correct: a negative `raw` (e.g. SUB with a < b) wraps to the right bit
+    // pattern (2 - 5 → 0xFFFD at 16 bits) the same way any other value does.
     const result = this.clamp(raw & this.max);
-    // Carry only applies to arithmetic operations — bitwise ops (AND, OR, NOT) never overflow
+    // Carry only applies to arithmetic operations — bitwise ops (AND, OR, NOT) never overflow.
+    // This is unsigned carry-out (ADD) / borrow (SUB), not signed overflow — a
+    // signed-range overflow like 0x7FFF + 1 sets no flag here. There is no
+    // dedicated overflow (V) flag in this ISA; JN/JC read this and `negative`
+    // as-is. Known gap, not fixed as part of adding signed decimal support.
     const carry = (op === UlaOperation.ADD || op === UlaOperation.SUB) && (raw > this.max || raw < 0) ? 1 : 0;
     const zero = result === 0 ? 1 : 0;
     const negative = (result & (1 << (this.bitWidth - 1))) !== 0 ? 1 : 0;

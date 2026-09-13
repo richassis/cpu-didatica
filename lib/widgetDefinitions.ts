@@ -235,7 +235,11 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
         "gprAddrA": {side: "right", offset: 14.7},
         "gprAddrB": {side: "right", offset: 26.6},
         "dst": {side: "right", offset: 65.5},
+        // operand (unsigned, → MAR) and operandSigned (sign-extended, →
+        // muxDReg) share this exact position: two wires leaving the same
+        // point, carrying different interpretations of the same 8 bits.
         "operand": {side: "right", offset: 90.9},
+        "operandSigned": {side: "right", offset: 90.9},
       }
     },
   },

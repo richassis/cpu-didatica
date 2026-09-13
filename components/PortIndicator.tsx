@@ -110,13 +110,13 @@ export default function PortIndicator({
     const obj = objects.get(componentId);
     if (!obj || !("getPorts" in obj)) return "";
 
-    const portMap = (obj as { getPorts: () => Record<string, { value: unknown }> }).getPorts();
+    const portMap = (obj as { getPorts: () => Record<string, { value: unknown; bitWidth: number | null }> }).getPorts();
     const port = portMap[portName];
     if (!port) return "";
 
     const val = port.value;
     if (typeof val === "number") {
-      return formatNum(val, base);
+      return formatNum(val, base, port.bitWidth ?? undefined);
     }
     if (typeof val === "boolean") {
       return val ? "1" : "0";

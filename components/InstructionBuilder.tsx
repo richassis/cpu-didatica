@@ -71,6 +71,14 @@ export default function InstructionBuilder({ imem, onClose, initialAddress = 0 }
     return value.toString(2).padStart(bits, "0");
   };
 
+  // Signed decimal view of the same bits `formatHex` shows unsigned — lets
+  // the operand field for LDAI's immediate be typed as e.g. "-5" instead of
+  // hunting for its two's-complement byte.
+  const formatSignedDec = (value: number, bits: number) => {
+    const half = 1 << (bits - 1);
+    return String(value & half ? value - (1 << bits) : value);
+  };
+
   // Get binary breakdown
   const getBinaryBreakdown = () => {
     const opcodeBits = formatBinary((encodedValue >> 11) & 0b11111, 5);
@@ -175,10 +183,28 @@ export default function InstructionBuilder({ imem, onClose, initialAddress = 0 }
                       setOperand(val);
                     }
                   }}
-                  className="flex-1 bg-sunken border border-line rounded px-3 py-2 text-fg font-mono focus:outline-none focus:border-st-active"
+                  className="w-28 bg-sunken border border-line rounded px-3 py-2 text-fg font-mono focus:outline-none focus:border-st-active"
                   placeholder="0x00"
                 />
-                <span className="text-xs text-fg-muted">Range: 0x00-0xFF</span>
+                {/* Same 8 bits as the hex field, read/written as a signed
+                    decimal — for LDAI's immediate. Hex and decimal digits
+                    overlap (e.g. "10"), so this is a separate field rather
+                    than a mode toggle on the one above. */}
+                <input
+                  type="text"
+                  value={formatSignedDec(operand, 8)}
+                  onChange={(e) => {
+                    const t = e.target.value.trim();
+                    if (!/^-?\d*$/.test(t)) return;
+                    const val = parseInt(t || "0", 10);
+                    if (!isNaN(val) && val >= -128 && val <= 255) {
+                      setOperand(val & 0xFF);
+                    }
+                  }}
+                  className="w-20 bg-sunken border border-line rounded px-3 py-2 text-fg font-mono focus:outline-none focus:border-st-active"
+                  placeholder="-5"
+                />
+                <span className="text-xs text-fg-muted">Range: 0x00-0xFF / -128..255</span>
               </div>
             )}
           </>

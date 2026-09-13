@@ -2,7 +2,7 @@
   "id": "default-full-datapath",
   "name": "Full Datapath",
   "createdAt": "2026-04-07T03:40:44.124Z",
-  "updatedAt": "2026-09-13T21:35:03.497Z",
+  "updatedAt": "2026-09-13T22:02:53.803Z",
   "components": [
     {
       "id": "cpu-1",
@@ -459,7 +459,8 @@
           "gprAddrA": 0,
           "gprAddrB": 1,
           "dst": 3,
-          "operand": 0
+          "operand": 0,
+          "operandSigned": 0
         }
       }
     },
@@ -1060,7 +1061,7 @@
     {
       "id": "dc5cc45c-b9ba-4358-ac75-07c603566556",
       "sourceComponentId": "decoder-1",
-      "sourcePortName": "operand",
+      "sourcePortName": "operandSigned",
       "targetComponentId": "9c3b9c7b-52e0-4388-9287-b4e8144873b2",
       "targetPortName": "in_0",
       "label": "",

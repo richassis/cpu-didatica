@@ -95,10 +95,10 @@ function parseRegister(token: string): number | null {
   return m ? parseInt(m[1], 10) : null;
 }
 
-/** Parse a numeric literal: `0xNN` hex or plain decimal → number, or null. */
+/** Parse a numeric literal: `0xNN` hex or plain (optionally negative) decimal → number, or null. */
 function parseNumber(token: string): number | null {
   if (/^0[xX][0-9a-fA-F]+$/.test(token)) return parseInt(token, 16);
-  if (/^\d+$/.test(token)) return parseInt(token, 10);
+  if (/^-?\d+$/.test(token)) return parseInt(token, 10);
   return null;
 }
 
@@ -270,17 +270,25 @@ function resolveOperand(
   return addr;
 }
 
-/** Validate that a value fits in a given bit-width field (unsigned). */
+/**
+ * Validate that a value fits in a given bit-width field.
+ * By default the field is unsigned (0..max) — right for register indices,
+ * addresses, and jump targets. Pass `allowNegative` for a field that also
+ * accepts the field's signed range (-(max+1)/2..max) — e.g. LDAI's immediate,
+ * where `-5` and its two's-complement byte `0xFB` are both valid spellings.
+ */
 function checkRange(
   value: number,
   bits: number,
   fieldName: string,
   lineNum: number,
   errors: AssemblyError[],
+  allowNegative = false,
 ): boolean {
   const max = (1 << bits) - 1;
-  if (value < 0 || value > max) {
-    errors.push({ line: lineNum, message: `${fieldName} fora do range 0–${max}: ${value}` });
+  const min = allowNegative ? -(1 << (bits - 1)) : 0;
+  if (value < min || value > max) {
+    errors.push({ line: lineNum, message: `${fieldName} fora do range ${min}–${max}: ${value}` });
     return false;
   }
   return true;
@@ -317,7 +325,7 @@ function pass2(
         const imm = resolve(operands[1]);
         if (dst === null || imm === null) break;
         if (!checkRange(dst, 3, "Registrador", lineNum, errors)) break;
-        if (!checkRange(imm, 8, "Imediato", lineNum, errors)) break;
+        if (!checkRange(imm, 8, "Imediato", lineNum, errors, /* allowNegative */ true)) break;
         word = Encoder.assemble("LDAI", { gprAddr: dst, operand: imm });
         break;
       }

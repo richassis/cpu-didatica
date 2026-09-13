@@ -12,6 +12,7 @@ import {
   OPCODE_SHIFT,
   GPR_ADDR_SHIFT,
   OPERAND_MASK,
+  OPERAND_BITS,
   ULA_SRC_A_SHIFT,
   ULA_SRC_B_SHIFT,
   ULA_DST_MASK,
@@ -57,7 +58,9 @@ export function disassemble(word: number): DisassembledWord {
     return { mnemonic: entry.mnemonic, operandText: `0x${operand.toString(16).toUpperCase().padStart(2, "0")}` };
   }
   const operandText = entry.mnemonic === "LDAI"
-    ? `R${gprAddr}, #${operand}`
+    // LDAI's operand is the signed immediate — round-trips with the
+    // assembler's `LDAI R1, -5` spelling, unlike LDA/STA's unsigned address.
+    ? `R${gprAddr}, #${operand >= (1 << (OPERAND_BITS - 1)) ? operand - (1 << OPERAND_BITS) : operand}`
     : `R${gprAddr}, 0x${operand.toString(16).toUpperCase().padStart(2, "0")}`;
   return { mnemonic: entry.mnemonic, operandText };
 }
