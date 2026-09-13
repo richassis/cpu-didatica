@@ -133,7 +133,6 @@ export default function CpuComponent({ component, zoom }: Props) {
           currentState={currentState}
           nextState={nextState}
           opcode={opcode}
-          halted={halted}
         />
       </div>
 

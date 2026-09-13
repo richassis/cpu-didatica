@@ -285,8 +285,6 @@ export class CPU implements Clockable, Connectable {
   // Registered components for step-based ticking
   private _registeredComponents: Map<string, RegisteredComponent> = new Map();
 
-  // Previous signal values for change detection
-  private _prevSignals: Map<string, number | boolean> = new Map();
   // Control output port names that changed in the most recent tick.
   private _changedControlSignalPorts: Set<string> = new Set();
   
@@ -350,8 +348,6 @@ export class CPU implements Clockable, Connectable {
     this.out_state = new OutputPort<number>("out_state", "number", 4, CpuState.RESET);
     this.out_halted = new OutputPort<boolean>("out_halted", "boolean", 1, false);
 
-    // Initialize previous signal values
-    this.initPrevSignals();
     this.resetLatchedFlags();
   }
 
@@ -560,7 +556,6 @@ export class CPU implements Clockable, Connectable {
     this._halted = false;
     this._totalTicks = 0;
     this._changedControlSignalPorts.clear();
-    this.initPrevSignals();
     this.resetLatchedFlags();
     // Apply RESET state control signals immediately
     this.emitSignals(CpuState.RESET, Opcode.HLT, true);
@@ -587,38 +582,36 @@ export class CPU implements Clockable, Connectable {
     this._latchedFlagNegative = snapshot.latchedFlagNegative ?? false;
   }
 
-  /** Initialize previous signal values for change detection. */
-  private initPrevSignals(): void {
-    this._prevSignals.set("wrReg", 0);
-    this._prevSignals.set("muxAReg", 1);
-    this._prevSignals.set("muxDReg", 2);
-    this._prevSignals.set("wrPC", 0);
-    this._prevSignals.set("muxPC", 1);
-    this._prevSignals.set("rdMem", 0);
-    this._prevSignals.set("wrMem", 0);
-    this._prevSignals.set("muxAMem", 1);
-    this._prevSignals.set("wrIR", 0);
-    this._prevSignals.set("opULA", UlaOperation.ADD);
-  }
-
   /**
    * Set a signal only if it has changed from its previous value.
-   * This reduces unnecessary propagation.
+   *
+   * Compares against the port's own current value — not a separately
+   * tracked copy — so this can never desync from it. A tracked copy (this
+   * used to keep one in `_prevSignals`, initialized to hardcoded defaults)
+   * goes stale the moment anything outside this method writes the port
+   * directly: loading a project file restores its own saved port values,
+   * and the timeline's progressive-reveal system resets ports to older
+   * values while animating. Either one leaves the tracked copy pointing at
+   * a value the port no longer holds, so the next real signal change that
+   * happens to match the *stale tracked* value gets skipped here — the port
+   * silently keeps whatever the external write left it at. That is exactly
+   * how `out_opULA` could get stuck showing a stale operation: a loaded
+   * project's saved value never matched the hardcoded tracked default, so
+   * the first real EXECUTE that coincidentally computed that same default
+   * value never actually wrote the port.
    */
   private setSignalIfChanged<T extends number | boolean>(
     port: OutputPort<T>,
-    signalName: string,
-    value: T, 
+    value: T,
     force_update: boolean = false
   ): void {
-    const prevValue = this._prevSignals.get(signalName);
+    const prevValue = port.value;
     if (prevValue !== value) {
       this._changedControlSignalPorts.add(port.name);
     }
 
     if (prevValue !== value || force_update) {
       port.set(value);
-      this._prevSignals.set(signalName, value);
     }
   }
 
@@ -914,38 +907,38 @@ export class CPU implements Clockable, Connectable {
 
     // Apply all configured signals
     if (config.wrReg !== undefined) {
-      this.setSignalIfChanged(this.out_wrReg, "wrReg", config.wrReg, force_write);
+      this.setSignalIfChanged(this.out_wrReg, config.wrReg, force_write);
     }
     if (config.muxAReg !== undefined) {
-      this.setSignalIfChanged(this.out_muxAReg, "muxAReg", config.muxAReg, force_write);
+      this.setSignalIfChanged(this.out_muxAReg, config.muxAReg, force_write);
     }
     if (config.muxDReg !== undefined) {
-      this.setSignalIfChanged(this.out_muxDReg, "muxDReg", config.muxDReg, force_write);
+      this.setSignalIfChanged(this.out_muxDReg, config.muxDReg, force_write);
     }
     if (config.wrPC !== undefined) {
-      this.setSignalIfChanged(this.out_wrPC, "wrPC", config.wrPC, force_write);
+      this.setSignalIfChanged(this.out_wrPC, config.wrPC, force_write);
     }
     if (config.muxPC !== undefined) {
-      this.setSignalIfChanged(this.out_muxPC, "muxPC", config.muxPC, force_write);
+      this.setSignalIfChanged(this.out_muxPC, config.muxPC, force_write);
     }
     if (config.rdMem !== undefined) {
-      this.setSignalIfChanged(this.out_rdMem, "rdMem", config.rdMem, force_write);
+      this.setSignalIfChanged(this.out_rdMem, config.rdMem, force_write);
     }
     if (config.wrMem !== undefined) {
-      this.setSignalIfChanged(this.out_wrMem, "wrMem", config.wrMem, force_write);
+      this.setSignalIfChanged(this.out_wrMem, config.wrMem, force_write);
     }
     if (config.muxAMem !== undefined) {
-      this.setSignalIfChanged(this.out_muxAMem, "muxAMem", config.muxAMem, force_write);
+      this.setSignalIfChanged(this.out_muxAMem, config.muxAMem, force_write);
     }
     if (config.wrIR !== undefined) {
-      this.setSignalIfChanged(this.out_wrIR, "wrIR", config.wrIR, force_write);
+      this.setSignalIfChanged(this.out_wrIR, config.wrIR, force_write);
     }
 
     // Special handling for state-specific logic
     switch (state) {
       case CpuState.EXECUTE:
         // EXECUTE: set ULA operation based on opcode
-        this.setSignalIfChanged(this.out_opULA, "opULA", this.opcodeToUlaOp(opcode));
+        this.setSignalIfChanged(this.out_opULA, this.opcodeToUlaOp(opcode));
         break;
 
       case CpuState.WRITEPC: {
@@ -958,8 +951,8 @@ export class CPU implements Clockable, Connectable {
 
         if (taken) {
           console.log(`Jump taken for opcode ${Opcode[opcode]} (0b${opcode.toString(2).padStart(5, "0")})`);
-          this.setSignalIfChanged(this.out_wrPC, "wrPC", 1);
-          this.setSignalIfChanged(this.out_muxPC, "muxPC", 0); // jump target from operand
+          this.setSignalIfChanged(this.out_wrPC, 1);
+          this.setSignalIfChanged(this.out_muxPC, 0); // jump target from operand
         }
         break;
       }
@@ -967,7 +960,7 @@ export class CPU implements Clockable, Connectable {
       default:
         // For other states, apply opULA if configured
         if (config.opULA !== undefined) {
-          this.setSignalIfChanged(this.out_opULA, "opULA", config.opULA);
+          this.setSignalIfChanged(this.out_opULA, config.opULA);
         }
         break;
     }

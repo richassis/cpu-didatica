@@ -165,10 +165,9 @@ export interface CpuFsmGraphProps {
   /** The state about to execute next tick. */
   nextState: CpuState;
   opcode: number;
-  halted: boolean;
 }
 
-export default function CpuFsmGraph({ currentState, nextState, opcode, halted }: CpuFsmGraphProps) {
+export default function CpuFsmGraph({ currentState, nextState, opcode }: CpuFsmGraphProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [vScale, setVScale] = useState(1);
 
@@ -313,7 +312,10 @@ export default function CpuFsmGraph({ currentState, nextState, opcode, halted }:
         </marker>
       </defs>
 
-      <StateBox x={HEADER_X} y={FETCH_Y} label={halted ? "HALT" : "FETCH"} active={isFetchCurrent && !halted} />
+      {/* Stays "FETCH" even when halted — the dedicated HLT branch box below
+          is already what lights up for that state; relabeling this one too
+          suggested two different states were both "the halt state". */}
+      <StateBox x={HEADER_X} y={FETCH_Y} label="FETCH" active={isFetchCurrent} />
       <StateBox x={HEADER_X} y={DECODE_Y} label="DECODE" active={isDecodeCurrent} />
 
       {/* The instruction actually decoded, top-right — appears only once DECODE

@@ -532,8 +532,22 @@ export default function EnhancedBusOverlay({
           );
           const cpuTargetIds: string[] = [];
           for (const wireId of animCpuIds) {
-            const targetId = wireDataByIdRef.current.get(wireId)?.wire.targetComponentId;
-            if (targetId && !groupedIds.has(targetId)) cpuTargetIds.push(targetId);
+            const wireData = wireDataByIdRef.current.get(wireId);
+            const targetId = wireData?.wire.targetComponentId;
+            if (!targetId) continue;
+
+            if (!groupedIds.has(targetId)) {
+              cpuTargetIds.push(targetId);
+            } else if (wireData!.wire.targetPortName === "sel") {
+              // A MUX's select line, fed by this control-signal wire. The MUX
+              // is also grouped into a later data substep (for the value
+              // flowing through it), but the *selection* itself must switch
+              // now, in step with the control signal actually arriving — not
+              // wait for that later substep, by which point the animation
+              // would already show data flowing through using the stale,
+              // pre-tick selection.
+              useDisplayMaskStore.getState().revealInputPort(targetId, "sel");
+            }
           }
           if (cpuTargetIds.length > 0) {
             useDisplayMaskStore.getState().revealComponents(cpuTargetIds);

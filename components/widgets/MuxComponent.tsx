@@ -2,7 +2,6 @@
 
 import { Props } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
-import { useDisplayStore, formatNum } from "@/lib/displayStore";
 import NodeShell from "@/components/widgets/NodeShell";
 
 /**
@@ -22,12 +21,10 @@ export default function MuxComponent({ component, zoom }: Props) {
 
   const revision = useSimulatorStore((s) => s.revision);
   const mux = useSimulatorStore((s) => s.getMux(id));
-  const base = useDisplayStore((s) => s.numericBase);
   void revision;
 
   const sel = mux ? mux.sel : 0;
   const numInputs = mux ? mux.numInputs : ((component.meta?.numInputs as number) ?? 2);
-  const bitWidth = mux ? mux.bitWidth : 16;
 
   const W = !w || isNaN(w) ? 84 : w;
   const H = !h || isNaN(h) ? 104 : h;
@@ -45,7 +42,6 @@ export default function MuxComponent({ component, zoom }: Props) {
       component={component}
       zoom={zoom}
       silhouette="custom"
-      value={<span className="num font-mono text-[11px]">{formatNum(mux ? mux.result : 0, base, bitWidth)}</span>}
       actions={
         <span className="shrink-0 font-mono text-[10px] leading-none text-fg-faint">
           s={clampedSel}
