@@ -17,9 +17,9 @@ const BASICO = `\
 SOMA:   DB    0             ; resultado de R0 + R1
 DIFF:   DB    0             ; resultado de R0 - R1
 
-        .text
-INICIO: LDAI  R0, #10       ; R0 = 10
-        LDAI  R1, #6        ; R1 = 6
+        .code
+INICIO: LDAI  R0, 10       ; R0 = 10
+        LDAI  R1, 6        ; R1 = 6
         ADD   R0, R1, R2    ; R2 = R0 + R1 = 16
         SUB   R0, R1, R3    ; R3 = R0 - R1 = 4
         STA   R2, SOMA      ; mem[SOMA] = 16
@@ -38,13 +38,13 @@ const FOR_CONTADOR = `\
 ; Resultado esperado: R0=5, mem[CNT]=5
 
         .data
-CNT:    DB    #01h          ; valor inicial do contador
-END:    DB    #05h          ; valor limite
+CNT:    DB    01h          ; valor inicial do contador
+END:    DB    05h          ; valor limite
 
-        .text
+        .code
         LDA   R0, CNT       ; R0 = CNT
         LDA   R1, END       ; R1 = END
-        LDAI  R2, #1        ; R2 = 1 (passo)
+        LDAI  R2, 1        ; R2 = 1 (passo)
 
 CONTA:  ADD   R0, R2, R0   ; R0 = R0 + 1
         STA   R0, CNT       ; salva contador na memória
@@ -67,10 +67,10 @@ NmenorN2: DB  0             ; 1 se N1 < N2
 NmaiorN2: DB  0             ; 1 se N1 > N2
 NigualN2: DB  0             ; 1 se N1 == N2
 
-        .text
+        .code
         LDA   R1, N1        ; R1 = N1
         LDA   R2, N2        ; R2 = N2
-        LDAI  R3, #1        ; R3 = 1 (constante)
+        LDAI  R3, 1        ; R3 = 1 (constante)
 
 TESTA:  SUB   R2, R1, R0   ; R0 = N2 - N1
         JZ    IGUAL         ; N2 == N1
@@ -97,11 +97,11 @@ N1:     DB    3             ; primeiro fator (valor somado)
 N2:     DB    4             ; segundo fator (contador de repetições)
 RE:     DB    0             ; resultado
 
-        .text
+        .code
         LDA   R1, N1        ; R1 = N1
         LDA   R2, N2        ; R2 = N2 (contador)
-        LDAI  R4, #0        ; R4 = acumulador = 0
-        LDAI  R3, #1        ; R3 = 1 (decremento)
+        LDAI  R4, 0        ; R4 = acumulador = 0
+        LDAI  R3, 1        ; R3 = 1 (decremento)
 
 MULTIP: ADD   R4, R1, R4   ; acumulador += N1
         STA   R4, RE        ; salva resultado parcial
@@ -120,17 +120,17 @@ const DESVIOS = `\
         .data
 OK:     DB    0             ; resultado (1=sucesso, 0=falha)
 
-        .text
-        LDAI  R7, #1        ; R7 = 1 (constante de sucesso)
-        LDAI  R0, #0        ; R0 = 0
+        .code
+        LDAI  R7, 1        ; R7 = 1 (constante de sucesso)
+        LDAI  R0, 0        ; R0 = 0
 
         ; Teste JZ: 0 - 0 deve ser zero → deve saltar
         SUB   R0, R0, R1   ; R1 = 0
         JZ    T_JN          ; deve saltar (zero) → ok
         JMP   FIM           ; erro se chegar aqui
 
-T_JN:   LDAI  R2, #5       ; R2 = 5
-        LDAI  R3, #10       ; R3 = 10
+T_JN:   LDAI  R2, 5       ; R2 = 5
+        LDAI  R3, 10       ; R3 = 10
         SUB   R2, R3, R4   ; R4 = 5 - 10 < 0 (negativo)
         JN    T_JMP         ; deve saltar (negativo) → ok
         JMP   FIM           ; erro se chegar aqui
@@ -154,9 +154,9 @@ RES_AND: DB   0             ; resultado de R0 AND R1
 RES_OR:  DB   0             ; resultado de R0 OR R1
 RES_NOT: DB   0             ; resultado de NOT R0
 
-        .text
-        LDAI  R0, #170      ; R0 = 10101010
-        LDAI  R1, #204      ; R1 = 11001100
+        .code
+        LDAI  R0, 170      ; R0 = 10101010
+        LDAI  R1, 204      ; R1 = 11001100
         AND   R0, R1, R2   ; R2 = R0 AND R1 = 10001000 = 136
         OR    R0, R1, R3   ; R3 = R0 OR  R1 = 11101110 = 238
         NOT   R0, R4        ; R4 = NOT R0    = 1111...01010101

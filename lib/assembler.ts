@@ -5,7 +5,7 @@
  * Pass 2: resolve label references, validate operand ranges, encode to 16-bit words.
  *
  * Instruction syntax (from TEST_PROGRAM_SOURCE):
- *   LDAI Rdst, #imm          — load immediate
+ *   LDAI Rdst, imm           — load immediate
  *   LDA  Rdst, addr          — load from data memory
  *   STA  Rsrc, addr          — store to data memory
  *   ADD  Rsrc_a, Rsrc_b, Rdst — ULA: dst = a + b
@@ -102,21 +102,14 @@ function parseNumber(token: string): number | null {
   return null;
 }
 
-/** Parse an immediate operand: `#decimal` or `#0xHH` → number, or null. */
-function parseImmediate(token: string): number | null {
-  if (!token.startsWith("#")) return null;
-  return parseNumber(token.slice(1));
-}
-
 /**
  * Parse a data value for DB declarations.
- * Accepts: Intel hex `#00h`/`#FFh`, our format `#10`/`#0xFF`, or plain decimal `5`.
+ * Accepts: Intel hex `00h`/`FFh`, our format `0xFF`, or plain (optionally
+ * negative) decimal `5` / `-5`.
  */
 function parseDataValue(token: string): number | null {
-  const intelHex = token.match(/^#([0-9A-Fa-f]+)[hH]$/);
+  const intelHex = token.match(/^([0-9A-Fa-f]+)[hH]$/);
   if (intelHex) return parseInt(intelHex[1], 16);
-  const imm = parseImmediate(token);
-  if (imm !== null) return imm;
   return parseNumber(token);
 }
 
@@ -125,15 +118,11 @@ function parseDataValue(token: string): number | null {
  *   - A register literal  →  number (0–7)
  *   - A hex literal       →  number
  *   - A decimal literal   →  number
- *   - An immediate (#N)   →  number
  *   - A label reference   →  string (UPPERCASED, to be resolved in pass 2)
  */
 function parseOperandToken(token: string): Operand {
   const reg = parseRegister(token);
   if (reg !== null) return reg;
-
-  const imm = parseImmediate(token);
-  if (imm !== null) return imm;
 
   const num = parseNumber(token);
   if (num !== null) return num;
@@ -315,10 +304,10 @@ function pass2(
     let word: number | null = null;
 
     switch (mnemonic) {
-      // ── Standard: LDAI Rdst, #imm ─────────────────────────────────────────
+      // ── Standard: LDAI Rdst, imm ──────────────────────────────────────────
       case "LDAI": {
         if (operands.length !== 2) {
-          errors.push({ line: lineNum, message: `LDAI: esperado 2 operandos (Rdst, #imm), recebeu ${operands.length}` });
+          errors.push({ line: lineNum, message: `LDAI: esperado 2 operandos (Rdst, imm), recebeu ${operands.length}` });
           break;
         }
         const dst = resolve(operands[0]);

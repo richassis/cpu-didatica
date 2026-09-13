@@ -34,8 +34,8 @@ import { Memory } from "@/lib/simulator/Memory";
  * ─────────────────────────────────────────────────────────────────────
  *
  * Addr  Instruction              Comment
- *  00   LDAI R0, #10             R0 = 10
- *  01   LDAI R1, #3              R1 = 3
+ *  00   LDAI R0, 10             R0 = 10
+ *  01   LDAI R1, 3              R1 = 3
  *
  *  -- ULA tests --
  *  02   ADD  R0, R1 → R2         R2 = R0+R1 = 13
@@ -50,38 +50,38 @@ import { Memory } from "@/lib/simulator/Memory";
  *  09   LDA  R7, 0x00            R7 = mem[0x00] = 13
  *
  *  -- JZ test: zero result path --
- *  10   LDAI R0, #0              R0 = 0  (set zero flag via next SUB)
+ *  10   LDAI R0, 0              R0 = 0  (set zero flag via next SUB)
  *  11   SUB  R0, R0 → R0         R0 = 0-0 = 0  → zero flag set
  *  12   JZ   0x0E                should jump to addr 14 (zero flag IS set)
  *  13   JMP  0x0C                MUST NOT execute (would signal JZ failure)
  *
- *  14   LDAI R0, #10             restore R0 = 10 (after successful JZ)
+ *  14   LDAI R0, 10             restore R0 = 10 (after successful JZ)
  *
  *  -- JN test: negative result path --
- *  15   LDAI R1, #20             R1 = 20
+ *  15   LDAI R1, 20             R1 = 20
  *  16   SUB  R0, R1 → R0         R0 = 10-20 → raw=-10 → 65526 (0xFFF6); negative flag set
  *  17   JN   0x13                should jump to addr 19 (negative flag IS set)
  *  18   JMP  0x11                MUST NOT execute (would signal JN failure)
  *
- *  19   LDAI R0, #10             restore R0 = 10 (after successful JN)
- *  20   LDAI R1, #3              restore R1 = 3
+ *  19   LDAI R0, 10             restore R0 = 10 (after successful JN)
+ *  20   LDAI R1, 3              restore R1 = 3
  *
  *  -- JC test: carry/overflow path --
- *  21   LDAI R0, #255            R0 = 255
- *  22   LDAI R1, #2              R1 = 2
+ *  21   LDAI R0, 255            R0 = 255
+ *  22   LDAI R1, 2              R1 = 2
  *  23   ADD  R0, R1 → R0         R0 = 255+2 = 257, but raw = 257 > 65535? No. 257 ≤ 65535.
  *                                Actually for 16-bit: 257 fits, carry=0.
  *                                Use larger values: R0=65535 (max), R1=2 → sum=65537 > 65535 → carry=1
  *                                BUT LDAI only supports 8-bit immediate (0–255).
- *                                Strategy: LDAI R0, #255, LDAI R1, #255, ADD R0,R1→R0  → 510, no carry.
+ *                                Strategy: LDAI R0, 255, LDAI R1, 255, ADD R0,R1→R0  → 510, no carry.
  *                                We need ADD to overflow 65535. Use NOT to get 0xFFFF first:
- *                                LDAI R0, #0 → NOT R0→R0 → R0=0xFFFF=65535; LDAI R1,#1 → ADD R0,R1→R0
+ *                                LDAI R0, 0 → NOT R0→R0 → R0=0xFFFF=65535; LDAI R1,1 → ADD R0,R1→R0
  *                                → raw=65536 > 65535 → result=0, carry=1
  *
  *  -- JC test (revised) --
- *  21   LDAI R0, #0              R0 = 0
+ *  21   LDAI R0, 0              R0 = 0
  *  22   NOT  R0     → R0         R0 = ~0 & 0xFFFF = 65535  (0xFFFF)
- *  23   LDAI R1, #1              R1 = 1
+ *  23   LDAI R1, 1              R1 = 1
  *  24   ADD  R0, R1 → R0         R0 = 65535+1 = 65536 → result=0, carry=1
  *  25   JC   0x1B                should jump to addr 27 (carry IS set)
  *  26   JMP  0x17                MUST NOT execute (would signal JC failure)
@@ -96,7 +96,7 @@ import { Memory } from "@/lib/simulator/Memory";
  * NOTE: R0 and R1 are modified by the branch tests.
  * FINAL GPR values reflect state AFTER all instructions execute:
  *   R0 = 0     (0x0000)  ADD overflow result (65535+1)
- *   R1 = 1     (0x0001)  last LDAI R1,#1
+ *   R1 = 1     (0x0001)  last LDAI R1,1
  *   R2 = 13    (0x000D)  ADD R0(10)+R1(3)
  *   R3 = 7     (0x0007)  SUB R0(10)-R1(3)
  *   R4 = 2     (0x0002)  AND 10&3
@@ -124,8 +124,8 @@ export const TEST_PROGRAM_SOURCE = `\
 ; ────────────────────────────────────────────────────────────────────────────
 
 ; Phase 1 — Load base values
-LDAI R0, #10        ; [0x00] R0 = 10
-LDAI R1, #3         ; [0x01] R1 = 3
+LDAI R0, 10        ; [0x00] R0 = 10
+LDAI R1, 3         ; [0x01] R1 = 3
 
 ; Phase 2 — ULA operations
 ADD  R0, R1, R2     ; [0x02] R2 = R0+R1 = 13
@@ -140,22 +140,22 @@ STA  R3, 0x01       ; [0x08] mem[0x01] = 7
 LDA  R7, 0x00       ; [0x09] R7 = mem[0x00] = 13
 
 ; Phase 4 — JZ (jump if zero flag)
-LDAI R0, #0         ; [0x0A] R0 = 0
+LDAI R0, 0         ; [0x0A] R0 = 0
 SUB  R0, R0, R0     ; [0x0B] R0 = 0-0 = 0  → zero flag set
 JZ   0x0E           ; [0x0C] ✓ jumps to 0x0E
 JMP  0x0C           ; [0x0D] ⛔ JZ failed — loop back
 
 ; Phase 5 — JN (jump if negative flag)
-LDAI R0, #10        ; [0x0E] R0 = 10  (restore)
-LDAI R1, #20        ; [0x0F] R1 = 20
+LDAI R0, 10        ; [0x0E] R0 = 10  (restore)
+LDAI R1, 20        ; [0x0F] R1 = 20
 SUB  R0, R1, R0     ; [0x10] R0 = 10-20 = 65526  → negative flag set
 JN   0x13           ; [0x11] ✓ jumps to 0x13
 JMP  0x11           ; [0x12] ⛔ JN failed — loop back
 
 ; Phase 6 — JC (jump if carry flag)
-LDAI R0, #0         ; [0x13] R0 = 0
+LDAI R0, 0         ; [0x13] R0 = 0
 NOT  R0,     R0     ; [0x14] R0 = ~0 = 65535 (0xFFFF)
-LDAI R1, #1         ; [0x15] R1 = 1
+LDAI R1, 1         ; [0x15] R1 = 1
 ADD  R0, R1, R0     ; [0x16] R0 = 65535+1 → 0  carry flag set
 JC   0x19           ; [0x17] ✓ jumps to 0x19
 JMP  0x17           ; [0x18] ⛔ JC failed — loop back
@@ -252,7 +252,7 @@ export const TEST_PROGRAM_EXPECTED = {
   /** GPR register values [R0..R7] */
   gpr: [
     0,      // R0 = 0      — 65535+1 overflowed to 0 (JC carry test)
-    1,      // R1 = 1      — last LDAI R1,#1 before carry test
+    1,      // R1 = 1      — last LDAI R1,1 before carry test
     13,     // R2 = 13     — ADD: 10+3
     7,      // R3 = 7      — SUB: 10-3
     2,      // R4 = 2      — AND: 10&3  (0b1010 & 0b0011 = 0b0010)
@@ -272,8 +272,8 @@ export const TEST_PROGRAM_EXPECTED = {
 
   /** Human-readable test description */
   description: [
-    "LDAI R0,#10 → R0=10",
-    "LDAI R1,#3  → R1=3",
+    "LDAI R0,10 → R0=10",
+    "LDAI R1,3  → R1=3",
     "ADD  R0,R1→R2 → R2=13",
     "SUB  R0,R1→R3 → R3=7",
     "AND  R0,R1→R4 → R4=2",
