@@ -478,14 +478,22 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
       </CanvasEditingProvider>
 
       {/* ── FAB actions menu (bottom-right) ───────────────── */}
-      {/* ── Bottom-right controls ─────────────────────────
+      {/* ── Corner controls ────────────────────────────────
           The zoom cluster is a *viewing* control, not an authoring one, so it
           renders in both modes. It used to sit inside the authoring guard,
           which left program mode — the mode built for reading the datapath —
           with no way to zoom or refit at all. Everything above it is authoring
-          and stays behind the guard. */}
+          and stays behind the guard.
+          In read-only (program) mode this corner swaps with TickDisplay's:
+          the tick counter is the instrument that matters while a program runs,
+          so it takes the bottom-right spot, and zoom — used far less there —
+          moves to top-right instead of fighting it for the same corner. */}
       <div
-        className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2"
+        className={
+          isReadOnly
+            ? "fixed right-4 top-4 z-40 flex flex-col items-end gap-2"
+            : "fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2"
+        }
         onMouseDown={(e) => e.stopPropagation()} // prevent outside-click handler
       >
         {/* Action items — slide up when open. Every item is neutral: these are

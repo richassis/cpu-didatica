@@ -5,7 +5,7 @@ import { useProgramDataStore, mountStatus } from "@/lib/programDataStore";
 import { useExecutionStore } from "@/lib/executionStore";
 
 /**
- * The Montar / Executar pair, in one strip above both code panels.
+ * The Montar / Executar pair, in one strip below both code panels.
  *
  * Montagem used to be an invisible side effect of typing (debounced, 300ms
  * behind the cursor) and Executar lived in the top bar, silently re-
@@ -14,7 +14,7 @@ import { useExecutionStore } from "@/lib/executionStore";
  * the only thing that produces a listing, and Executar refuses to run
  * anything that is not a clean, up-to-date mount (`mountStatus`).
  *
- * Staying visible above the panels — not inside either header — means the
+ * Staying visible below the panels — not inside either header — means the
  * pair still works when Assembly, Montagem, or both are collapsed to a rail.
  *
  * Which button carries the accent follows the state: unmounted or stale,
@@ -47,7 +47,7 @@ export default function BuildBar() {
           : "Montar o programa e executar até HLT";
 
   return (
-    <div className="flex shrink-0 items-center gap-2 border-b border-line px-3 py-2">
+    <div className="flex shrink-0 items-center gap-2 border-t border-line px-3 py-2">
       <button
         onClick={() => mountProgram()}
         disabled={isLocked}

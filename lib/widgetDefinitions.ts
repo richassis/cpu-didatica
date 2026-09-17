@@ -46,17 +46,23 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
       defaultOutputSide: "right",
       ports: {
         "in_writeEnable": { side: "top" },  // Control signal → top
-        "out_readDataA": { side: "right", offset: 36 },  // Data output → right
-        "out_readDataB": { side: "right", offset: 66 },  // Data output → right
+        "out_readDataA": { side: "right", offset: 28.1 },  // Data output → right
+        "out_readDataB": { side: "right", offset: 78.1 },  // Data output → right
+        "in_readAddrA": { side: "left", offset: 12.5 },  // Address input → left
+        "in_readAddrB": { side: "left", offset: 22.9 },  // Address input → left
+        "in_writeAddr": { side: "left", offset: 50 },  // Address input → left
+        "in_writeData": { side: "left", offset: 87.5 },  // Data input → left
         // Address and data ports stay on left (default)
         // Output ports stay on right (default)
+        "out_flagZero":     { side: "bottom", offset: 33, hidden: true },
+        "out_flagNegative": { side: "bottom", offset: 66, hidden: true },
       },
     },
   },
   {
     type: "MemoryComponent",
-    label: "Memory",
-    namePrefix: "MEM",
+    label: "Data Memory",
+    namePrefix: "DMEM",
     defaultWidth: 160,  // 10 grid cells
     defaultHeight: 288, // 18 grid cells — tall enough for the address list to read as a list
     description: "Unified memory — addr/data/rdMem/wrMem ports, 256×16b default",
@@ -99,7 +105,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     // ULA: data operands from left, result on right, operation control on top, flags on right
     portConfig: {
       ports: {
-        "a": { side: "left", offset: 22.5 },        // Data input → left
+        "a": { side: "left", offset: 14 },        // Data input → left
         "b": { side: "left", offset: 86.5 },        // Data input → left
         "operation": { side: "top", offset: 50 }, // Control signal → top
         "result": { side: "right", offset: 52 },  // Data output → right
@@ -217,13 +223,24 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     // A thin vertical bar: plumbing between the IR and the datapath, not a
     // teaching block. Instruction word in on the left, fields out on the right.
     defaultWidth: 64,   // 4 grid cells
-    defaultHeight: 192, // 12 grid cells
+    defaultHeight: 220, // 12 grid cells
     description: "Instruction decoder — shows opcode, fields, and format",
     // Decoder with standard left/right layout
     portConfig: {
       defaultInputSide: "left",
       defaultOutputSide: "right",
-      ports: {"instruction": {side: "left", offset: 54.5}}
+      ports: {
+        "instruction": {side: "left", offset: 54.5},
+        "opcode": {side: "top", offset: 50.0}, 
+        "gprAddrA": {side: "right", offset: 14.7},
+        "gprAddrB": {side: "right", offset: 26.6},
+        "dst": {side: "right", offset: 65.5},
+        // operand (unsigned, → MAR) and operandSigned (sign-extended, →
+        // muxDReg) share this exact position: two wires leaving the same
+        // point, carrying different interpretations of the same 8 bits.
+        "operand": {side: "right", offset: 90.9},
+        "operandSigned": {side: "right", offset: 90.9},
+      }
     },
   },
   {
@@ -233,7 +250,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     // the block is called on screen.
     label: "Control unit (UC)",
     namePrefix: "UC",
-    defaultWidth: 704,  // 44 grid cells — 10 bottom ports at 64px pitch, room for the FSM columns
+    defaultWidth: 901,  // 44 grid cells — 10 bottom ports at 64px pitch, room for the FSM columns
     defaultHeight: 336, // 21 grid cells — FETCH/DECODE stacked above the branch fan
     description: "Control unit (UC) — FSM state and control signals",
     // CPU: input ports (opcode/flags) on left, all control signal outputs on
@@ -246,6 +263,10 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
         "in_flagZero":     { side: "left", hidden: true },
         "in_flagCarry":    { side: "left", hidden: true },
         "in_flagNegative": { side: "left", hidden: true },
+        // GPR-sourced Z/N, fed by the write-data comparator on the GPR
+        // (LDA/LDAI) — OR'd with the ULA-sourced flags above when latching.
+        "in_flagZeroGpr":     { side: "left", hidden: true },
+        "in_flagNegativeGpr": { side: "left", hidden: true },
         // Debug-only outputs, already shown by the FSM graph itself — hidden
         // rather than left as unconnected dots on the right edge.
         "out_state":  { side: "right", hidden: true },
@@ -260,7 +281,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
         "out_rdMem": { side: "bottom" },
         "out_wrMem": { side: "bottom" },
         "out_muxAMem": { side: "bottom" },
-        "out_opULA": { side: "bottom" },
+        "out_opULA": { side: "bottom", offset: 91},
       },
     },
   },

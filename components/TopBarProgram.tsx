@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { Upload, Download, Pencil } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Upload, Download, Pencil, Settings2, HelpCircle } from "lucide-react";
 import { useModeStore } from "@/lib/modeStore";
 import { useProjectStore } from "@/lib/projectStore";
 import { DEFAULT_PROJECT_ID, isDefaultProject } from "@/lib/defaultProject";
@@ -9,6 +9,8 @@ import { useProgramDataStore } from "@/lib/programDataStore";
 import { EDITOR_ENABLED } from "@/lib/editorFlag";
 import { CODE_FILE_ACCEPT } from "@/lib/codeFile";
 import SaveProgramDialog from "@/components/ProgramMode/SaveProgramDialog";
+import SimulationSettings from "@/components/SimulationSettings";
+import Legend from "@/components/ProgramMode/Legend";
 import ThemeToggle from "./ThemeToggle";
 
 /**
@@ -38,6 +40,7 @@ export default function TopBarProgram() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [saveOpen, setSaveOpen] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
+  const [panel, setPanel] = useState<"settings" | "legend" | null>(null);
 
   const lineCount = assemblySource.split("\n").length;
 
@@ -99,6 +102,21 @@ export default function TopBarProgram() {
       </div>
 
       <div className="flex items-center gap-2">
+        <PanelButton
+          label="Ajustes"
+          active={panel === "settings"}
+          onClick={() => setPanel((p) => (p === "settings" ? null : "settings"))}
+        >
+          <Settings2 size={14} strokeWidth={1.5} />
+        </PanelButton>
+        <PanelButton
+          label="Legenda"
+          active={panel === "legend"}
+          onClick={() => setPanel((p) => (p === "legend" ? null : "legend"))}
+        >
+          <HelpCircle size={14} strokeWidth={1.5} />
+        </PanelButton>
+
         <ThemeToggle />
 
         {EDITOR_ENABLED && (
@@ -128,6 +146,20 @@ export default function TopBarProgram() {
       )}
 
       {saveOpen && <SaveProgramDialog onClose={() => setSaveOpen(false)} />}
+
+      {/* Settings/legend dropdown, anchored under this bar rather than the
+          transport strip at the bottom — both toggles live next to the theme
+          switch now, so the panel opens where the button is. */}
+      {panel && (
+        <div
+          role="dialog"
+          aria-modal="false"
+          aria-label={panel === "settings" ? "Ajustes da simulação" : "Legenda"}
+          className="absolute right-4 top-full z-50 mt-2 w-fit rounded-2xl border border-line bg-surface p-4"
+        >
+          {panel === "settings" ? <SimulationSettings /> : <Legend />}
+        </div>
+      )}
     </div>
   );
 }
@@ -158,6 +190,50 @@ function ClusterButton({
       className="inline-flex h-8 items-center gap-1.5 px-2.5 text-xs text-fg-muted transition-colors hover:text-fg"
     >
       {children}
+    </button>
+  );
+}
+
+/** A toggle button for a dropdown panel — Escape closes it and returns focus. */
+function PanelButton({
+  label,
+  active,
+  onClick,
+  children,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  const ref = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!active) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClick();
+        ref.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [active, onClick]);
+
+  return (
+    <button
+      ref={ref}
+      onClick={onClick}
+      aria-expanded={active}
+      title={label}
+      className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs transition-colors ${
+        active
+          ? "border-line-strong text-fg"
+          : "border-line text-fg-muted hover:border-line-strong hover:text-fg"
+      }`}
+    >
+      {children}
+      {label}
     </button>
   );
 }

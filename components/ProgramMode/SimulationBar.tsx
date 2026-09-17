@@ -1,13 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo } from "react";
 import {
   ChevronLeft,
   ChevronRight,
-  HelpCircle,
   Pause,
   Play,
-  Settings2,
   SkipBack,
   SkipForward,
   X,
@@ -15,8 +13,6 @@ import {
 import { Opcode, opcodeToMnemonic } from "@/lib/simulator";
 import { useExecutionStore } from "@/lib/executionStore";
 import { usePlaybackStore } from "@/lib/playbackStore";
-import SimulationSettings from "@/components/SimulationSettings";
-import Legend from "@/components/ProgramMode/Legend";
 
 function formatOpcode(opcode: number): string {
   try {
@@ -43,7 +39,9 @@ function formatOpcode(opcode: number): string {
  *    and it already shows both.
  *
  * It mounts whenever program mode is up, not only once a timeline exists —
- * otherwise the settings and legend would be unreachable before the first Run.
+ * otherwise transport would be unreachable the instant a run finishes and the
+ * timeline needs closing. Settings and the legend live in the top bar now,
+ * next to the theme toggle — reachable before the first Run same as this bar.
  */
 export default function SimulationBar() {
   const isTimelineActive = useExecutionStore((s) => s.isTimelineActive);
@@ -63,8 +61,6 @@ export default function SimulationBar() {
   const isPlaying = usePlaybackStore((s) => s.isPlaying);
   const togglePlay = usePlaybackStore((s) => s.toggle);
   const pause = usePlaybackStore((s) => s.pause);
-
-  const [panel, setPanel] = useState<"settings" | "legend" | null>(null);
 
   /**
    * Every manual navigation stops playback first. It cannot live inside
@@ -106,17 +102,6 @@ export default function SimulationBar() {
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 px-4 pb-3">
       <div className="mx-auto w-full max-w-[1400px]">
-        {panel && (
-          <div
-            role="dialog"
-            aria-modal="false"
-            aria-label={panel === "settings" ? "Ajustes da simulação" : "Legenda"}
-            className="mb-2 ml-auto w-fit rounded-2xl border border-line bg-surface p-4"
-          >
-            {panel === "settings" ? <SimulationSettings /> : <Legend />}
-          </div>
-        )}
-
         <div className="rounded-2xl border border-line bg-surface px-4 py-3">
           <div className="flex items-center gap-2">
             {isTimelineActive ? (
@@ -179,21 +164,6 @@ export default function SimulationBar() {
             )}
 
             <div className="ml-auto flex items-center gap-2">
-              <PanelButton
-                label="Ajustes"
-                active={panel === "settings"}
-                onClick={() => setPanel((p) => (p === "settings" ? null : "settings"))}
-              >
-                <Settings2 size={14} strokeWidth={1.5} />
-              </PanelButton>
-              <PanelButton
-                label="Legenda"
-                active={panel === "legend"}
-                onClick={() => setPanel((p) => (p === "legend" ? null : "legend"))}
-              >
-                <HelpCircle size={14} strokeWidth={1.5} />
-              </PanelButton>
-
               {isTimelineActive && (
                 <button
                   onClick={manual(exitTimeline)}
@@ -271,50 +241,6 @@ function TransportButton({
       className="flex h-8 w-8 items-center justify-center rounded-lg border border-line text-fg-muted transition-colors hover:border-line-strong hover:text-fg disabled:opacity-30 disabled:hover:border-line disabled:hover:text-fg-muted"
     >
       {children}
-    </button>
-  );
-}
-
-function PanelButton({
-  label,
-  active,
-  onClick,
-  children,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  const ref = useRef<HTMLButtonElement>(null);
-
-  // Escape closes the panel and puts focus back on the button that opened it.
-  useEffect(() => {
-    if (!active) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        onClick();
-        ref.current?.focus();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [active, onClick]);
-
-  return (
-    <button
-      ref={ref}
-      onClick={onClick}
-      aria-expanded={active}
-      title={label}
-      className={`flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs transition-colors ${
-        active
-          ? "border-line-strong text-fg"
-          : "border-line text-fg-muted hover:border-line-strong hover:text-fg"
-      }`}
-    >
-      {children}
-      {label}
     </button>
   );
 }

@@ -15,6 +15,13 @@ import { InputPort, OutputPort, type Connectable, type PortMap } from "./Port";
  * - in_writeEnable (1-bit): if high, latch in_writeData into addressed register on tick
  * - out_readDataA (16-bit): data read from register at in_readAddrA
  * - out_readDataB (16-bit): data read from register at in_readAddrB
+ * - out_flagZero (1-bit, hidden): high while in_writeEnable is high and
+ *   in_writeData is all zero bits — a comparator on the write-data bus, not a
+ *   latch, so it reads 0 again as soon as the write tick passes. Lets a
+ *   LDA/LDAI feed the UC's Z flag from the loaded value, the same way the
+ *   ULA feeds it from a computed result.
+ * - out_flagNegative (1-bit, hidden): same idea, high while writing a value
+ *   whose sign bit (MSB) is set.
  */
 export class Gpr implements Clockable, Connectable {
   /** Unique ID matching the ComponentInstance id on the canvas */
@@ -36,6 +43,10 @@ export class Gpr implements Clockable, Connectable {
   // ── Output Ports ─────────────────────────────────────────────
   readonly out_readDataA: OutputPort<number>;
   readonly out_readDataB: OutputPort<number>;
+  /** Hidden: high while a write in progress is writing an all-zero value. */
+  readonly out_flagZero: OutputPort<number>;
+  /** Hidden: high while a write in progress is writing a negative (MSB-set) value. */
+  readonly out_flagNegative: OutputPort<number>;
 
   constructor(
     id: string,
@@ -61,6 +72,8 @@ export class Gpr implements Clockable, Connectable {
     // Output ports - update immediately when read addresses change
     this.out_readDataA = new OutputPort<number>("out_readDataA", "number", bitWidth, 0);
     this.out_readDataB = new OutputPort<number>("out_readDataB", "number", bitWidth, 0);
+    this.out_flagZero = new OutputPort<number>("out_flagZero", "number", 1, 0);
+    this.out_flagNegative = new OutputPort<number>("out_flagNegative", "number", 1, 0);
 
     // Wire up combinational read: when address changes, output updates immediately.
     this.in_readAddrA.onChange = (addr) => {
@@ -82,6 +95,8 @@ export class Gpr implements Clockable, Connectable {
       in_writeEnable: this.in_writeEnable,
       out_readDataA: this.out_readDataA,
       out_readDataB: this.out_readDataB,
+      out_flagZero: this.out_flagZero,
+      out_flagNegative: this.out_flagNegative,
     };
   }
 
@@ -153,13 +168,33 @@ export class Gpr implements Clockable, Connectable {
   }
 
   /**
-   * Combinational phase: refresh read outputs for current addresses.
+   * Combinational phase: refresh read outputs for current addresses, and the
+   * hidden Z/N comparator on the write-data bus.
    */
   evaluate(): void {
     const readAddrA = this.clampIndex(this.in_readAddrA.get());
     const readAddrB = this.clampIndex(this.in_readAddrB.get());
     this.out_readDataA.set(this._registers[readAddrA]);
     this.out_readDataB.set(this._registers[readAddrB]);
+
+    this.evaluateWriteFlags();
+  }
+
+  /**
+   * Comparator on the write-data bus: high only while `in_writeEnable` is
+   * high, so it pulses for exactly the tick a value is actually written and
+   * reads 0 the rest of the time (there is no latch here — the UC is what
+   * latches, in `latchFlagsIfProduced()`).
+   */
+  private evaluateWriteFlags(): void {
+    const writeEnabled = this.in_writeEnable.get() !== 0;
+    const value = this.in_writeData.get() & this.mask;
+    this.out_flagZero.set(writeEnabled && value === 0 ? 1 : 0);
+    this.out_flagNegative.set(writeEnabled && (value & (1 << (this.bitWidth - 1))) !== 0 ? 1 : 0);
+  }
+
+  private get mask(): number {
+    return (1 << this.bitWidth) - 1;
   }
 
   /**

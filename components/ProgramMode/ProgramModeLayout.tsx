@@ -25,12 +25,12 @@ const MONTAGEM_W = 220;
  * ProgramModeLayout — Full-screen layout for Program Mode.
  *
  * ┌──────────────┬──────────────────────────────────────────┐
- * │  BuildBar (Montar / Executar)                            │
- * ├──────────────┤                                          │
  * │  Assembly    │   Datapath Canvas (read-only)            │
  * │  + bytecode  │                                          │
  * │  (60% / 26%) │                                          │
  * │              │                                          │
+ * ├──────────────┤                                          │
+ * │  BuildBar (Montar / Executar)                            │
  * ├──────────────┴──────────────────────────────────────────┤
  * │  SimulationBar (always mounted; transport when running) │
  * └─────────────────────────────────────────────────────────┘
@@ -134,8 +134,6 @@ export default function ProgramModeLayout() {
           }`}
           style={{ width: codeRegionWidth, minWidth: 240 }}
         >
-          <BuildBar />
-
           {memoryOpen ? (
             <div className="min-h-0 flex-1">
               <MemoryPanel />
@@ -157,6 +155,8 @@ export default function ProgramModeLayout() {
               )}
             </div>
           )}
+
+          <BuildBar />
 
           <div
             role="separator"

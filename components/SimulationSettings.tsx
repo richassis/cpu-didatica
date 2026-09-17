@@ -5,7 +5,17 @@ import {
   ANIMATION_MIN_MS,
   ANIMATION_MAX_MS,
   isInstantSpeed,
+  type NumericBase,
 } from "@/lib/displayStore";
+
+/** Button labels — "decSigned" is a valid NumericBase but not a word anyone should read. */
+const BASE_LABELS: Record<NumericBase, string> = {
+  hex: "hex",
+  dec: "dec+",
+  decSigned: "dec±",
+  bin: "bin",
+  oct: "oct",
+};
 
 /**
  * Every simulation display setting, in one place.
@@ -44,7 +54,8 @@ export default function SimulationSettings() {
     <div className="w-72">
       <Section title="Valores" first />
       <div className="mb-1 flex items-center gap-1">
-        {(["hex", "dec", "bin", "oct"] as const).map((b) => (
+        {/* {(["hex", "dec", "decSigned", "bin", "oct"] as const).map((b) => ( */}
+        {(["hex", "dec", "decSigned", "bin"] as const).map((b) => (
           <button
             key={b}
             onClick={() => setNumericBase(b)}
@@ -55,7 +66,7 @@ export default function SimulationSettings() {
                 : "border-line text-fg-muted hover:border-line-strong hover:text-fg"
             }`}
           >
-            {b}
+            {BASE_LABELS[b]}
           </button>
         ))}
       </div>

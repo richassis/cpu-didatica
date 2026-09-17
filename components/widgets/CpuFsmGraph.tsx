@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { CpuState, CPU_STATE_LABELS } from "@/lib/simulator/CpuState";
 import { OPCODE_SEQUENCES } from "@/lib/simulator/Cpu";
 import { Opcode, opcodeToMnemonic } from "@/lib/simulator/ISA";
@@ -21,9 +22,16 @@ import { Opcode, opcodeToMnemonic } from "@/lib/simulator/ISA";
  * it reads isn't trustworthy until DECODE's wire animation resolves — and
  * appears the instant the branch's first state goes current.
  *
- * Laid out on an abstract viewBox with `preserveAspectRatio="none"`: nothing
- * here lines up with a port, so a proportional grid fills whatever size the
- * control unit's body gives it.
+ * The control unit's body can be resized taller or shorter by the user, and
+ * this graph is inherently wide (six columns). Rather than stretch the fixed
+ * layout to fill whatever box it's given (which distorts boxes and text
+ * non-uniformly), a ResizeObserver measures the actual rendered aspect ratio
+ * and a `vScale` factor grows only the *spacing* between rows — FETCH/DECODE
+ * gaps, row height, merge margins — so a taller box gets more breathing room
+ * between states instead of warped glyphs. Element sizes (box width/height,
+ * font size) stay fixed; only whitespace grows. `preserveAspectRatio="xMidYMid
+ * meet"` then scales that matched-aspect viewBox uniformly, so scaleX ===
+ * scaleY and nothing is ever non-uniformly stretched.
  */
 
 type BranchKey = "LDA" | "LDAI" | "STA" | "ULA" | "JUMP" | "HLT";
@@ -56,37 +64,49 @@ const BRANCHES: Branch[] = [
 
 const MAX_LEVELS = 3; // the ULA branch: READREG2 → EXECUTE → WRITEREG3
 
-const BOX_W = 156;
+// Element sizes — fixed regardless of the container's aspect ratio, so
+// nothing individually distorts. Narrower than the original design, both to
+// give the return rail clear room on the left and to fit six columns more
+// comfortably.
+const BOX_W = 130;
 const BOX_H = 42;
 
-const RAIL_X = 24; // the return loop runs up this left rail
-
-const COL_X0 = 96;
-const COL_W = 176;
+const COL_X0 = 110;
+const COL_W = 150;
 const COL_X_LAST = COL_X0 + (BRANCHES.length - 1) * COL_W;
+
+// The return-to-FETCH rail. Kept a clear margin to the left of the first
+// branch column's box edge (COL_X0 - BOX_W / 2) so it always reads as its own
+// line hugging the control unit's left edge, never passing under a box.
+const RAIL_X = COL_X0 - BOX_W / 2 - 24;
 
 // FETCH / DECODE stacked at the top, centred over the branch fan.
 const HEADER_X = (COL_X0 + COL_X_LAST) / 2;
-const FETCH_Y = 44;
-const DECODE_Y = FETCH_Y + 60;
 
-const FANOUT_Y = DECODE_Y + 44;
-const ROW_Y0 = FANOUT_Y + 54;
-const ROW_H = 74;
-const MERGE_Y = ROW_Y0 + (MAX_LEVELS - 1) * ROW_H + BOX_H / 2 + 30;
+// Base (unscaled) vertical gaps, tuned for the original wide/short aspect
+// ratio. Multiplied by `vScale` at render time to fill a taller container.
+const FETCH_Y_BASE = 44;
+const DECODE_GAP_BASE = 60;
+const FANOUT_GAP_BASE = 44;
+const ROW_GAP0_BASE = 54;
+const ROW_H_BASE = 74;
+const MERGE_MARGIN_BASE = 30;
+const BOTTOM_MARGIN_BASE = 24;
 
 const INSTR_BADGE_X = COL_X_LAST + BOX_W / 2 - 68;
-const INSTR_BADGE_Y = FETCH_Y;
 
 const GRAPH_W = COL_X_LAST + BOX_W / 2 + 30;
-const GRAPH_H = MERGE_Y + 24;
+
+const BASE_GRAPH_H =
+  FETCH_Y_BASE + DECODE_GAP_BASE + FANOUT_GAP_BASE + ROW_GAP0_BASE +
+  (MAX_LEVELS - 1) * ROW_H_BASE + BOX_H / 2 + MERGE_MARGIN_BASE + BOTTOM_MARGIN_BASE;
+const BASE_ASPECT = GRAPH_W / BASE_GRAPH_H;
+
+const MIN_VSCALE = 1; // never shrink below the tuned base layout
+const MAX_VSCALE = 2.5; // cap how much whitespace can stretch on very tall boxes
 
 function colX(col: number): number {
   return COL_X0 + col * COL_W;
-}
-
-function rowY(row: number): number {
-  return ROW_Y0 + row * ROW_H;
 }
 
 function findActiveBranch(opcode: number): Branch | null {
@@ -112,9 +132,9 @@ function StateBox({
         y={BOX_H / 2}
         textAnchor="middle"
         dominantBaseline="central"
-        fontSize={18}
+        fontSize={16}
         fontFamily="var(--font-mono, monospace)"
-        fill={active ? "var(--st-active)" : "var(--fg-muted)"}
+        fill={active ? "var(--st-active)" : "var(--text-muted)"}
       >
         {label}
       </text>
@@ -135,16 +155,50 @@ function Edge({
   );
 }
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
 export interface CpuFsmGraphProps {
   /** The state that just executed (what should read as "current"). */
   currentState: CpuState;
   /** The state about to execute next tick. */
   nextState: CpuState;
   opcode: number;
-  halted: boolean;
 }
 
-export default function CpuFsmGraph({ currentState, nextState, opcode, halted }: CpuFsmGraphProps) {
+export default function CpuFsmGraph({ currentState, nextState, opcode }: CpuFsmGraphProps) {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [vScale, setVScale] = useState(1);
+
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      const { width, height } = entry.contentRect;
+      if (width <= 0 || height <= 0) return;
+      const currentAspect = width / height;
+      setVScale(clamp(BASE_ASPECT / currentAspect, MIN_VSCALE, MAX_VSCALE));
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // Only whitespace scales with the container's height — box/text sizes above
+  // are fixed, so nothing gets non-uniformly stretched.
+  const FETCH_Y = FETCH_Y_BASE * vScale;
+  const DECODE_Y = FETCH_Y + DECODE_GAP_BASE * vScale;
+  const FANOUT_Y = DECODE_Y + FANOUT_GAP_BASE * vScale;
+  const ROW_Y0 = FANOUT_Y + ROW_GAP0_BASE * vScale;
+  const ROW_H = ROW_H_BASE * vScale;
+  const MERGE_Y = ROW_Y0 + (MAX_LEVELS - 1) * ROW_H + BOX_H / 2 + MERGE_MARGIN_BASE * vScale;
+  const GRAPH_H = MERGE_Y + BOTTOM_MARGIN_BASE * vScale;
+  const INSTR_BADGE_Y = FETCH_Y;
+
+  const rowY = (row: number) => ROW_Y0 + row * ROW_H;
+
   // Not just RESET/FETCH: DECODE too. The opcode this reads isn't settled
   // until DECODE's own wire animation resolves, so a branch "chosen" during
   // that tick would just be replaying the previous instruction's opcode.
@@ -169,8 +223,9 @@ export default function CpuFsmGraph({ currentState, nextState, opcode, halted }:
 
   return (
     <svg
+      ref={svgRef}
       viewBox={`0 0 ${GRAPH_W} ${GRAPH_H}`}
-      preserveAspectRatio="none"
+      preserveAspectRatio="xMidYMid meet"
       className="h-full w-full"
       aria-label="Diagrama de estados da unidade de controle"
     >
@@ -227,7 +282,9 @@ export default function CpuFsmGraph({ currentState, nextState, opcode, halted }:
       })}
 
       {/* Merge spine: every non-HLT branch returns to FETCH. Runs left to the
-          rail, up the rail, and into FETCH's left edge. */}
+          rail, up the rail, and into FETCH's left edge. The rail sits clear
+          of every branch box's horizontal footprint, so it always reads as a
+          distinct line at the control unit's left edge. */}
       {(() => {
         const lastReturningCol = colX(BRANCHES.filter((b) => b.key !== "HLT").length - 1);
         const returnActive = !!activeBranch && activeBranch.key !== "HLT" && onDecodeTrail;
@@ -240,7 +297,7 @@ export default function CpuFsmGraph({ currentState, nextState, opcode, halted }:
             <path
               d={`M ${COL_X0} ${MERGE_Y} L ${RAIL_X} ${MERGE_Y} L ${RAIL_X} ${FETCH_Y} L ${HEADER_X - BOX_W / 2} ${FETCH_Y}`}
               fill="none"
-              stroke={returnActive ? "var(--st-active)" : "var(--fg-faint)"}
+              stroke={returnActive ? "var(--st-active)" : "var(--border)"}
               strokeWidth={returnActive ? 2 : 1}
               vectorEffect="non-scaling-stroke"
               markerEnd="url(#cpu-fsm-arrow)"
@@ -251,11 +308,14 @@ export default function CpuFsmGraph({ currentState, nextState, opcode, halted }:
 
       <defs>
         <marker id="cpu-fsm-arrow" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
-          <path d="M0,0 L7,3.5 L0,7 Z" fill="var(--fg-faint)" />
+          <path d="M0,0 L7,3.5 L0,7 Z" fill="var(--border)" />
         </marker>
       </defs>
 
-      <StateBox x={HEADER_X} y={FETCH_Y} label={halted ? "HALT" : "FETCH"} active={isFetchCurrent && !halted} />
+      {/* Stays "FETCH" even when halted — the dedicated HLT branch box below
+          is already what lights up for that state; relabeling this one too
+          suggested two different states were both "the halt state". */}
+      <StateBox x={HEADER_X} y={FETCH_Y} label="FETCH" active={isFetchCurrent} />
       <StateBox x={HEADER_X} y={DECODE_Y} label="DECODE" active={isDecodeCurrent} />
 
       {/* The instruction actually decoded, top-right — appears only once DECODE
@@ -277,7 +337,7 @@ export default function CpuFsmGraph({ currentState, nextState, opcode, halted }:
           textAnchor="end"
           fontSize={11}
           fontFamily="var(--font-mono, monospace)"
-          fill="var(--fg-faint)"
+          fill="var(--text-faint)"
         >
           próx.: {CPU_STATE_LABELS[nextState]}
         </text>

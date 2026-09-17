@@ -12,7 +12,8 @@
  *   │                gprAddrA      ──────────────────▶  GPR mux   │
  *   │                gprAddrB      ──────────────────▶  GPR mux   │
  *   │                dst           ──────────────────▶  GPR mux   │
- *   │                operand       ──────────────────▶  Imm / MAR │
+ *   │                operand       ──────────────────▶  MAR       │
+ *   │                operandSigned ──────────────────▶  Imm mux   │
  *   └──────────────────────────────────────────────────────────────┘
  *
  * The CPU only ever reads `decoder.opcode`.
@@ -65,6 +66,14 @@ export class Decoder implements Clockable, Connectable {
   /** Output: 8-bit operand/immediate [7:0] (standard format). */
   readonly out_operand: OutputPort<number>;
 
+  /**
+   * Output: the same [7:0] field, sign-extended to the full word width.
+   * `operand` feeds address consumers (LDA/STA's MAR, unsigned); this feeds
+   * LDAI's immediate-data mux, where the field is a signed byte and needs
+   * bit 7 replicated into bits 15:8 before it reaches a 16-bit register.
+   */
+  readonly out_operandSigned: OutputPort<number>;
+
   /** Output: ULA source B / second GPR address [7:5]. */
   readonly out_gprAddrB: OutputPort<number>;
 
@@ -101,6 +110,11 @@ export class Decoder implements Clockable, Connectable {
       "8-bit immediate/address [7:0] for standard instructions"
     );
 
+    this.out_operandSigned = new OutputPort<number>(
+      "operandSigned", "number", ISA_WORD_SIZE, 0,
+      "operand, sign-extended to the full word — feeds LDAI's immediate mux"
+    );
+
     this.out_gprAddrB = new OutputPort<number>(
       "gprAddrB", "number", GPR_ADDR_BITS, 0,
       "ULA source B / second GPR address [7:5]"
@@ -118,10 +132,11 @@ export class Decoder implements Clockable, Connectable {
     return {
       instruction: this.in_instruction,
       opcode: this.out_opcode,
-      operand: this.out_operand,
       gprAddrA: this.out_gprAddrA,
       gprAddrB: this.out_gprAddrB,
       dst: this.out_dst,
+      operand: this.out_operand,
+      operandSigned: this.out_operandSigned,
     };
   }
 
@@ -228,6 +243,7 @@ export class Decoder implements Clockable, Connectable {
 
       // Clear standard outputs
       this.out_operand.set(0);
+      this.out_operandSigned.set(0);
 
       this._decoded = {
         format: "ula", raw, opcode, mnemonic,
@@ -239,6 +255,16 @@ export class Decoder implements Clockable, Connectable {
 
       this.out_gprAddrA.set(gprAddr);
       this.out_operand.set(operand);
+
+      // Sign-extend bit 7 into bits 15:8. `& ISA_WORD_MAX` is required, not
+      // cosmetic: OutputPort.set() clamps a raw negative number to 0 instead
+      // of wrapping it, so the two's-complement bit pattern must already be
+      // non-negative by the time it reaches `.set()`.
+      const signBit = 1 << (OPERAND_BITS - 1);
+      const operandSigned = operand & signBit
+        ? (operand - (1 << OPERAND_BITS)) & ISA_WORD_MAX
+        : operand;
+      this.out_operandSigned.set(operandSigned);
 
       // Clear ULA outputs
       this.out_gprAddrB.set(0);

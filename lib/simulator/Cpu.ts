@@ -256,8 +256,18 @@ export interface CpuInternalStateSnapshot {
  * - in_flagZero (1-bit): Zero flag from ULA
  * - in_flagCarry (1-bit): Carry flag from ULA
  * - in_flagNegative (1-bit): Negative flag from ULA
+ * - in_flagZeroGpr (1-bit, hidden): Zero flag from the GPR's write-data bus
+ *   (LDA/LDAI loading a zero value)
+ * - in_flagNegativeGpr (1-bit, hidden): Negative flag from the GPR's
+ *   write-data bus (LDA/LDAI loading a negative value)
  * - out_wrReg, out_muxAReg, out_muxDReg, etc.: Control signal outputs
  * - out_state (3-bit): Current FSM state (for debugging/UI)
+ *
+ * Status flags (Z/N) are effectively an OR between the ULA's flags and the
+ * GPR's: `latchFlagsIfProduced()` samples whichever source's operation just
+ * finished (ULA after EXECUTE, GPR after a LDA/LDAI write commits in
+ * WRITEREG1/WRITEREG2), so a flag left over on the *other* input from an
+ * earlier, unrelated instruction never bleeds into the freshly latched value.
  */
 export class CPU implements Clockable, Connectable {
   readonly id: string;
@@ -275,8 +285,6 @@ export class CPU implements Clockable, Connectable {
   // Registered components for step-based ticking
   private _registeredComponents: Map<string, RegisteredComponent> = new Map();
 
-  // Previous signal values for change detection
-  private _prevSignals: Map<string, number | boolean> = new Map();
   // Control output port names that changed in the most recent tick.
   private _changedControlSignalPorts: Set<string> = new Set();
   
@@ -297,6 +305,8 @@ export class CPU implements Clockable, Connectable {
   readonly in_flagZero: InputPort<number>;
   readonly in_flagCarry: InputPort<number>;
   readonly in_flagNegative: InputPort<number>;
+  readonly in_flagZeroGpr: InputPort<number>;
+  readonly in_flagNegativeGpr: InputPort<number>;
 
   // ── Output Ports (Control Signals) ───────────────────────────
   readonly out_wrIR: OutputPort<number>;
@@ -321,6 +331,8 @@ export class CPU implements Clockable, Connectable {
     this.in_flagZero = new InputPort<number>("in_flagZero", "number", 1, 0);
     this.in_flagCarry = new InputPort<number>("in_flagCarry", "number", 1, 0);
     this.in_flagNegative = new InputPort<number>("in_flagNegative", "number", 1, 0);
+    this.in_flagZeroGpr = new InputPort<number>("in_flagZeroGpr", "number", 1, 0);
+    this.in_flagNegativeGpr = new InputPort<number>("in_flagNegativeGpr", "number", 1, 0);
 
     // Control signal output ports
     this.out_wrIR = new OutputPort<number>("out_wrIR", "number", 1, 0);
@@ -336,8 +348,6 @@ export class CPU implements Clockable, Connectable {
     this.out_state = new OutputPort<number>("out_state", "number", 4, CpuState.RESET);
     this.out_halted = new OutputPort<boolean>("out_halted", "boolean", 1, false);
 
-    // Initialize previous signal values
-    this.initPrevSignals();
     this.resetLatchedFlags();
   }
 
@@ -430,6 +440,8 @@ export class CPU implements Clockable, Connectable {
       in_flagZero: this.in_flagZero,
       in_flagCarry: this.in_flagCarry,
       in_flagNegative: this.in_flagNegative,
+      in_flagZeroGpr: this.in_flagZeroGpr,
+      in_flagNegativeGpr: this.in_flagNegativeGpr,
       out_muxPC: this.out_muxPC,
       out_wrPC: this.out_wrPC,
       out_wrIR: this.out_wrIR,
@@ -439,7 +451,7 @@ export class CPU implements Clockable, Connectable {
       out_muxDReg: this.out_muxDReg,
       out_wrReg: this.out_wrReg,
       out_opULA: this.out_opULA,
-      out_muxAMem: this.out_muxAMem,
+      // out_muxAMem: this.out_muxAMem,
       out_state: this.out_state,
       out_halted: this.out_halted,
     };
@@ -544,7 +556,6 @@ export class CPU implements Clockable, Connectable {
     this._halted = false;
     this._totalTicks = 0;
     this._changedControlSignalPorts.clear();
-    this.initPrevSignals();
     this.resetLatchedFlags();
     // Apply RESET state control signals immediately
     this.emitSignals(CpuState.RESET, Opcode.HLT, true);
@@ -571,38 +582,36 @@ export class CPU implements Clockable, Connectable {
     this._latchedFlagNegative = snapshot.latchedFlagNegative ?? false;
   }
 
-  /** Initialize previous signal values for change detection. */
-  private initPrevSignals(): void {
-    this._prevSignals.set("wrReg", 0);
-    this._prevSignals.set("muxAReg", 1);
-    this._prevSignals.set("muxDReg", 2);
-    this._prevSignals.set("wrPC", 0);
-    this._prevSignals.set("muxPC", 1);
-    this._prevSignals.set("rdMem", 0);
-    this._prevSignals.set("wrMem", 0);
-    this._prevSignals.set("muxAMem", 1);
-    this._prevSignals.set("wrIR", 0);
-    this._prevSignals.set("opULA", UlaOperation.ADD);
-  }
-
   /**
    * Set a signal only if it has changed from its previous value.
-   * This reduces unnecessary propagation.
+   *
+   * Compares against the port's own current value — not a separately
+   * tracked copy — so this can never desync from it. A tracked copy (this
+   * used to keep one in `_prevSignals`, initialized to hardcoded defaults)
+   * goes stale the moment anything outside this method writes the port
+   * directly: loading a project file restores its own saved port values,
+   * and the timeline's progressive-reveal system resets ports to older
+   * values while animating. Either one leaves the tracked copy pointing at
+   * a value the port no longer holds, so the next real signal change that
+   * happens to match the *stale tracked* value gets skipped here — the port
+   * silently keeps whatever the external write left it at. That is exactly
+   * how `out_opULA` could get stuck showing a stale operation: a loaded
+   * project's saved value never matched the hardcoded tracked default, so
+   * the first real EXECUTE that coincidentally computed that same default
+   * value never actually wrote the port.
    */
   private setSignalIfChanged<T extends number | boolean>(
     port: OutputPort<T>,
-    signalName: string,
-    value: T, 
+    value: T,
     force_update: boolean = false
   ): void {
-    const prevValue = this._prevSignals.get(signalName);
+    const prevValue = port.value;
     if (prevValue !== value) {
       this._changedControlSignalPorts.add(port.name);
     }
 
     if (prevValue !== value || force_update) {
       port.set(value);
-      this._prevSignals.set(signalName, value);
     }
   }
 
@@ -644,10 +653,8 @@ export class CPU implements Clockable, Connectable {
 
     this.tickAllComponentsPhased();
 
-    // Latch ULA flags only after EXECUTE completes.
-    if (this._previousState === CpuState.EXECUTE) {
-      this.latchFlagsFromInputs();
-    }
+    // Latch status flags right after whichever source just produced them.
+    this.latchFlagsIfProduced();
   }
 
   /**
@@ -900,38 +907,38 @@ export class CPU implements Clockable, Connectable {
 
     // Apply all configured signals
     if (config.wrReg !== undefined) {
-      this.setSignalIfChanged(this.out_wrReg, "wrReg", config.wrReg, force_write);
+      this.setSignalIfChanged(this.out_wrReg, config.wrReg, force_write);
     }
     if (config.muxAReg !== undefined) {
-      this.setSignalIfChanged(this.out_muxAReg, "muxAReg", config.muxAReg, force_write);
+      this.setSignalIfChanged(this.out_muxAReg, config.muxAReg, force_write);
     }
     if (config.muxDReg !== undefined) {
-      this.setSignalIfChanged(this.out_muxDReg, "muxDReg", config.muxDReg, force_write);
+      this.setSignalIfChanged(this.out_muxDReg, config.muxDReg, force_write);
     }
     if (config.wrPC !== undefined) {
-      this.setSignalIfChanged(this.out_wrPC, "wrPC", config.wrPC, force_write);
+      this.setSignalIfChanged(this.out_wrPC, config.wrPC, force_write);
     }
     if (config.muxPC !== undefined) {
-      this.setSignalIfChanged(this.out_muxPC, "muxPC", config.muxPC, force_write);
+      this.setSignalIfChanged(this.out_muxPC, config.muxPC, force_write);
     }
     if (config.rdMem !== undefined) {
-      this.setSignalIfChanged(this.out_rdMem, "rdMem", config.rdMem, force_write);
+      this.setSignalIfChanged(this.out_rdMem, config.rdMem, force_write);
     }
     if (config.wrMem !== undefined) {
-      this.setSignalIfChanged(this.out_wrMem, "wrMem", config.wrMem, force_write);
+      this.setSignalIfChanged(this.out_wrMem, config.wrMem, force_write);
     }
     if (config.muxAMem !== undefined) {
-      this.setSignalIfChanged(this.out_muxAMem, "muxAMem", config.muxAMem, force_write);
+      this.setSignalIfChanged(this.out_muxAMem, config.muxAMem, force_write);
     }
     if (config.wrIR !== undefined) {
-      this.setSignalIfChanged(this.out_wrIR, "wrIR", config.wrIR, force_write);
+      this.setSignalIfChanged(this.out_wrIR, config.wrIR, force_write);
     }
 
     // Special handling for state-specific logic
     switch (state) {
       case CpuState.EXECUTE:
         // EXECUTE: set ULA operation based on opcode
-        this.setSignalIfChanged(this.out_opULA, "opULA", this.opcodeToUlaOp(opcode));
+        this.setSignalIfChanged(this.out_opULA, this.opcodeToUlaOp(opcode));
         break;
 
       case CpuState.WRITEPC: {
@@ -944,8 +951,8 @@ export class CPU implements Clockable, Connectable {
 
         if (taken) {
           console.log(`Jump taken for opcode ${Opcode[opcode]} (0b${opcode.toString(2).padStart(5, "0")})`);
-          this.setSignalIfChanged(this.out_wrPC, "wrPC", 1);
-          this.setSignalIfChanged(this.out_muxPC, "muxPC", 0); // jump target from operand
+          this.setSignalIfChanged(this.out_wrPC, 1);
+          this.setSignalIfChanged(this.out_muxPC, 0); // jump target from operand
         }
         break;
       }
@@ -953,7 +960,7 @@ export class CPU implements Clockable, Connectable {
       default:
         // For other states, apply opULA if configured
         if (config.opULA !== undefined) {
-          this.setSignalIfChanged(this.out_opULA, "opULA", config.opULA);
+          this.setSignalIfChanged(this.out_opULA, config.opULA);
         }
         break;
     }
@@ -971,9 +978,29 @@ export class CPU implements Clockable, Connectable {
     this._latchedFlagNegative = false;
   }
 
-  private latchFlagsFromInputs(): void {
-    this._latchedFlagZero = Boolean(this.in_flagZero.get());
-    this._latchedFlagCarry = Boolean(this.in_flagCarry.get());
-    this._latchedFlagNegative = Boolean(this.in_flagNegative.get());
+  /**
+   * Refreshes the latched Z/C/N flags right after whichever operation just
+   * produced fresh ones — the ULA after EXECUTE (arithmetic/logic ops), or
+   * the GPR after a load commits in WRITEREG1/WRITEREG2 (LDA/LDAI). Each
+   * branch only reads the source that just fired, so a flag left over on the
+   * *other* input from an earlier, unrelated instruction (the ULA's operands
+   * hold their last value between EXECUTEs; the GPR's write bus is whatever
+   * was last written) never bleeds into the freshly latched value — which is
+   * what makes this equivalent to an OR between the ULA's flag and the
+   * GPR's, without either one going stale.
+   */
+  private latchFlagsIfProduced(): void {
+    if (this._previousState === CpuState.EXECUTE) {
+      this._latchedFlagZero = Boolean(this.in_flagZero.get());
+      this._latchedFlagCarry = Boolean(this.in_flagCarry.get());
+      this._latchedFlagNegative = Boolean(this.in_flagNegative.get());
+    } else if (
+      this._previousState === CpuState.WRITEREG1 ||
+      this._previousState === CpuState.WRITEREG2
+    ) {
+      // LDA/LDAI don't touch carry — only the ULA can set it.
+      this._latchedFlagZero = Boolean(this.in_flagZeroGpr.get());
+      this._latchedFlagNegative = Boolean(this.in_flagNegativeGpr.get());
+    }
   }
 }

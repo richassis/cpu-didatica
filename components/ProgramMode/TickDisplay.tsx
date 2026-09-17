@@ -89,7 +89,7 @@ export default function TickDisplay() {
 
   return (
     <div
-      className="pointer-events-none absolute right-4 top-4 z-30 flex flex-col items-end gap-1 rounded-xl border border-line bg-surface px-3 py-2"
+      className="pointer-events-none absolute bottom-6 right-6 z-30 flex flex-col items-end gap-1 rounded-xl border border-line bg-surface px-3 py-2"
       style={{ background: "var(--surface)" }}
     >
       <div className="flex items-center gap-1">

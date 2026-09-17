@@ -63,8 +63,8 @@ export default function PortTooltipWrapper({ componentId, componentLabel, childr
   const inputPorts  = ports.filter((p) => p.direction === "input");
   const outputPorts = ports.filter((p) => p.direction === "output");
 
-  const formatValue = (value: unknown): string => {
-    if (typeof value === "number") return formatNum(value, base);
+  const formatValue = (value: unknown, bitWidth: number | null): string => {
+    if (typeof value === "number") return formatNum(value, base, bitWidth ?? undefined);
     if (typeof value === "boolean") return value ? "1" : "0";
     return String(value);
   };
@@ -103,7 +103,7 @@ export default function PortTooltipWrapper({ componentId, componentLabel, childr
                     {inputPorts.map((port) => (
                       <div key={port.name} className="flex items-center justify-between rounded px-2 py-0.5 text-[11px]">
                         <span className="font-mono text-fg-faint">{port.name}</span>
-                        <span className="num font-mono text-fg">{formatValue(port.value)}</span>
+                        <span className="num font-mono text-fg">{formatValue(port.value, port.bitWidth)}</span>
                       </div>
                     ))}
                   </div>
@@ -123,7 +123,7 @@ export default function PortTooltipWrapper({ componentId, componentLabel, childr
                     {outputPorts.map((port) => (
                       <div key={port.name} className="flex items-center justify-between rounded px-2 py-0.5 text-[11px]">
                         <span className="font-mono text-fg-faint">{port.name}</span>
-                        <span className="num font-mono text-fg">{formatValue(port.value)}</span>
+                        <span className="num font-mono text-fg">{formatValue(port.value, port.bitWidth)}</span>
                       </div>
                     ))}
                   </div>

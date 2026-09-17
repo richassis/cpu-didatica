@@ -57,10 +57,14 @@ export class Constant implements Connectable, Clockable {
   }
 
   private get max(): number {
-    return (1 << this.bitWidth) - 1;
+    // (1 << 32) - 1 === 0 in JS — guard the width the ConfigPanel actually offers.
+    return this.bitWidth >= 32 ? 0xffffffff : (1 << this.bitWidth) - 1;
   }
 
+  /** Mask to the bit pattern rather than clamp — a negative value (e.g. -3)
+   * should wrap to its two's-complement pattern (0xFFFD at 16 bits), not
+   * silently become 0. */
   private clamp(v: number): number {
-    return Math.max(0, Math.min(this.max, Math.floor(v)));
+    return (Math.floor(v) >>> 0) & this.max;
   }
 }

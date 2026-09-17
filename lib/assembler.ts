@@ -5,7 +5,7 @@
  * Pass 2: resolve label references, validate operand ranges, encode to 16-bit words.
  *
  * Instruction syntax (from TEST_PROGRAM_SOURCE):
- *   LDAI Rdst, #imm          — load immediate
+ *   LDAI Rdst, imm           — load immediate
  *   LDA  Rdst, addr          — load from data memory
  *   STA  Rsrc, addr          — store to data memory
  *   ADD  Rsrc_a, Rsrc_b, Rdst — ULA: dst = a + b
@@ -95,28 +95,21 @@ function parseRegister(token: string): number | null {
   return m ? parseInt(m[1], 10) : null;
 }
 
-/** Parse a numeric literal: `0xNN` hex or plain decimal → number, or null. */
+/** Parse a numeric literal: `0xNN` hex or plain (optionally negative) decimal → number, or null. */
 function parseNumber(token: string): number | null {
   if (/^0[xX][0-9a-fA-F]+$/.test(token)) return parseInt(token, 16);
-  if (/^\d+$/.test(token)) return parseInt(token, 10);
+  if (/^-?\d+$/.test(token)) return parseInt(token, 10);
   return null;
-}
-
-/** Parse an immediate operand: `#decimal` or `#0xHH` → number, or null. */
-function parseImmediate(token: string): number | null {
-  if (!token.startsWith("#")) return null;
-  return parseNumber(token.slice(1));
 }
 
 /**
  * Parse a data value for DB declarations.
- * Accepts: Intel hex `#00h`/`#FFh`, our format `#10`/`#0xFF`, or plain decimal `5`.
+ * Accepts: Intel hex `00h`/`FFh`, our format `0xFF`, or plain (optionally
+ * negative) decimal `5` / `-5`.
  */
 function parseDataValue(token: string): number | null {
-  const intelHex = token.match(/^#([0-9A-Fa-f]+)[hH]$/);
+  const intelHex = token.match(/^([0-9A-Fa-f]+)[hH]$/);
   if (intelHex) return parseInt(intelHex[1], 16);
-  const imm = parseImmediate(token);
-  if (imm !== null) return imm;
   return parseNumber(token);
 }
 
@@ -125,15 +118,11 @@ function parseDataValue(token: string): number | null {
  *   - A register literal  →  number (0–7)
  *   - A hex literal       →  number
  *   - A decimal literal   →  number
- *   - An immediate (#N)   →  number
  *   - A label reference   →  string (UPPERCASED, to be resolved in pass 2)
  */
 function parseOperandToken(token: string): Operand {
   const reg = parseRegister(token);
   if (reg !== null) return reg;
-
-  const imm = parseImmediate(token);
-  if (imm !== null) return imm;
 
   const num = parseNumber(token);
   if (num !== null) return num;
@@ -270,17 +259,25 @@ function resolveOperand(
   return addr;
 }
 
-/** Validate that a value fits in a given bit-width field (unsigned). */
+/**
+ * Validate that a value fits in a given bit-width field.
+ * By default the field is unsigned (0..max) — right for register indices,
+ * addresses, and jump targets. Pass `allowNegative` for a field that also
+ * accepts the field's signed range (-(max+1)/2..max) — e.g. LDAI's immediate,
+ * where `-5` and its two's-complement byte `0xFB` are both valid spellings.
+ */
 function checkRange(
   value: number,
   bits: number,
   fieldName: string,
   lineNum: number,
   errors: AssemblyError[],
+  allowNegative = false,
 ): boolean {
   const max = (1 << bits) - 1;
-  if (value < 0 || value > max) {
-    errors.push({ line: lineNum, message: `${fieldName} fora do range 0–${max}: ${value}` });
+  const min = allowNegative ? -(1 << (bits - 1)) : 0;
+  if (value < min || value > max) {
+    errors.push({ line: lineNum, message: `${fieldName} fora do range ${min}–${max}: ${value}` });
     return false;
   }
   return true;
@@ -307,17 +304,17 @@ function pass2(
     let word: number | null = null;
 
     switch (mnemonic) {
-      // ── Standard: LDAI Rdst, #imm ─────────────────────────────────────────
+      // ── Standard: LDAI Rdst, imm ──────────────────────────────────────────
       case "LDAI": {
         if (operands.length !== 2) {
-          errors.push({ line: lineNum, message: `LDAI: esperado 2 operandos (Rdst, #imm), recebeu ${operands.length}` });
+          errors.push({ line: lineNum, message: `LDAI: esperado 2 operandos (Rdst, imm), recebeu ${operands.length}` });
           break;
         }
         const dst = resolve(operands[0]);
         const imm = resolve(operands[1]);
         if (dst === null || imm === null) break;
         if (!checkRange(dst, 3, "Registrador", lineNum, errors)) break;
-        if (!checkRange(imm, 8, "Imediato", lineNum, errors)) break;
+        if (!checkRange(imm, 8, "Imediato", lineNum, errors, /* allowNegative */ true)) break;
         word = Encoder.assemble("LDAI", { gprAddr: dst, operand: imm });
         break;
       }

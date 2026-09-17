@@ -8,7 +8,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-export type NumericBase = "hex" | "dec" | "bin" | "oct";
+export type NumericBase = "hex" | "dec" | "decSigned" | "bin" | "oct";
 
 /**
  * Animation speed, in milliseconds per substep.
@@ -172,6 +172,13 @@ export function formatNum(value: number, base: NumericBase, bitWidth = 16): stri
     case "oct": {
       const digits = Math.ceil(bitWidth / 3);
       return "0o" + n.toString(8).padStart(digits, "0");
+    }
+    case "decSigned": {
+      // Two's-complement interpretation of the same bits `dec` shows unsigned.
+      // `2 ** bitWidth` rather than `1 << bitWidth`, so this stays correct
+      // even at bitWidth 32 (where `<<` wraps to 0 in JS).
+      const half = 2 ** (bitWidth - 1);
+      return String(n >= half ? n - 2 ** bitWidth : n);
     }
     case "dec":
     default:

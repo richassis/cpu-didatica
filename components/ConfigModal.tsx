@@ -286,8 +286,8 @@ export default function ConfigModal({ component, onClose }: Props) {
     touch();
   };
 
-  const formatValue = (value: unknown): string => {
-    if (typeof value === "number") return formatNum(value, base);
+  const formatValue = (value: unknown, bitWidth: number | null): string => {
+    if (typeof value === "number") return formatNum(value, base, bitWidth ?? undefined);
     if (typeof value === "boolean") return value ? "1" : "0";
     return String(value);
   };
@@ -334,7 +334,7 @@ export default function ConfigModal({ component, onClose }: Props) {
                   <div className="mb-1 text-[11px] text-fg-muted">Inputs</div>
                   {inputPorts.map((port) => {
                     const key = port.name;
-                    const inputVal = portInputs[key] ?? formatValue(port.value);
+                    const inputVal = portInputs[key] ?? formatValue(port.value, port.bitWidth);
                     return (
                       <div key={key} className="flex items-center gap-2">
                         <span className="w-24 shrink-0 truncate font-mono text-[11px] text-fg-muted">{key}</span>
@@ -356,7 +356,7 @@ export default function ConfigModal({ component, onClose }: Props) {
                   <div className="mb-1 text-[11px] text-fg-muted">Outputs</div>
                   {outputPorts.map((port) => {
                     const key = port.name;
-                    const inputVal = portInputs[key] ?? formatValue(port.value);
+                    const inputVal = portInputs[key] ?? formatValue(port.value, port.bitWidth);
                     return (
                       <div key={key} className="flex items-center gap-2">
                         <span className="w-24 shrink-0 truncate font-mono text-[11px] text-fg-muted">{key}</span>

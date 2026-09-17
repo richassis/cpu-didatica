@@ -65,6 +65,21 @@ interface DisplayMaskState {
   revealComponents: (componentIds: string[]) => void;
 
   /**
+   * Reveal a single named input port early, decoupled from the owning
+   * component's own (possibly later) reveal via `revealComponents`.
+   *
+   * Built for a MUX's `sel` line: it is driven by a CPU control-signal wire,
+   * which lands in the earlier "CPU phase" of the animation, while the data
+   * flowing *through* the MUX lands in a later data substep. Without this,
+   * the MUX's selection indicator would wait for that later substep — by
+   * which point the animation has already drawn data flowing through it
+   * using the stale, pre-tick selection. Does not touch `revealedComponents`,
+   * so the component's overall dim/bright styling still follows its normal
+   * full reveal.
+   */
+  revealInputPort: (componentId: string, portName: string) => void;
+
+  /**
    * Force-reveal all remaining components.
    * Called when: skipping animation, fast scrubbing, animation ends.
    */
@@ -87,9 +102,27 @@ interface DisplayMaskState {
 }
 
 /**
- * Apply the post-tick output-port values + bulk data of a single component to
- * the live simulator objects. Mirrors `applyObjectStates` (output ports only —
- * input ports are wire-driven).
+ * Apply the post-tick port values + bulk data of a single component to the
+ * live simulator objects.
+ *
+ * Output ports use `setWithoutPropagate` so revealing one component (e.g. IR
+ * in FETCH) does not cascade through wires into not-yet-revealed components
+ * (e.g. Decoder) — each component is revealed independently from its own
+ * snapshot slice.
+ *
+ * Input ports are restored too, via `InputPort.set()` — the same "bypass
+ * wiring" entry point components use internally. Without this, a widget that
+ * displays one of its OWN inputs (the ULA's operands, the GPR's read/write
+ * addresses, a MUX's select line) would show the post-tick value the instant
+ * the tick computes, since input ports are never touched by wire propagation
+ * during a reveal (propagation is deliberately suppressed above) and nothing
+ * else was resetting or advancing them mid-animation. Restoring them here
+ * puts a component's inputs on the same reveal timing as its outputs.
+ *
+ * Setting an input directly can re-trigger that port's own `onChange` (e.g.
+ * the GPR recomputing its read-data outputs from a restored read address) —
+ * harmless here because this same call also restores every output from the
+ * snapshot afterward, so the authoritative post-tick value always wins.
  */
 function applyComponentTargetState(componentId: string, targetSnapshot: TickSnapshot): boolean {
   const targetState = targetSnapshot.state.get(componentId);
@@ -106,10 +139,6 @@ function applyComponentTargetState(componentId: string, targetSnapshot: TickSnap
     obj.load(targetState.cells);
   }
 
-  // Restore output port values from the post-tick snapshot.
-  // Use setWithoutPropagate so updating one component (e.g. IR in FETCH) does
-  // not cascade through wires into not-yet-revealed components (e.g. Decoder).
-  // Each component is revealed independently from its own snapshot slice.
   if ("getPorts" in obj && typeof (obj as { getPorts: () => unknown }).getPorts === "function") {
     const portMap = (obj as {
       getPorts: () => Record<string, {
@@ -120,12 +149,15 @@ function applyComponentTargetState(componentId: string, targetSnapshot: TickSnap
     }).getPorts();
     for (const [key, value] of Object.entries(targetState.ports)) {
       const port = portMap[key];
-      if (port && port.direction === "output" && typeof value === "number") {
+      if (!port || typeof value !== "number") continue;
+      if (port.direction === "output") {
         if (port.setWithoutPropagate) {
           port.setWithoutPropagate(value);
         } else {
           port.set?.(value);
         }
+      } else {
+        port.set?.(value);
       }
     }
   }
@@ -197,6 +229,27 @@ export const useDisplayMaskStore = create<DisplayMaskState>()((set, get) => ({
     // Bump revision so widgets + downstream wire values re-render with the
     // revealed values. (Does NOT restart the wire animation, which keys on
     // `animationCycle`.)
+    useSimulatorStore.setState((s) => ({ revision: s.revision + 1 }));
+  },
+
+  revealInputPort: (componentId, portName) => {
+    const { targetSnapshot, isActive } = get();
+    if (!isActive || !targetSnapshot) return;
+
+    const targetState = targetSnapshot.state.get(componentId);
+    if (!targetState) return;
+    const value = targetState.ports[portName];
+    if (typeof value !== "number") return;
+
+    const obj = useSimulatorStore.getState().objects.get(componentId);
+    if (!obj || !("getPorts" in obj)) return;
+    const portMap = (obj as {
+      getPorts: () => Record<string, { direction: string; set?: (v: number) => void }>;
+    }).getPorts();
+    const port = portMap[portName];
+    if (!port || port.direction !== "input") return;
+
+    port.set?.(value);
     useSimulatorStore.setState((s) => ({ revision: s.revision + 1 }));
   },
 
