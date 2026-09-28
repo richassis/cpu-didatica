@@ -19,6 +19,8 @@ export default function MemoryTable({
   read,
   decode,
   scrollBlock = "center",
+  compact = false,
+  headers,
 }: {
   wordCount: number;
   bitWidth: number;
@@ -29,7 +31,14 @@ export default function MemoryTable({
   /** Optional second column — instruction memory renders mnemonics. */
   decode?: (word: number) => string;
   scrollBlock?: ScrollLogicalPosition;
+  /** Tighter columns, for the narrow side-by-side memory panel. */
+  compact?: boolean;
+  /** Column captions above the rows. */
+  headers?: { addr: string; word: string; decode?: string };
 }) {
+  const gap = compact ? "gap-1.5" : "gap-3";
+  const addrW = compact ? "w-10" : "w-16";
+  const decodeW = compact ? "w-14" : "w-16";
   const base = useDisplayStore((s) => s.numericBase);
   const currentRowRef = useRef<HTMLDivElement>(null);
 
@@ -43,14 +52,27 @@ export default function MemoryTable({
     "0x" + addr.toString(16).toUpperCase().padStart(Math.ceil(addrBits / 4), "0");
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+    <div className="flex min-h-0 flex-1 flex-col">
+      {headers && (
+        <div
+          className={`flex shrink-0 items-center ${gap} border-b border-line ${
+            compact ? "px-3" : "px-4"
+          } py-1 font-mono text-[10px] text-fg-faint`}
+        >
+          <span aria-hidden className="w-2.5 shrink-0" />
+          <span className={`${addrW} shrink-0`}>{headers.addr}</span>
+          <span className="flex-1 text-right">{headers.word}</span>
+          {decode && <span className={`${decodeW} shrink-0 text-right`}>{headers.decode}</span>}
+        </div>
+      )}
+      <div className={`min-h-0 flex-1 overflow-y-auto ${compact ? "px-1" : "px-2"} py-2`}>
       {rows.map(({ addr, value }) => {
         const isCurrent = addr === currentAddr;
         return (
           <div
             key={addr}
             ref={isCurrent ? currentRowRef : undefined}
-            className="flex items-center gap-3 rounded px-2 py-1"
+            className={`flex items-center ${gap} rounded px-1.5 py-1`}
             style={
               isCurrent
                 ? { background: "color-mix(in srgb, var(--st-data) 10%, transparent)" }
@@ -65,7 +87,7 @@ export default function MemoryTable({
             >
               ▶
             </span>
-            <span className="num w-16 shrink-0 font-mono text-[11px] text-fg-faint">
+            <span className={`num ${addrW} shrink-0 font-mono text-[11px] text-fg-faint`}>
               {fmtAddr(addr)}
             </span>
             <span
@@ -77,7 +99,7 @@ export default function MemoryTable({
             </span>
             {decode && (
               <span
-                className={`w-16 shrink-0 text-right font-mono text-[11px] ${
+                className={`${decodeW} shrink-0 text-right font-mono text-[11px] ${
                   isCurrent ? "text-fg" : "text-fg-faint"
                 }`}
               >
@@ -87,6 +109,7 @@ export default function MemoryTable({
           </div>
         );
       })}
+      </div>
     </div>
   );
 }

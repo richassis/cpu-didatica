@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Upload, Download, Pencil, Settings2, HelpCircle } from "lucide-react";
+import { Upload, Download, Pencil, Settings2, HelpCircle, Plus, Minus } from "lucide-react";
 import { useModeStore } from "@/lib/modeStore";
 import { useProjectStore } from "@/lib/projectStore";
 import { DEFAULT_PROJECT_ID, isDefaultProject } from "@/lib/defaultProject";
@@ -9,6 +9,8 @@ import { useProgramDataStore } from "@/lib/programDataStore";
 import { EDITOR_ENABLED } from "@/lib/editorFlag";
 import { CODE_FILE_ACCEPT } from "@/lib/codeFile";
 import SaveProgramDialog from "@/components/ProgramMode/SaveProgramDialog";
+import { useLayoutStore, ZOOM_MIN, ZOOM_MAX } from "@/lib/store";
+import { useCanvasViewStore } from "@/lib/canvasViewStore";
 import SimulationSettings from "@/components/SimulationSettings";
 import Legend from "@/components/ProgramMode/Legend";
 import ThemeToggle from "./ThemeToggle";
@@ -16,13 +18,10 @@ import ThemeToggle from "./ThemeToggle";
 /**
  * Top bar for Program Mode (the default, end-user view).
  *
- * It reads as two regions: what is open on the left, and what you can do with
- * the file in the middle. It used to carry four loose I/O buttons across two
- * formats — the `.cpudat` pair is gone, and the code pair became "Abrir"/
- * "Salvar" acting on a file with a visible name. Montar/Executar used to live
- * here too; they moved to `BuildBar`, right above the panels they act on, so
- * that mounting and running read as steps in the code region rather than
- * commands issued from the global chrome.
+ * Left: what is open. Right, in two groups: the file and display controls
+ * (Abrir/Salvar, Ajustes, Claro/Escuro), then the view controls (zoom, Ajuda).
+ * Montar and Simular live in the bottom bar with the player. Ajustes and Ajuda
+ * open a panel just under this bar.
  *
  * The "Edit mode" entry point exists only in developer builds. Students never
  * see it, and `enterEditMode` refuses anyway.
@@ -41,6 +40,23 @@ export default function TopBarProgram() {
   const [saveOpen, setSaveOpen] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const [panel, setPanel] = useState<"settings" | "legend" | null>(null);
+
+  const zoom = useLayoutStore((s) => s.zoom);
+  const zoomIn = useCanvasViewStore((s) => s.zoomIn);
+  const zoomOut = useCanvasViewStore((s) => s.zoomOut);
+  const fit = useCanvasViewStore((s) => s.fit);
+
+  // Escape closes whichever panel is open.
+  useEffect(() => {
+    if (!panel) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPanel(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [panel]);
+
+  const togglePanel = (next: "settings" | "legend") => setPanel((p) => (p === next ? null : next));
 
   const lineCount = assemblySource.split("\n").length;
 
@@ -99,25 +115,47 @@ export default function TopBarProgram() {
             Salvar
           </ClusterButton>
         </Cluster>
-      </div>
 
-      <div className="flex items-center gap-2">
-        <PanelButton
-          label="Ajustes"
-          active={panel === "settings"}
-          onClick={() => setPanel((p) => (p === "settings" ? null : "settings"))}
-        >
+        <PanelButton label="Ajustes" active={panel === "settings"} onClick={() => togglePanel("settings")}>
           <Settings2 size={14} strokeWidth={1.5} />
-        </PanelButton>
-        <PanelButton
-          label="Legenda"
-          active={panel === "legend"}
-          onClick={() => setPanel((p) => (p === "legend" ? null : "legend"))}
-        >
-          <HelpCircle size={14} strokeWidth={1.5} />
         </PanelButton>
 
         <ThemeToggle />
+
+        <span className="mx-1 h-5 w-px shrink-0 bg-line" />
+
+        <Cluster>
+          <button
+            onClick={() => zoomOut?.()}
+            disabled={!zoomOut || zoom <= ZOOM_MIN}
+            className="flex h-8 w-8 items-center justify-center text-fg-muted transition-colors hover:text-fg disabled:opacity-30"
+            title="Diminuir zoom"
+            aria-label="Diminuir zoom"
+          >
+            <Minus size={14} strokeWidth={1.5} />
+          </button>
+          <button
+            onClick={() => fit?.()}
+            className="num min-w-[3.5rem] text-center font-mono text-xs text-fg-muted transition-colors hover:text-fg"
+            title="Ajustar à tela"
+            aria-label="Ajustar à tela"
+          >
+            {Math.round(zoom * 100)}%
+          </button>
+          <button
+            onClick={() => zoomIn?.()}
+            disabled={!zoomIn || zoom >= ZOOM_MAX}
+            className="flex h-8 w-8 items-center justify-center text-fg-muted transition-colors hover:text-fg disabled:opacity-30"
+            title="Aumentar zoom"
+            aria-label="Aumentar zoom"
+          >
+            <Plus size={14} strokeWidth={1.5} />
+          </button>
+        </Cluster>
+
+        <PanelButton label="Ajuda" active={panel === "legend"} onClick={() => togglePanel("legend")}>
+          <HelpCircle size={14} strokeWidth={1.5} />
+        </PanelButton>
 
         {EDITOR_ENABLED && (
           <button
@@ -130,6 +168,17 @@ export default function TopBarProgram() {
           </button>
         )}
       </div>
+
+      {panel && (
+        <div
+          role="dialog"
+          aria-modal="false"
+          aria-label={panel === "settings" ? "Ajustes da simulação" : "Ajuda"}
+          className="absolute right-4 top-full z-50 mt-2 max-h-[calc(100vh-120px)] overflow-y-auto rounded-2xl border border-line bg-surface p-4"
+        >
+          {panel === "settings" ? <SimulationSettings /> : <Legend />}
+        </div>
+      )}
 
       {/* Import failures used to go to console.error, so picking the wrong file
           looked like nothing happening at all. */}
@@ -146,20 +195,6 @@ export default function TopBarProgram() {
       )}
 
       {saveOpen && <SaveProgramDialog onClose={() => setSaveOpen(false)} />}
-
-      {/* Settings/legend dropdown, anchored under this bar rather than the
-          transport strip at the bottom — both toggles live next to the theme
-          switch now, so the panel opens where the button is. */}
-      {panel && (
-        <div
-          role="dialog"
-          aria-modal="false"
-          aria-label={panel === "settings" ? "Ajustes da simulação" : "Legenda"}
-          className="absolute right-4 top-full z-50 mt-2 w-fit rounded-2xl border border-line bg-surface p-4"
-        >
-          {panel === "settings" ? <SimulationSettings /> : <Legend />}
-        </div>
-      )}
     </div>
   );
 }
@@ -194,7 +229,6 @@ function ClusterButton({
   );
 }
 
-/** A toggle button for a dropdown panel — Escape closes it and returns focus. */
 function PanelButton({
   label,
   active,
@@ -206,23 +240,8 @@ function PanelButton({
   onClick: () => void;
   children: React.ReactNode;
 }) {
-  const ref = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (!active) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        onClick();
-        ref.current?.focus();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [active, onClick]);
-
   return (
     <button
-      ref={ref}
       onClick={onClick}
       aria-expanded={active}
       title={label}

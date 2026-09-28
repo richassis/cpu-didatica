@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import AssemblyPanel from "@/components/ProgramMode/AssemblyPanel";
 import AssembledPanel from "@/components/ProgramMode/AssembledPanel";
-import BuildBar from "@/components/ProgramMode/BuildBar";
 import DatapathViewer from "@/components/ProgramMode/DatapathViewer";
 import MemoryPanel from "@/components/ProgramMode/MemoryPanel";
 import SimulationBar from "@/components/ProgramMode/SimulationBar";
@@ -25,30 +24,28 @@ const MONTAGEM_W = 220;
  * ProgramModeLayout — Full-screen layout for Program Mode.
  *
  * ┌──────────────┬──────────────────────────────────────────┐
- * │  Assembly    │   Datapath Canvas (read-only)            │
- * │  + bytecode  │                                          │
+ * │  Ling.       │   Datapath Canvas (read-only)            │
+ * │  Montagem +  │                                          │
+ * │  Ling. Máq.  │                                          │
  * │  (60% / 26%) │                                          │
- * │              │                                          │
- * ├──────────────┤                                          │
- * │  BuildBar (Montar / Executar)                            │
  * ├──────────────┴──────────────────────────────────────────┤
- * │  SimulationBar (always mounted; transport when running) │
+ * │  SimulationBar (Montar, Simular, player, contador)      │
  * └─────────────────────────────────────────────────────────┘
  *
- * The code region is wide before Executar — writing the program is the point
+ * The code region is wide before Simular — writing the program is the point
  * — and narrows once the timeline takes over, so the datapath gets the room.
  * A manual drag overrides both defaults until the timeline exits, at which
  * point the override is cleared: what the student decided about a running
  * program shouldn't linger after it stops meaning anything.
  *
- * Either panel — Assembly, Montagem, or both — can collapse to a narrow rail
+ * Either panel — Ling. Montagem, Ling. Máquina, or both — can collapse to a narrow rail
  * by clicking its header, and the region actually shrinks when they do,
  * handing the freed width to the datapath rather than leaving it blank.
- * BuildBar sits above both panels rather than inside either header, so
- * Montar/Executar stay reachable regardless of what is collapsed.
+ * Montar/Simular live in the bottom bar, so they stay reachable whatever
+ * the region is showing — either code panel collapsed, or the memories open.
  */
-/** Width the code region takes while a memory is open in the side panel. */
-const MEMORY_PANEL_W = 340;
+/** Width the code region takes while the memories are open — two columns. */
+const MEMORY_PANEL_W = 480;
 
 export default function ProgramModeLayout() {
   const isTimelineActive = useExecutionStore((s) => s.isTimelineActive);
@@ -141,7 +138,7 @@ export default function ProgramModeLayout() {
           ) : (
             <div className="flex min-h-0 flex-1">
               {asmCollapsed ? (
-                <CollapsedRail label="Assembly" onExpand={() => setAsmCollapsed(false)} />
+                <CollapsedRail label="Ling. Montagem" onExpand={() => setAsmCollapsed(false)} />
               ) : (
                 <div className="min-h-0 min-w-0 flex-1">
                   <AssemblyPanel onToggleCollapse={() => setAsmCollapsed(true)} />
@@ -149,19 +146,17 @@ export default function ProgramModeLayout() {
               )}
 
               {mountCollapsed ? (
-                <CollapsedRail label="Montagem" onExpand={() => setMountCollapsed(false)} />
+                <CollapsedRail label="Ling. Máquina" onExpand={() => setMountCollapsed(false)} />
               ) : (
                 <AssembledPanel onToggleCollapse={() => setMountCollapsed(true)} />
               )}
             </div>
           )}
 
-          <BuildBar />
-
           <div
             role="separator"
             aria-orientation="vertical"
-            aria-label="Resize assembly panel"
+            aria-label="Redimensionar painel de códigos"
             onPointerDown={handleDragStart}
             className="absolute right-0 top-0 h-full w-2 cursor-col-resize bg-transparent hover:bg-line-strong"
           >

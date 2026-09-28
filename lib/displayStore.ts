@@ -129,7 +129,7 @@ export const useDisplayStore = create<DisplayState>()(
     }),
     {
       name: "simulator-display",
-      version: 5,
+      version: 6,
       migrate: (persistedState) => {
         const state = persistedState as Partial<DisplayState> & {
           animationSpeed?: "fast" | "normal" | "slow";
@@ -142,11 +142,13 @@ export const useDisplayStore = create<DisplayState>()(
 
         return {
           ...state,
-          showWireDots: state.showWireDots ?? true,
-          animationEnabled: state.animationEnabled ?? true,
-          animateCpuSignals: state.animateCpuSignals ?? true,
-          animateDataSignals: state.animateDataSignals ?? true,
-          showPortValues: state.showPortValues ?? true,
+          // v6 removed these switches from the settings panel, so a value a
+          // student switched off earlier can no longer be switched back on.
+          showWireDots: true,
+          animationEnabled: true,
+          animateCpuSignals: true,
+          animateDataSignals: true,
+          showPortValues: true,
           animationDurationMs:
             state.animationDurationMs ?? fromPreset[state.animationSpeed ?? "normal"],
         };

@@ -188,11 +188,11 @@ export default function AssemblyPanel({ onToggleCollapse }: { onToggleCollapse: 
       <button
         onClick={onToggleCollapse}
         aria-expanded="true"
-        title="Recolher Assembly"
+        title="Recolher Ling. Montagem"
         className="flex shrink-0 items-center justify-between border-b border-line px-4 py-2 text-left transition-colors hover:bg-raised"
       >
         <span className="flex items-center gap-2">
-          <h2 className="t-panel text-fg">Assembly</h2>
+          <h2 className="t-panel text-fg">Ling. Montagem</h2>
           {isLocked && (
             <span className="rounded-md border border-st-warn px-1.5 py-0.5 font-mono text-[10px] text-st-warn">
               travado
@@ -222,11 +222,6 @@ export default function AssemblyPanel({ onToggleCollapse }: { onToggleCollapse: 
             ))}
           </select>
         </div>
-        {activePreset && (
-          <p className="mt-1 text-[11px] leading-snug text-fg-faint">
-            {activePreset.description}
-          </p>
-        )}
       </div>
 
       {/* ── Code Editor (flex-1) ── */}

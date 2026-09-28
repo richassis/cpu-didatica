@@ -1,7 +1,6 @@
 export interface PresetProgram {
   id: string;
   name: string;
-  description: string;
   source: string;
 }
 
@@ -167,10 +166,10 @@ RES_NOT: DB   0             ; resultado de NOT R0
 `;
 
 export const PRESET_PROGRAMS: PresetProgram[] = [
-  { id: "basico",   name: "Exemplo Básico",         description: "Soma, subtração, memória e desvio condicional",  source: BASICO },
-  { id: "for",      name: "FOR — Contador",          description: "Laço contando de 1 até 5 usando ADD, SUB, JZ",  source: FOR_CONTADOR },
-  { id: "if-else",  name: "IF-THEN-ELSE",            description: "Comparação condicional entre N1 e N2",           source: IF_THEN_ELSE },
-  { id: "mult",     name: "Multiplicação",            description: "N1 × N2 por somas sucessivas",                  source: MULTIPLICACAO },
-  { id: "desvios",  name: "Desvios",                 description: "Testa JZ, JN e JMP — resultado OK=1 se correto", source: DESVIOS },
-  { id: "logico",   name: "Instruções Lógicas",      description: "AND, OR e NOT com padrões de bits",              source: LOGICO },
+  { id: "basico",   name: "Exemplo Básico",         source: BASICO },
+  { id: "for",      name: "FOR — Contador",          source: FOR_CONTADOR },
+  { id: "if-else",  name: "IF-THEN-ELSE",            source: IF_THEN_ELSE },
+  { id: "mult",     name: "Multiplicação",            source: MULTIPLICACAO },
+  { id: "desvios",  name: "Desvios",                 source: DESVIOS },
+  { id: "logico",   name: "Instruções Lógicas",      source: LOGICO },
 ];

@@ -4,7 +4,6 @@ import {
   useDisplayStore,
   ANIMATION_MIN_MS,
   ANIMATION_MAX_MS,
-  isInstantSpeed,
   type NumericBase,
 } from "@/lib/displayStore";
 
@@ -35,20 +34,8 @@ export default function SimulationSettings() {
   const setShowCpuSignalWires = useDisplayStore((s) => s.setShowCpuSignalWires);
   const showDataSignalWires = useDisplayStore((s) => s.showDataSignalWires);
   const setShowDataSignalWires = useDisplayStore((s) => s.setShowDataSignalWires);
-  const showWireDots = useDisplayStore((s) => s.showWireDots);
-  const setShowWireDots = useDisplayStore((s) => s.setShowWireDots);
-  const showPortValues = useDisplayStore((s) => s.showPortValues);
-  const setShowPortValues = useDisplayStore((s) => s.setShowPortValues);
-  const animationEnabled = useDisplayStore((s) => s.animationEnabled);
-  const setAnimationEnabled = useDisplayStore((s) => s.setAnimationEnabled);
-  const animateCpuSignals = useDisplayStore((s) => s.animateCpuSignals);
-  const setAnimateCpuSignals = useDisplayStore((s) => s.setAnimateCpuSignals);
-  const animateDataSignals = useDisplayStore((s) => s.animateDataSignals);
-  const setAnimateDataSignals = useDisplayStore((s) => s.setAnimateDataSignals);
   const animationDurationMs = useDisplayStore((s) => s.animationDurationMs);
   const setAnimationDurationMs = useDisplayStore((s) => s.setAnimationDurationMs);
-
-  const instant = isInstantSpeed(animationDurationMs);
 
   return (
     <div className="w-72">
@@ -89,63 +76,31 @@ export default function SimulationSettings() {
           onChange={setShowDataSignalWires}
           disabled={!showWiresAndPorts}
         />
-        <Toggle
-          label="Pontos de valor"
-          on={showWireDots}
-          onChange={setShowWireDots}
-          disabled={!showWiresAndPorts}
-        />
-        <Toggle
-          label="Valores nas portas"
-          on={showPortValues}
-          onChange={setShowPortValues}
-          disabled={!showWiresAndPorts}
-        />
-      </div>
-
-      <Section title="Animação" />
-      <div className="space-y-1">
-        <Toggle label="Ativada" on={animationEnabled} onChange={setAnimationEnabled} />
-        <Toggle
-          label="Sinais de controle"
-          on={animateCpuSignals}
-          onChange={setAnimateCpuSignals}
-          disabled={!animationEnabled}
-        />
-        <Toggle
-          label="Fluxo de dados"
-          on={animateDataSignals}
-          onChange={setAnimateDataSignals}
-          disabled={!animationEnabled}
-        />
       </div>
 
       <Section title="Velocidade" />
+      {/* Left is slow, right is fast. The store keeps milliseconds per step,
+          where smaller is faster, so the slider runs on the mirrored value. */}
       <div className="px-1">
-        <div className="mb-1.5 flex items-baseline justify-between">
-          <span className="text-xs text-fg-muted">Por passo</span>
-          <span className="num font-mono text-xs text-fg">
-            {instant ? "instantâneo" : `${animationDurationMs} ms`}
-          </span>
-        </div>
         <input
           type="range"
           min={ANIMATION_MIN_MS}
           max={ANIMATION_MAX_MS}
           step={10}
-          value={animationDurationMs}
-          disabled={!animationEnabled}
-          onChange={(e) => setAnimationDurationMs(Number(e.target.value))}
-          aria-label="Velocidade da animação em milissegundos por passo"
-          className="timeline-slider h-4 w-full cursor-pointer appearance-none bg-transparent disabled:opacity-40"
+          value={ANIMATION_MIN_MS + ANIMATION_MAX_MS - animationDurationMs}
+          onChange={(e) =>
+            setAnimationDurationMs(ANIMATION_MIN_MS + ANIMATION_MAX_MS - Number(e.target.value))
+          }
+          aria-label="Velocidade da animação"
+          className="timeline-slider h-4 w-full cursor-pointer appearance-none bg-transparent"
           style={{
             background:
               "linear-gradient(var(--border), var(--border)) center/100% 2px no-repeat",
           }}
         />
         <div className="flex items-center justify-between font-mono text-[10px] text-fg-faint">
-          <span>instantâneo</span>
-          <span>lento</span>
+          <span>Baixa</span>
+          <span>Alta</span>
         </div>
       </div>
     </div>
