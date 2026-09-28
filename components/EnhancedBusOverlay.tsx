@@ -30,8 +30,18 @@ import {
 } from "@/lib/wireRouting";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import type { WireDescriptor } from "@/lib/simulator";
-import { Mux, Register } from "@/lib/simulator";
+import { Adder, Decoder, Incrementer, Mux, Register, Ula } from "@/lib/simulator";
 
+/** Components whose outputs settle in the evaluate phase, with no commit. */
+function isCombinational(obj: unknown): boolean {
+  return (
+    obj instanceof Mux ||
+    obj instanceof Ula ||
+    obj instanceof Adder ||
+    obj instanceof Incrementer ||
+    obj instanceof Decoder
+  );
+}
 
 const HIT_AREA_WIDTH = 14;
 
@@ -575,20 +585,26 @@ export default function EnhancedBusOverlay({
             progress.set(id, groupProgress);
           }
 
-          // A MUX is combinational: its output is already the post-tick value
-          // when its outgoing wire starts flowing. Covers ticks where `sel` did
-          // not change (so no control wire revealed it above) but the selected
-          // input did.
+          // A purely combinational component (MUX, ULA, adder, incrementer,
+          // decoder) computes its outputs in the evaluate phase, before any
+          // commit, so its output is already the post-tick value when its
+          // outgoing wire starts flowing. Revealing it here keeps the wire from
+          // animating the pre-tick value whenever nothing revealed the
+          // component earlier (e.g. a MUX whose `sel` did not change, or an
+          // operand wire that sits in the same substep as the result).
+          // Sequential components are excluded on purpose: they keep driving
+          // their old value until their own incoming wire delivers.
           if (groupProgress > 0 && !startedGroupsRef.current.has(order)) {
             startedGroupsRef.current.add(order);
             const objs = useSimulatorStore.getState().objects;
-            const muxIds = new Set<string>();
+            const combinationalIds = new Set<string>();
             for (const wireId of groupIds) {
               const sourceId = wireDataByIdRef.current.get(wireId)?.wire.sourceComponentId;
-              if (sourceId && objs.get(sourceId) instanceof Mux) muxIds.add(sourceId);
+              const source = sourceId ? objs.get(sourceId) : undefined;
+              if (sourceId && isCombinational(source)) combinationalIds.add(sourceId);
             }
-            for (const muxId of muxIds) {
-              useDisplayMaskStore.getState().revealOutputPort(muxId, "result");
+            for (const id of combinationalIds) {
+              useDisplayMaskStore.getState().revealOutputPorts(id);
             }
           }
 

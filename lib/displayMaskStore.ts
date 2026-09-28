@@ -90,6 +90,13 @@ interface DisplayMaskState {
   revealOutputPort: (componentId: string, portName: string) => void;
 
   /**
+   * Reveal every output port of a purely combinational component (MUX, ULA,
+   * adder, incrementer, decoder) — same reasoning as `revealOutputPort`, for a
+   * component whose several outputs all settle in the evaluate phase.
+   */
+  revealOutputPorts: (componentId: string) => void;
+
+  /**
    * Force-reveal all remaining components.
    * Called when: skipping animation, fast scrubbing, animation ends.
    */
@@ -284,6 +291,29 @@ export const useDisplayMaskStore = create<DisplayMaskState>()((set, get) => ({
     // into not-yet-revealed components.
     if (port.setWithoutPropagate) port.setWithoutPropagate(value);
     else port.set?.(value);
+    useSimulatorStore.setState((s) => ({ revision: s.revision + 1 }));
+  },
+
+  revealOutputPorts: (componentId) => {
+    const { targetSnapshot, isActive } = get();
+    if (!isActive || !targetSnapshot) return;
+
+    const targetState = targetSnapshot.state.get(componentId);
+    const obj = useSimulatorStore.getState().objects.get(componentId);
+    if (!targetState || !obj || !("getPorts" in obj)) return;
+
+    const portMap = (obj as {
+      getPorts: () => Record<
+        string,
+        { direction: string; set?: (v: number) => void; setWithoutPropagate?: (v: number) => void }
+      >;
+    }).getPorts();
+    for (const [key, value] of Object.entries(targetState.ports)) {
+      const port = portMap[key];
+      if (!port || port.direction !== "output" || typeof value !== "number") continue;
+      if (port.setWithoutPropagate) port.setWithoutPropagate(value);
+      else port.set?.(value);
+    }
     useSimulatorStore.setState((s) => ({ revision: s.revision + 1 }));
   },
 
