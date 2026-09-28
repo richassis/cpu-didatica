@@ -63,6 +63,12 @@ export interface TickFrame {
    * because they don't *send* this state. See `computeActivatedComponents`.
    */
   activatedComponentIds: string[];
+  /**
+   * The value each data wire carried when it last animated, as of the end of
+   * this tick (see `computeWireValues`). A wire at rest shows this, not the
+   * live value of its source, which keeps changing after the wire delivered.
+   */
+  wireValues?: Map<string, number>;
 }
 
 interface ExecutionDerivedState {
@@ -251,6 +257,46 @@ function computeActivatedComponents(
 function registerFedWires(): WireDescriptor[] {
   const sim = useSimulatorStore.getState();
   return sim.getWires().filter((w) => sim.objects.get(w.sourceComponentId) instanceof Register);
+}
+
+/**
+ * Fill `wireValues` on every frame: the value each data wire carried when it
+ * last animated, as of the end of that tick.
+ *
+ * A wire at rest keeps showing that value. Reading the live source instead
+ * drifts: a register updates after its wire delivered, and combinational logic
+ * (the IMem, PC+1, MUX_PC) is re-evaluated every tick with the propagated
+ * inputs, whether or not any wire animated.
+ */
+function computeWireValues(frames: TickFrame[]): void {
+  if (frames.length === 0) return;
+  const sim = useSimulatorStore.getState();
+  const cpuId = sim.getPrimaryCpu()?.id;
+  // Control-signal wires reflect the CPU's current state and never go stale.
+  const wires = sim.getWires().filter((w) => w.sourceComponentId !== cpuId);
+
+  const carried = new Map<string, number>();
+  for (const w of wires) {
+    const initial = frames[0].postTick.state.get(w.sourceComponentId)?.ports[w.sourcePortName];
+    if (typeof initial === "number") carried.set(w.id, initial);
+  }
+  frames[0].wireValues = new Map(carried);
+
+  for (let i = 1; i < frames.length; i++) {
+    const frame = frames[i];
+    const animated = new Set(frame.substepGroups.flatMap((g) => g.componentIds));
+
+    for (const w of wires) {
+      if (!animated.has(w.sourceComponentId)) continue;
+      // A register drives its wire with the value it held before the commit;
+      // everything else has already computed its output by then.
+      const isRegister = sim.objects.get(w.sourceComponentId) instanceof Register;
+      const snapshot = isRegister ? frame.preTick : frame.postTick;
+      const value = snapshot.state.get(w.sourceComponentId)?.ports[w.sourcePortName];
+      if (typeof value === "number") carried.set(w.id, value);
+    }
+    frame.wireValues = new Map(carried);
+  }
 }
 
 /**
@@ -472,6 +518,7 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
       useSimulatorStore.setState({ isBatchExecuting: false });
     }
 
+    computeWireValues(frames);
     holdRegisterFedInputs(frames, registerFedWires());
 
     useDisplayMaskStore.getState().deactivate();

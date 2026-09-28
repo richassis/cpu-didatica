@@ -54,6 +54,12 @@ interface WireRenderData {
   sourceEscape: Point;
   targetEscape: Point;
   value: string;
+  /**
+   * What the wire shows while resting at its target: the value it last
+   * delivered, from the timeline. Undefined outside the timeline and for CPU
+   * control signals, which show their live value.
+   */
+  restingValue?: string;
   isCpuControlSignal: boolean;
 }
 
@@ -85,6 +91,9 @@ export default function EnhancedBusOverlay({
   const animationCycle = useSimulatorStore((s) => s.animationCycle);
   const displayMaskActive = useDisplayMaskStore((s) => s.isActive);
   const isTimelineActive = useExecutionStore((s) => s.isTimelineActive);
+  const frameWireValues = useExecutionStore((s) =>
+    s.isTimelineActive ? s.frames[s.currentIndex]?.wireValues : undefined
+  );
   const getPrimaryCpu = useSimulatorStore((s) => s.getPrimaryCpu);
   const getComponentTickSteps = useSimulatorStore((s) => s.getComponentTickSteps);
   const getComponentTickOrderByState = useSimulatorStore((s) => s.getComponentTickOrderByState);
@@ -203,6 +212,19 @@ export default function EnhancedBusOverlay({
 
     const instructionRegisterIds = findInstructionRegisterIds(components, projectWires);
 
+    const formatWireNumber = (wire: WireDescriptor, raw: number): string => {
+      const sourceObj = objects.get(wire.sourceComponentId);
+      const ports = sourceObj && "getPorts" in sourceObj
+        ? (sourceObj as { getPorts: () => Record<string, { bitWidth: number | null }> }).getPorts()
+        : {};
+      const unsigned = isUnsignedPort(
+        components.find((c) => c.id === wire.sourceComponentId)?.type ?? "",
+        wire.sourcePortName,
+        instructionRegisterIds.has(wire.sourceComponentId),
+      );
+      return formatPortValue(raw, base, ports[wire.sourcePortName]?.bitWidth ?? 16, unsigned);
+    };
+
     const resolveWireValue = (wire: WireDescriptor): string => {
       const sourceObj = objects.get(wire.sourceComponentId);
       if (!sourceObj || !("getPorts" in sourceObj)) return "?";
@@ -281,12 +303,16 @@ export default function EnhancedBusOverlay({
         sourceEscape,
         targetEscape,
         value: resolveWireValue(wire),
+        restingValue:
+          !isCpuControlSignal && frameWireValues?.has(wire.id)
+            ? formatWireNumber(wire, frameWireValues.get(wire.id)!)
+            : undefined,
         isCpuControlSignal,
       });
     }
 
     return data;
-  }, [projectWires, components, objects, base, revision, displayMaskActive]);
+  }, [projectWires, components, objects, base, revision, displayMaskActive, frameWireValues]);
 
   const wireDataById = useMemo(() => {
     const map = new Map<string, WireRenderData>();
@@ -874,7 +900,9 @@ export default function EnhancedBusOverlay({
     return [{
       id: wireData.wire.id,
       point: getPointAlongPath(wireData.path, progress),
-      value: wireData.value,
+      // At rest, the value the wire delivered — not its source, which may have
+      // moved on since (a register that updated later, logic re-evaluated).
+      value: progress >= 1 ? (wireData.restingValue ?? wireData.value) : wireData.value,
       color: wireData.isCpuControlSignal ? "var(--wire-control)" : "var(--wire-data)",
       isResting: progress >= 1,
       // Resting markers sit on top of the destination widget, so push the badge
