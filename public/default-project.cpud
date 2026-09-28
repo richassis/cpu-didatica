@@ -502,10 +502,12 @@
         "numInputs": 2
       },
       "tickSteps": [
-        0
+        0,
+        10
       ],
       "tickOrderByState": {
-        "0": 2
+        "0": 2,
+        "10": 1
       },
       "state": {
         "ports": {
