@@ -8,7 +8,7 @@ import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useExecutingAddr } from "@/lib/useExecutingAddr";
 import { useMemoryPanelStore } from "@/lib/memoryPanelStore";
 import { useCanvasEditing } from "@/components/CanvasEditingContext";
-import { useDisplayStore, formatNum } from "@/lib/displayStore";
+import { useDisplayStore, formatPortValue } from "@/lib/displayStore";
 import { EDITOR_ENABLED } from "@/lib/editorFlag";
 import NodeShell from "@/components/widgets/NodeShell";
 import MemoryViewer from "@/components/MemoryViewer";
@@ -136,7 +136,7 @@ export default function InstructionMemoryComponent({ component, zoom }: Props) {
                     isCurrent ? "text-[12.5px] text-fg" : "text-[11px] text-fg-muted"
                   }`}
                 >
-                  {formatNum(imem?.peek(a) ?? 0, base, bitWidth)}
+                  {formatPortValue(imem?.peek(a) ?? 0, base, bitWidth, true)}
                 </span>
               </div>
             );

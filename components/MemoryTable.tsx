@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useDisplayStore, formatNum } from "@/lib/displayStore";
+import { useDisplayStore, formatPortValue } from "@/lib/displayStore";
 
 /**
  * The scrollable address→value list shared by the edit-mode modal
@@ -40,6 +40,9 @@ export default function MemoryTable({
   const addrW = compact ? "w-10" : "w-16";
   const decodeW = compact ? "w-14" : "w-16";
   const base = useDisplayStore((s) => s.numericBase);
+  // A table with a decoded column is instruction memory: its words are
+  // encodings, never signed data.
+  const unsigned = decode !== undefined;
   const currentRowRef = useRef<HTMLDivElement>(null);
 
   const rows = Array.from({ length: wordCount }, (_, addr) => ({ addr, value: read(addr) }));
@@ -95,7 +98,7 @@ export default function MemoryTable({
                 isCurrent ? "text-fg" : "text-fg-muted"
               }`}
             >
-              {formatNum(value, base, bitWidth)}
+              {formatPortValue(value, base, bitWidth, unsigned)}
             </span>
             {decode && (
               <span

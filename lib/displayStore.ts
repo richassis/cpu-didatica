@@ -158,6 +158,20 @@ export const useDisplayStore = create<DisplayState>()(
 );
 
 /**
+ * `formatNum` for a port value. `unsigned` marks values that are not data —
+ * control lines, flags, addresses, opcodes, instruction words (see
+ * `isUnsignedPort`) — which the signed-decimal base shows as plain decimal.
+ */
+export function formatPortValue(
+  value: number,
+  base: NumericBase,
+  bitWidth: number | undefined,
+  unsigned: boolean,
+): string {
+  return formatNum(value, unsigned && base === "decSigned" ? "dec" : base, bitWidth);
+}
+
+/**
  * Format a numeric value according to the selected numeric base.
  * `bitWidth` is used to zero-pad hex/bin/oct output.
  */

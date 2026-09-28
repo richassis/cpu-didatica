@@ -40,7 +40,8 @@ function readSignals(cpu: CPU): Record<string, number | boolean> {
 function formatSignal(value: number | boolean, bits: number, base: NumericBase): string {
   if (typeof value === "boolean") return value ? "1" : "0";
   if (bits <= 1) return String(Number(value));
-  return formatNum(Number(value), base, bits);
+  // Every control line is unsigned, whatever the base.
+  return formatNum(Number(value), base === "decSigned" ? "dec" : base, bits);
 }
 
 /**

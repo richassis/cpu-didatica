@@ -3,7 +3,8 @@
 import { useState, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useSimulatorStore } from "@/lib/simulatorStore";
-import { useDisplayStore, formatNum } from "@/lib/displayStore";
+import { useDisplayStore, formatPortValue } from "@/lib/displayStore";
+import { useIsUnsignedPort } from "@/lib/portKinds";
 
 interface PortInfo {
   name: string;
@@ -26,6 +27,7 @@ export default function PortTooltipWrapper({ componentId, componentLabel, childr
   const objects = useSimulatorStore((s) => s.objects);
   const revision = useSimulatorStore((s) => s.revision);
   const base = useDisplayStore((s) => s.numericBase);
+  const isUnsignedPort = useIsUnsignedPort();
   const showPortValues = useDisplayStore((s) => s.showPortValues);
   const ports = useMemo<PortInfo[]>(() => {
     void revision;
@@ -63,8 +65,10 @@ export default function PortTooltipWrapper({ componentId, componentLabel, childr
   const inputPorts  = ports.filter((p) => p.direction === "input");
   const outputPorts = ports.filter((p) => p.direction === "output");
 
-  const formatValue = (value: unknown, bitWidth: number | null): string => {
-    if (typeof value === "number") return formatNum(value, base, bitWidth ?? undefined);
+  const formatValue = (value: unknown, bitWidth: number | null, portKey: string): string => {
+    if (typeof value === "number") {
+      return formatPortValue(value, base, bitWidth ?? undefined, isUnsignedPort(componentId, portKey));
+    }
     if (typeof value === "boolean") return value ? "1" : "0";
     return String(value);
   };
@@ -103,7 +107,7 @@ export default function PortTooltipWrapper({ componentId, componentLabel, childr
                     {inputPorts.map((port) => (
                       <div key={port.name} className="flex items-center justify-between rounded px-2 py-0.5 text-[11px]">
                         <span className="font-mono text-fg-faint">{port.name}</span>
-                        <span className="num font-mono text-fg">{formatValue(port.value, port.bitWidth)}</span>
+                        <span className="num font-mono text-fg">{formatValue(port.value, port.bitWidth, port.name)}</span>
                       </div>
                     ))}
                   </div>
@@ -123,7 +127,7 @@ export default function PortTooltipWrapper({ componentId, componentLabel, childr
                     {outputPorts.map((port) => (
                       <div key={port.name} className="flex items-center justify-between rounded px-2 py-0.5 text-[11px]">
                         <span className="font-mono text-fg-faint">{port.name}</span>
-                        <span className="num font-mono text-fg">{formatValue(port.value, port.bitWidth)}</span>
+                        <span className="num font-mono text-fg">{formatValue(port.value, port.bitWidth, port.name)}</span>
                       </div>
                     ))}
                   </div>

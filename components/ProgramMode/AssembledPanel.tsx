@@ -4,7 +4,7 @@ import { ChevronDown } from "lucide-react";
 import { useProgramDataStore, mountStatus } from "@/lib/programDataStore";
 import { useExecutionStore } from "@/lib/executionStore";
 import { useSimulatorStore } from "@/lib/simulatorStore";
-import { useDisplayStore, formatNum } from "@/lib/displayStore";
+import { useDisplayStore, formatNum, formatPortValue } from "@/lib/displayStore";
 
 function fmtAddr(addr: number) {
   return "0x" + addr.toString(16).toUpperCase().padStart(2, "0");
@@ -112,7 +112,7 @@ export default function AssembledPanel({ onToggleCollapse }: { onToggleCollapse:
                       >
                         <td className="num px-1.5 py-0.5 text-fg-faint">{fmtAddr(line.addr)}</td>
                         <td className="num px-1.5 py-0.5 text-fg-muted">
-                          {formatNum(line.word, base, 16)}
+                          {formatPortValue(line.word, base, 16, true)}
                         </td>
                         <td className={`px-1.5 py-0.5 ${isCurrent ? "text-fg" : "text-fg-muted"}`}>
                           {line.mnemonic}

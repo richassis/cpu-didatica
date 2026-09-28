@@ -5,7 +5,8 @@ import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayMaskStore } from "@/lib/displayMaskStore";
 import { useExecutionStore } from "@/lib/executionStore";
 import { usePlaybackStore } from "@/lib/playbackStore";
-import { useDisplayStore, formatNum, isInstantSpeed } from "@/lib/displayStore";
+import { useDisplayStore, formatPortValue, isInstantSpeed } from "@/lib/displayStore";
+import { findInstructionRegisterIds, isUnsignedPort } from "@/lib/portKinds";
 import { useWireCreationStore } from "@/lib/wireCreationStore";
 import { useWireSelectionStore } from "@/lib/wireSelectionStore";
 import { useProjectStore } from "@/lib/projectStore";
@@ -200,9 +201,19 @@ export default function EnhancedBusOverlay({
       return { pos, side: placement.side };
     };
 
+    const instructionRegisterIds = findInstructionRegisterIds(components, projectWires);
+
     const resolveWireValue = (wire: WireDescriptor): string => {
       const sourceObj = objects.get(wire.sourceComponentId);
       if (!sourceObj || !("getPorts" in sourceObj)) return "?";
+
+      // Control lines, flags, addresses, opcodes and instruction words are not
+      // data: the signed-decimal base must not read them as negative.
+      const unsigned = isUnsignedPort(
+        components.find((c) => c.id === wire.sourceComponentId)?.type ?? "",
+        wire.sourcePortName,
+        instructionRegisterIds.has(wire.sourceComponentId),
+      );
 
       // For Register output ports during LIVE ticking, use the pre-commit
       // snapshot so the animation shows the value the register was *driving*
@@ -214,7 +225,7 @@ export default function EnhancedBusOverlay({
       // the stale `preCommitValue` here would show the last batch tick's value
       // (e.g. PC showing 0x001C instead of 0x0000 on the first run).
       if (!displayMaskActive && sourceObj instanceof Register && wire.sourcePortName === "value") {
-        return formatNum(sourceObj.preCommitValue, base, sourceObj.bitWidth);
+        return formatPortValue(sourceObj.preCommitValue, base, sourceObj.bitWidth, unsigned);
       }
 
       const ports = (sourceObj as { getPorts: () => Record<string, { value: unknown; bitWidth: number | null }> }).getPorts();
@@ -223,7 +234,7 @@ export default function EnhancedBusOverlay({
 
       const raw = port.value;
       if (typeof raw === "number") {
-        return formatNum(raw, base, port.bitWidth ?? 16);
+        return formatPortValue(raw, base, port.bitWidth ?? 16, unsigned);
       }
 
       return String(raw);

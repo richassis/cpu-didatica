@@ -2,7 +2,8 @@
 
 import { Props } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
-import { useDisplayStore, formatNum } from "@/lib/displayStore";
+import { useDisplayStore, formatPortValue } from "@/lib/displayStore";
+import { useIsUnsignedPort } from "@/lib/portKinds";
 import NodeShell from "@/components/widgets/NodeShell";
 
 /**
@@ -16,7 +17,11 @@ export default function RegisterComponent({ component, zoom }: Props) {
   void revision;
 
   const base = useDisplayStore((s) => s.numericBase);
-  const displayValue = reg ? formatNum(reg.value, base, reg.bitWidth) : "0x0000";
+  // The IR holds an instruction word, which is never read as signed.
+  const isUnsignedPort = useIsUnsignedPort();
+  const displayValue = reg
+    ? formatPortValue(reg.value, base, reg.bitWidth, isUnsignedPort(component.id, "value"))
+    : "0x0000";
 
   return (
     <NodeShell component={component} zoom={zoom} sequential value={displayValue} />
