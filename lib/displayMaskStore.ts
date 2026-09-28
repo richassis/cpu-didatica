@@ -80,6 +80,16 @@ interface DisplayMaskState {
   revealInputPort: (componentId: string, portName: string) => void;
 
   /**
+   * Reveal a single named output port early. Built for a MUX's result: it is
+   * combinational, so once its `sel` has landed its output is the post-tick
+   * value — the wire leaving it must animate that value, not the stale one
+   * the pre-tick snapshot left there until the MUX's own (later) reveal.
+   * Sequential components must NOT use this: they hold their old output
+   * until their incoming wire delivers.
+   */
+  revealOutputPort: (componentId: string, portName: string) => void;
+
+  /**
    * Force-reveal all remaining components.
    * Called when: skipping animation, fast scrubbing, animation ends.
    */
@@ -250,6 +260,30 @@ export const useDisplayMaskStore = create<DisplayMaskState>()((set, get) => ({
     if (!port || port.direction !== "input") return;
 
     port.set?.(value);
+    useSimulatorStore.setState((s) => ({ revision: s.revision + 1 }));
+  },
+
+  revealOutputPort: (componentId, portName) => {
+    const { targetSnapshot, isActive } = get();
+    if (!isActive || !targetSnapshot) return;
+
+    const value = targetSnapshot.state.get(componentId)?.ports[portName];
+    if (typeof value !== "number") return;
+
+    const obj = useSimulatorStore.getState().objects.get(componentId);
+    if (!obj || !("getPorts" in obj)) return;
+    const port = (obj as {
+      getPorts: () => Record<
+        string,
+        { direction: string; set?: (v: number) => void; setWithoutPropagate?: (v: number) => void }
+      >;
+    }).getPorts()[portName];
+    if (!port || port.direction !== "output") return;
+
+    // Without propagation, like every other reveal: the value must not flow
+    // into not-yet-revealed components.
+    if (port.setWithoutPropagate) port.setWithoutPropagate(value);
+    else port.set?.(value);
     useSimulatorStore.setState((s) => ({ revision: s.revision + 1 }));
   },
 

@@ -30,7 +30,7 @@ import {
 } from "@/lib/wireRouting";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import type { WireDescriptor } from "@/lib/simulator";
-import { Register } from "@/lib/simulator";
+import { Mux, Register } from "@/lib/simulator";
 
 
 const HIT_AREA_WIDTH = 14;
@@ -121,6 +121,8 @@ export default function EnhancedBusOverlay({
   const lastAnimatedCycleRef = useRef<number | null>(null);
   /** Substep order values already revealed in the current animation pass. */
   const revealedGroupsRef = useRef<Set<number>>(new Set());
+  /** Substep orders whose start-of-substep reveals have already run. */
+  const startedGroupsRef = useRef<Set<number>>(new Set());
 
   /**
    * Display settings, mirrored into a ref and read at pass start.
@@ -299,6 +301,7 @@ export default function EnhancedBusOverlay({
     lastAnimatedCycleRef.current = animationCycle;
     // Fresh pass: nothing revealed yet.
     revealedGroupsRef.current = new Set();
+    startedGroupsRef.current = new Set();
 
     const {
       showCpuSignalWires,
@@ -547,6 +550,9 @@ export default function EnhancedBusOverlay({
               // would already show data flowing through using the stale,
               // pre-tick selection.
               useDisplayMaskStore.getState().revealInputPort(targetId, "sel");
+              // And its output follows: the wire leaving the MUX must carry
+              // the newly selected value, not the previous selection.
+              useDisplayMaskStore.getState().revealOutputPort(targetId, "result");
             }
           }
           if (cpuTargetIds.length > 0) {
@@ -567,6 +573,23 @@ export default function EnhancedBusOverlay({
           const groupProgress = Math.min(1, Math.max(0, (compElapsed - groupStart) / animationDurationMs));
           for (const id of groupIds) {
             progress.set(id, groupProgress);
+          }
+
+          // A MUX is combinational: its output is already the post-tick value
+          // when its outgoing wire starts flowing. Covers ticks where `sel` did
+          // not change (so no control wire revealed it above) but the selected
+          // input did.
+          if (groupProgress > 0 && !startedGroupsRef.current.has(order)) {
+            startedGroupsRef.current.add(order);
+            const objs = useSimulatorStore.getState().objects;
+            const muxIds = new Set<string>();
+            for (const wireId of groupIds) {
+              const sourceId = wireDataByIdRef.current.get(wireId)?.wire.sourceComponentId;
+              if (sourceId && objs.get(sourceId) instanceof Mux) muxIds.add(sourceId);
+            }
+            for (const muxId of muxIds) {
+              useDisplayMaskStore.getState().revealOutputPort(muxId, "result");
+            }
           }
 
           // ENGINE TICK: once this substep's wires finish, reveal the components
