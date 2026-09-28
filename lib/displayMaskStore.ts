@@ -42,6 +42,20 @@ interface DisplayMaskState {
   activatedComponents: Set<string>;
 
   /**
+   * Components whose substep has started — they are acting (sending) even if no
+   * wire has delivered a value to them. Drives the node glow only; it is NOT a
+   * reveal, so `revealedComponents` keeps meaning "the new value is latched".
+   */
+  sendingComponents: Set<string>;
+
+  /**
+   * A substep started: light every component at that order or an earlier one.
+   * Earlier orders are included so a component with no visible wire in its own
+   * step still lights no later than the steps after it.
+   */
+  markSending: (order: number) => void;
+
+  /**
    * Initialize for a new tick animation.
    * Applies the baseSnapshot to live simulator objects so widgets start showing old values.
    */
@@ -189,6 +203,7 @@ export const useDisplayMaskStore = create<DisplayMaskState>()((set, get) => ({
   revealedComponents: new Set(),
   substepGroups: [],
   activatedComponents: new Set(),
+  sendingComponents: new Set(),
 
   init: (baseSnapshot, targetSnapshot, substepGroups, activatedComponentIds = []) => {
     // Apply the BASE snapshot to live simulator objects so all widgets/wires
@@ -221,8 +236,20 @@ export const useDisplayMaskStore = create<DisplayMaskState>()((set, get) => ({
       targetSnapshot,
       substepGroups,
       activatedComponents,
+      sendingComponents: new Set(),
       revealedComponents: revealed,
     });
+  },
+
+  markSending: (order) => {
+    const { isActive, substepGroups, sendingComponents } = get();
+    if (!isActive) return;
+
+    const next = new Set(sendingComponents);
+    for (const group of substepGroups) {
+      if (group.order <= order) group.componentIds.forEach((id) => next.add(id));
+    }
+    if (next.size !== sendingComponents.size) set({ sendingComponents: next });
   },
 
   revealComponents: (componentIds) => {
@@ -337,6 +364,7 @@ export const useDisplayMaskStore = create<DisplayMaskState>()((set, get) => ({
       revealedComponents: new Set(),
       substepGroups: [],
       activatedComponents: new Set(),
+      sendingComponents: new Set(),
     });
   },
 

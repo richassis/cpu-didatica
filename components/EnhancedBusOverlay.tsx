@@ -622,6 +622,8 @@ export default function EnhancedBusOverlay({
           // their old value until their own incoming wire delivers.
           if (groupProgress > 0 && !startedGroupsRef.current.has(order)) {
             startedGroupsRef.current.add(order);
+            // Whatever acts in this step lights now, not when a value lands on it.
+            useDisplayMaskStore.getState().markSending(order);
             const objs = useSimulatorStore.getState().objects;
             const combinationalIds = new Set<string>();
             for (const wireId of groupIds) {
