@@ -6,6 +6,7 @@ import { Props } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useMemoryPanelStore } from "@/lib/memoryPanelStore";
 import { useCanvasEditing } from "@/components/CanvasEditingContext";
+import { useDisplayMaskStore } from "@/lib/displayMaskStore";
 import { useDisplayStore, formatNum, type NumericBase } from "@/lib/displayStore";
 import NodeShell from "@/components/widgets/NodeShell";
 import MemoryViewer from "@/components/MemoryViewer";
@@ -46,8 +47,12 @@ export default function MemoryComponent({ component, zoom }: Props) {
   const bitWidth = mem?.bitWidth ?? 16;
   const addrBits = Math.max(1, Math.ceil(Math.log2(wordCount)));
   const addr = mem?.in_addr.value ?? 0;
-  const rdMem = (mem?.in_rdMem.value ?? 0) !== 0;
-  const wrMem = (mem?.in_wrMem.value ?? 0) !== 0;
+  // Enables land with the control signals, ahead of the address and data wires;
+  // the headline waits for the component to be revealed so it never pairs the
+  // new enable with the previous access's data.
+  const revealed = useDisplayMaskStore((s) => s.isRevealed(id));
+  const rdMem = revealed && (mem?.in_rdMem.value ?? 0) !== 0;
+  const wrMem = revealed && (mem?.in_wrMem.value ?? 0) !== 0;
   const dataIn = mem?.in_data.value ?? 0;
   const dataOut = mem?.output ?? 0;
 

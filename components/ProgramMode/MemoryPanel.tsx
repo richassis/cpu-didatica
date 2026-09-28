@@ -4,7 +4,7 @@ import { useCallback } from "react";
 import { ChevronLeft } from "lucide-react";
 import { useMemoryPanelStore } from "@/lib/memoryPanelStore";
 import { useSimulatorStore } from "@/lib/simulatorStore";
-import { useExecutionStore } from "@/lib/executionStore";
+import { useExecutingAddr } from "@/lib/useExecutingAddr";
 import { useLayoutStore, type ComponentInstance } from "@/lib/store";
 import { decodeMnemonic } from "@/lib/disassemble";
 import MemoryTable from "@/components/MemoryTable";
@@ -61,9 +61,7 @@ function MemoryColumn({
 
   // Instruction memory: on the timeline the PC register runs ahead to PC+1, so
   // the address port no longer points at the instruction being executed.
-  const executingAddr = useExecutionStore((s) =>
-    s.isTimelineActive ? s.frames[s.currentIndex]?.postTick?.pc : undefined
-  );
+  const executingAddr = useExecutingAddr(id);
 
   const read = useCallback((addr: number) => obj?.peek(addr) ?? 0, [obj]);
 

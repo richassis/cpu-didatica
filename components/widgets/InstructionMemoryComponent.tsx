@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { List } from "lucide-react";
 import { Props } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
-import { useExecutionStore } from "@/lib/executionStore";
+import { useExecutingAddr } from "@/lib/useExecutingAddr";
 import { useMemoryPanelStore } from "@/lib/memoryPanelStore";
 import { useCanvasEditing } from "@/components/CanvasEditingContext";
 import { useDisplayStore, formatNum } from "@/lib/displayStore";
@@ -53,19 +53,15 @@ export default function InstructionMemoryComponent({ component, zoom }: Props) {
 
   // While a program runs, the PC register races ahead to PC+1 during the
   // instruction it fetched, so `imem.in_addr` no longer points at the
-  // instruction being executed. The timeline carries that address separately.
-  const isTimelineActive = useExecutionStore((s) => s.isTimelineActive);
-  const executingAddr = useExecutionStore((s) =>
-    s.isTimelineActive ? s.frames[s.currentIndex]?.postTick?.pc : undefined
-  );
+  // instruction being executed. The timeline carries that address separately,
+  // and it only moves once the PC's wire has reached this memory.
+  const executingAddr = useExecutingAddr(id);
 
   const wordCount = imem?.wordCount ?? 256;
   const bitWidth = imem?.bitWidth ?? 16;
   const addrBits = Math.max(1, Math.ceil(Math.log2(wordCount)));
   const currentAddr =
-    isTimelineActive && executingAddr !== undefined
-      ? executingAddr
-      : imem?.in_addr.value ?? 0;
+    executingAddr !== undefined ? executingAddr : imem?.in_addr.value ?? 0;
 
   const readWord = useCallback((addr: number) => imem?.peek(addr) ?? 0, [imem]);
 
