@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { CpuState, Memory } from "@/lib/simulator";
+import { CpuState, Memory, Register } from "@/lib/simulator";
 import type { WireDescriptor } from "@/lib/simulator";
 import type { ComponentState } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
@@ -243,9 +243,81 @@ function computeActivatedComponents(
   return [...ids];
 }
 
+/**
+ * Wires whose source is a register. Their target input is special on the
+ * timeline: it shows the value the wire last carried and only changes when the
+ * wire animates again (see `holdRegisterFedInputs`).
+ */
+function registerFedWires(): WireDescriptor[] {
+  const sim = useSimulatorStore.getState();
+  return sim.getWires().filter((w) => sim.objects.get(w.sourceComponentId) instanceof Register);
+}
+
+/**
+ * Rewrite, in every frame's snapshots, the input each register-fed wire shows.
+ *
+ * A snapshot is taken after the tick has fully propagated, so a register that
+ * latched shows its NEW value on the inputs it feeds — although the wire
+ * carried the OLD one and will only animate the new one in a later tick (the
+ * PC latches PC+1 at FETCH, but PC → IMem.addr animates again only at the next
+ * FETCH). Instead, an input holds what its wire last carried: the source's
+ * pre-tick value in the last tick where that wire animated, i.e. the source is
+ * in the frame's substep groups.
+ *
+ * Only target *input* ports are rewritten, and the values are read from the
+ * raw pre-tick snapshot before any rewrite; the registers' own ports are never
+ * touched. Frame 0 has pre === post and is left as captured.
+ */
+function holdRegisterFedInputs(frames: TickFrame[], wires: WireDescriptor[]): void {
+  if (frames.length < 2 || wires.length === 0) return;
+
+  const initial = frames[0].postTick.state;
+  const held = new Map<string, number | undefined>();
+  for (const w of wires) {
+    held.set(w.id, initial.get(w.targetComponentId)?.ports[w.targetPortName]);
+  }
+
+  const write = (snapshot: TickSnapshot, w: WireDescriptor) => {
+    const value = held.get(w.id);
+    const ports = snapshot.state.get(w.targetComponentId)?.ports;
+    if (ports && typeof value === "number") ports[w.targetPortName] = value;
+  };
+
+  for (let i = 1; i < frames.length; i++) {
+    const frame = frames[i];
+    const animated = new Set(frame.substepGroups.flatMap((g) => g.componentIds));
+
+    for (const w of wires) {
+      write(frame.preTick, w);
+      if (animated.has(w.sourceComponentId)) {
+        const carried = frame.preTick.state.get(w.sourceComponentId)?.ports[w.sourcePortName];
+        if (typeof carried === "number") held.set(w.id, carried);
+      }
+      write(frame.postTick, w);
+    }
+  }
+}
+
 export function applySnapshot(snapshot: TickSnapshot): void {
   const sim = useSimulatorStore.getState();
   sim.applyObjectStates(cloneStateMap(snapshot.state));
+
+  // applyObjectStates restores outputs, which propagate: a register's new value
+  // would land on every input it feeds. Put those inputs back to what the
+  // snapshot says they show.
+  const fed = registerFedWires();
+  if (fed.length > 0) {
+    const objects = useSimulatorStore.getState().objects;
+    for (const w of fed) {
+      const value = snapshot.state.get(w.targetComponentId)?.ports[w.targetPortName];
+      const target = objects.get(w.targetComponentId);
+      if (typeof value !== "number" || !target || !("getPorts" in target)) continue;
+      const port = (target as { getPorts: () => Record<string, { direction: string; set?: (v: number) => void }> })
+        .getPorts()[w.targetPortName];
+      if (port?.direction === "input") port.set?.(value);
+    }
+    useSimulatorStore.setState((s) => ({ revision: s.revision + 1 }));
+  }
 
   const cpu = sim.getPrimaryCpu();
   if (cpu) {
@@ -399,6 +471,8 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
     } finally {
       useSimulatorStore.setState({ isBatchExecuting: false });
     }
+
+    holdRegisterFedInputs(frames, registerFedWires());
 
     useDisplayMaskStore.getState().deactivate();
     if (frames.length > 0) {
