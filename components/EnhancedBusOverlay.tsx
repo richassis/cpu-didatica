@@ -540,33 +540,22 @@ export default function EnhancedBusOverlay({
             return next;
           });
 
-          const groupedIds = new Set(
-            useDisplayMaskStore.getState().substepGroups.flatMap((g) => g.componentIds)
-          );
-          const cpuTargetIds: string[] = [];
+          // A control signal delivers only the port it drives (a write-enable,
+          // an ALU operation, a MUX select) — never the component's data. So
+          // only that input port is revealed here; the component's stored value
+          // and outputs wait for the data wire that actually carries them (or
+          // for the end of the pass when no data wire is animated), instead of
+          // appearing the moment the enable lands.
+          const mask = useDisplayMaskStore.getState();
           for (const wireId of animCpuIds) {
-            const wireData = wireDataByIdRef.current.get(wireId);
-            const targetId = wireData?.wire.targetComponentId;
-            if (!targetId) continue;
-
-            if (!groupedIds.has(targetId)) {
-              cpuTargetIds.push(targetId);
-            } else if (wireData!.wire.targetPortName === "sel") {
-              // A MUX's select line, fed by this control-signal wire. The MUX
-              // is also grouped into a later data substep (for the value
-              // flowing through it), but the *selection* itself must switch
-              // now, in step with the control signal actually arriving — not
-              // wait for that later substep, by which point the animation
-              // would already show data flowing through using the stale,
-              // pre-tick selection.
-              useDisplayMaskStore.getState().revealInputPort(targetId, "sel");
-              // And its output follows: the wire leaving the MUX must carry
-              // the newly selected value, not the previous selection.
-              useDisplayMaskStore.getState().revealOutputPort(targetId, "result");
+            const wire = wireDataByIdRef.current.get(wireId)?.wire;
+            if (!wire) continue;
+            mask.revealInputPort(wire.targetComponentId, wire.targetPortName);
+            // A MUX select also fixes the MUX's output: the wire leaving it must
+            // carry the newly selected value, not the previous selection.
+            if (wire.targetPortName === "sel") {
+              mask.revealOutputPort(wire.targetComponentId, "result");
             }
-          }
-          if (cpuTargetIds.length > 0) {
-            useDisplayMaskStore.getState().revealComponents(cpuTargetIds);
           }
         }
       }
