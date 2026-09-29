@@ -19,9 +19,9 @@ export type NumericBase = "hex" | "dec" | "decSigned" | "bin" | "oct";
  * impossible for watching a program run. The range is now continuous and starts
  * far lower.
  */
-export const ANIMATION_MIN_MS = 250;
-export const ANIMATION_MAX_MS = 3000;
-export const ANIMATION_DEFAULT_MS = 900;
+export const ANIMATION_MIN_MS = 1200;
+export const ANIMATION_MAX_MS = 6000;
+export const ANIMATION_DEFAULT_MS = 2000;
 
 /**
  * At or below this the flow animation is skipped entirely and values snap. The

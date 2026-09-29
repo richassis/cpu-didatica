@@ -35,9 +35,20 @@ import { useDisplayStore } from "./displayStore";
  */
 const INTER_TICK_PAUSE_MS = 60;
 
+/** How much faster the animation runs while the accelerate control is held. */
+export const BOOST_RATE = 3;
+
 interface PlaybackState {
   /** True while the timeline is advancing on its own. */
   isPlaying: boolean;
+
+  /**
+   * True while the accelerate control is held. The overlay runs its animation
+   * clock at `BOOST_RATE` times real time meanwhile — the same animation, just
+   * sooner, never a jump to the next tick.
+   */
+  boost: boolean;
+  setBoost: (on: boolean) => void;
 
   play: () => void;
   pause: () => void;
@@ -130,6 +141,11 @@ function advance(set: (partial: { isPlaying: boolean }) => void, isPlaying: () =
 
 export const usePlaybackStore = create<PlaybackState>()((set, get) => ({
   isPlaying: false,
+
+  boost: false,
+  setBoost: (on) => {
+    if (get().boost !== on) set({ boost: on });
+  },
 
   setLastPassMs: (ms) => {
     lastPassMs = ms;

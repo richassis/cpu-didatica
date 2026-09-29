@@ -4,6 +4,7 @@ import { useEffect, useMemo } from "react";
 import {
   ChevronLeft,
   ChevronRight,
+  FastForward,
   Hammer,
   LoaderCircle,
   Pause,
@@ -205,6 +206,7 @@ export default function SimulationBar() {
                 >
                   <ChevronRight size={16} strokeWidth={1.5} />
                 </TransportButton>
+                <BoostButton />
                 <TransportButton
                   onClick={manual(goToEnd)}
                   disabled={!canGoForward}
@@ -314,6 +316,50 @@ function TransportButton({
       className="flex h-8 w-8 items-center justify-center rounded-lg border border-line text-fg-muted transition-colors hover:border-line-strong hover:text-fg disabled:opacity-30 disabled:hover:border-line disabled:hover:text-fg-muted"
     >
       {children}
+    </button>
+  );
+}
+
+/**
+ * Hold to run the animation faster — same animation, sooner, without skipping
+ * to the next tick. Momentary on purpose: releasing it, or losing the pointer
+ * or the window, always puts the speed back, so it can never stay switched on
+ * by accident. The `F` key does the same (`useSimulationShortcuts`).
+ */
+function BoostButton() {
+  const boost = usePlaybackStore((s) => s.boost);
+  const setBoost = usePlaybackStore((s) => s.setBoost);
+
+  // The button goes away with the timeline; never leave the clock sped up.
+  useEffect(() => () => setBoost(false), [setBoost]);
+
+  return (
+    <button
+      onPointerDown={(e) => {
+        e.currentTarget.setPointerCapture(e.pointerId);
+        setBoost(true);
+      }}
+      onPointerUp={() => setBoost(false)}
+      onPointerCancel={() => setBoost(false)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          setBoost(true);
+        }
+      }}
+      onKeyUp={(e) => {
+        if (e.key === "Enter" || e.key === " ") setBoost(false);
+      }}
+      title="Segure para acelerar a animação (F)"
+      aria-label="Acelerar a animação"
+      aria-pressed={boost}
+      className={`flex h-8 w-8 items-center justify-center rounded-lg border transition-colors ${
+        boost
+          ? "border-st-active text-st-active"
+          : "border-line text-fg-muted hover:border-line-strong hover:text-fg"
+      }`}
+    >
+      <FastForward size={14} strokeWidth={1.5} />
     </button>
   );
 }

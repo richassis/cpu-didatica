@@ -4,7 +4,7 @@ import { useLayoutStore, CANVAS_WIDTH, CANVAS_HEIGHT } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayMaskStore } from "@/lib/displayMaskStore";
 import { useExecutionStore } from "@/lib/executionStore";
-import { usePlaybackStore } from "@/lib/playbackStore";
+import { usePlaybackStore, BOOST_RATE } from "@/lib/playbackStore";
 import { useDisplayStore, formatPortValue, isInstantSpeed, animationSpeedPxPerMs } from "@/lib/displayStore";
 import { buildSchedule, wireProgress } from "@/lib/animationSchedule";
 import { findInstructionRegisterIds, isUnsignedPort } from "@/lib/portKinds";
@@ -499,8 +499,6 @@ export default function EnhancedBusOverlay({
     const sortedNonCpuGroups = Array.from(nonCpuOrderGroups.entries())
       .sort((a, b) => a[0] - b[0]);
 
-    const startTime = Date.now();
-
     // Every dot crosses its wire at the same speed, so a long wire takes longer
     // than a short one. Steps still run in order; a step lasts as long as its
     // longest wire, and each wire lands on its own within it.
@@ -579,10 +577,34 @@ export default function EnhancedBusOverlay({
       usePlaybackStore.getState().notifyTickAnimationComplete();
     };
 
-    const finishTimer = window.setTimeout(finish, totalDuration);
+    // The pass runs on its own clock, which follows real time at the current
+    // rate: 1x normally, `BOOST_RATE`x while the accelerate control is held. The
+    // schedule is untouched — progress, reveals and the end of the pass all
+    // depend on this clock alone, so speeding it up speeds all of them together
+    // without skipping anything.
+    let clockRate = usePlaybackStore.getState().boost ? BOOST_RATE : 1;
+    let clock = 0;
+    let lastFrame = performance.now();
+    const advanceClock = () => {
+      const now = performance.now();
+      clock += (now - lastFrame) * clockRate;
+      lastFrame = now;
+      return clock;
+    };
+
+    // The timer that guarantees the pass ends must track the rate too: the real
+    // time left is the clock time left divided by the rate.
+    let finishTimer = window.setTimeout(finish, totalDuration / clockRate);
+    const unsubscribeBoost = usePlaybackStore.subscribe((state, previous) => {
+      if (state.boost === previous.boost) return;
+      advanceClock();
+      clockRate = state.boost ? BOOST_RATE : 1;
+      window.clearTimeout(finishTimer);
+      finishTimer = window.setTimeout(finish, Math.max(0, totalDuration - clock) / clockRate);
+    });
 
     const animate = () => {
-      const elapsed = Date.now() - startTime;
+      const elapsed = advanceClock();
       if (elapsed >= totalDuration) {
         finish();
         return;
@@ -676,6 +698,7 @@ export default function EnhancedBusOverlay({
     animationRef.current = requestAnimationFrame(animate);
 
     return () => {
+      unsubscribeBoost();
       window.clearTimeout(kickoff);
       window.clearTimeout(finishTimer);
       if (animationRef.current) {
