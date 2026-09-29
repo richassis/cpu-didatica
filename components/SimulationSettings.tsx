@@ -25,6 +25,19 @@ const BASE_LABELS: Record<NumericBase, string> = {
  * setting a student is most likely to want mid-run — was unreachable during a
  * simulation. Both surfaces now mount this.
  */
+const SLIDER_STEPS = 100;
+const SPEED_RATIO = Math.log(ANIMATION_MAX_MS / ANIMATION_MIN_MS);
+
+/** Slider position 0 (slow) to `SLIDER_STEPS` (fast) for a stored duration. */
+function speedToSlider(durationMs: number): number {
+  const clamped = Math.min(ANIMATION_MAX_MS, Math.max(ANIMATION_MIN_MS, durationMs));
+  return Math.round((Math.log(ANIMATION_MAX_MS / clamped) / SPEED_RATIO) * SLIDER_STEPS);
+}
+
+function sliderToDuration(position: number): number {
+  return ANIMATION_MAX_MS * Math.exp(-(position / SLIDER_STEPS) * SPEED_RATIO);
+}
+
 export default function SimulationSettings() {
   const numericBase = useDisplayStore((s) => s.numericBase);
   const setNumericBase = useDisplayStore((s) => s.setNumericBase);
@@ -79,18 +92,18 @@ export default function SimulationSettings() {
       </div>
 
       <Section title="Velocidade" />
-      {/* Left is slow, right is fast. The store keeps milliseconds per step,
-          where smaller is faster, so the slider runs on the mirrored value. */}
+      {/* Left is slow, right is fast. The store keeps the time a dot takes to
+          cross a reference wire, where smaller is faster, and the slider runs
+          on its logarithm: speed is a ratio, so equal steps along the bar are
+          equal factors of speed, and the middle is a middling speed. */}
       <div className="px-1">
         <input
           type="range"
-          min={ANIMATION_MIN_MS}
-          max={ANIMATION_MAX_MS}
-          step={10}
-          value={ANIMATION_MIN_MS + ANIMATION_MAX_MS - animationDurationMs}
-          onChange={(e) =>
-            setAnimationDurationMs(ANIMATION_MIN_MS + ANIMATION_MAX_MS - Number(e.target.value))
-          }
+          min={0}
+          max={SLIDER_STEPS}
+          step={1}
+          value={speedToSlider(animationDurationMs)}
+          onChange={(e) => setAnimationDurationMs(sliderToDuration(Number(e.target.value)))}
           aria-label="Velocidade da animação"
           className="timeline-slider h-4 w-full cursor-pointer appearance-none bg-transparent"
           style={{

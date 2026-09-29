@@ -19,16 +19,17 @@ export type NumericBase = "hex" | "dec" | "decSigned" | "bin" | "oct";
  * impossible for watching a program run. The range is now continuous and starts
  * far lower.
  */
-export const ANIMATION_MIN_MS = 50;
+export const ANIMATION_MIN_MS = 250;
 export const ANIMATION_MAX_MS = 3000;
-export const ANIMATION_DEFAULT_MS = 400;
+export const ANIMATION_DEFAULT_MS = 900;
 
 /**
- * At the bottom of the range the flow animation is skipped entirely and values
- * snap — a slider position rather than a separate switch, so "as fast as
- * possible" is where the student already expects to find it.
+ * At or below this the flow animation is skipped entirely and values snap. The
+ * slider no longer reaches it — the fast end used to be so fast the dots could
+ * not be followed — but the store still starts there under a reduced-motion
+ * preference, and `isInstantSpeed` honours it.
  */
-export const ANIMATION_INSTANT_MS = ANIMATION_MIN_MS;
+export const ANIMATION_INSTANT_MS = 50;
 
 /**
  * The slider's value is a time — how long a dot takes to cross a wire of this
@@ -142,16 +143,9 @@ export const useDisplayStore = create<DisplayState>()(
     }),
     {
       name: "simulator-display",
-      version: 7,
+      version: 8,
       migrate: (persistedState) => {
-        const state = persistedState as Partial<DisplayState> & {
-          animationSpeed?: "fast" | "normal" | "slow";
-        };
-
-        // v4 stored a preset name plus two derived durations. The presets were
-        // an order of magnitude too slow to watch a program run, so they are
-        // remapped rather than carried over literally.
-        const fromPreset = { fast: 200, normal: 400, slow: 900 } as const;
+        const state = persistedState as Partial<DisplayState>;
 
         // v7: a base the settings no longer offer (octal) would leave the
         // student on a display with no button to leave it.
@@ -169,8 +163,15 @@ export const useDisplayStore = create<DisplayState>()(
           animateCpuSignals: true,
           animateDataSignals: true,
           showPortValues: true,
+          // v8 moved the whole speed scale toward the slow end. A stored value
+          // from the old scale would land far too fast on the new one, so it
+          // is replaced by the new default — except the "instant" a
+          // reduced-motion preference chose.
           animationDurationMs:
-            state.animationDurationMs ?? fromPreset[state.animationSpeed ?? "normal"],
+            typeof state.animationDurationMs === "number" &&
+            state.animationDurationMs <= ANIMATION_INSTANT_MS
+              ? state.animationDurationMs
+              : ANIMATION_DEFAULT_MS,
         };
       },
     }
