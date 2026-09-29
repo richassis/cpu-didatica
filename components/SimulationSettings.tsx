@@ -28,9 +28,9 @@ const BASE_LABELS: Record<NumericBase, string> = {
  */
 /** The button's own "A" is drawn at the size it selects (relative to the base). */
 const TEXT_SIZES: Array<{ id: TextSize; label: string; sample: string }> = [
-  { id: "normal", label: "Texto normal", sample: "0.8125rem" },
-  { id: "large", label: "Texto grande", sample: "1rem" },
-  { id: "xlarge", label: "Texto muito grande", sample: "1.25rem" },
+  { id: "small", label: "Texto pequeno", sample: "0.75rem" },
+  { id: "medium", label: "Texto médio", sample: "0.9375rem" },
+  { id: "large", label: "Texto grande", sample: "1.125rem" },
 ];
 
 const SLIDER_STEPS = 100;

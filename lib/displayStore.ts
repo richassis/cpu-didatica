@@ -9,8 +9,8 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 /** "Tamanho do texto": a factor on the root font size (see `--fs` in globals.css). */
-export type TextSize = "normal" | "large" | "xlarge";
-export const TEXT_SIZE_SCALE: Record<TextSize, number> = { normal: 1, large: 1.15, xlarge: 1.3 };
+export type TextSize = "small" | "medium" | "large";
+export const TEXT_SIZE_SCALE: Record<TextSize, number> = { small: 0.875, medium: 1, large: 1.15 };
 
 export type NumericBase = "hex" | "dec" | "decSigned" | "bin" | "oct";
 
@@ -143,7 +143,7 @@ export const useDisplayStore = create<DisplayState>()(
       showPortValues: true,
       setShowPortValues: (show) => set({ showPortValues: show }),
 
-      textSize: "normal",
+      textSize: "medium",
       setTextSize: (size) => set({ textSize: size }),
 
       animationDurationMs: prefersReducedMotion() ? ANIMATION_INSTANT_MS : ANIMATION_DEFAULT_MS,
@@ -154,7 +154,7 @@ export const useDisplayStore = create<DisplayState>()(
     }),
     {
       name: "simulator-display",
-      version: 9,
+      version: 10,
       migrate: (persistedState) => {
         const state = persistedState as Partial<DisplayState>;
 
@@ -167,9 +167,13 @@ export const useDisplayStore = create<DisplayState>()(
         return {
           ...state,
           numericBase,
-          // v9 added the text size.
-          textSize:
-            state.textSize && state.textSize in TEXT_SIZE_SCALE ? state.textSize : "normal",
+          // v9 added the text size and v10 moved its scale down a step: what
+          // was "normal" is now "medium", and the two larger sizes are "large".
+          textSize: ((): TextSize => {
+            const stored = state.textSize as string | undefined;
+            if (stored === "small" || stored === "medium" || stored === "large") return stored;
+            return stored === "xlarge" ? "large" : "medium";
+          })(),
           // v6 removed these switches from the settings panel, so a value a
           // student switched off earlier can no longer be switched back on.
           showWireDots: true,

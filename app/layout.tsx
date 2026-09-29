@@ -46,7 +46,7 @@ export default function RootLayout({
         */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{var t=JSON.parse(localStorage.getItem("simulator-theme")||"{}");document.documentElement.dataset.theme=(t.state&&t.state.theme)||"dark"}catch(e){document.documentElement.dataset.theme="dark"}try{var d=JSON.parse(localStorage.getItem("simulator-display")||"{}");var z=d.state&&d.state.textSize;if(z==="large"||z==="xlarge")document.documentElement.dataset.textSize=z}catch(e){}`,
+            __html: `try{var t=JSON.parse(localStorage.getItem("simulator-theme")||"{}");document.documentElement.dataset.theme=(t.state&&t.state.theme)||"dark"}catch(e){document.documentElement.dataset.theme="dark"}try{var d=JSON.parse(localStorage.getItem("simulator-display")||"{}");var z=d.state&&d.state.textSize;if(z==="small"||z==="large")document.documentElement.dataset.textSize=z}catch(e){}`,
           }}
         />
       </head>

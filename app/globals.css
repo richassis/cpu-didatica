@@ -147,8 +147,8 @@
    The canvas follows at less than half the rate (`--fs-cv`): its boxes have a
    fixed size, so text growing as fast as the chrome would spill out of them. */
 :root { --fs: 1; --fs-cv: 1; }
+[data-text-size="small"] { --fs: 0.875; --fs-cv: 0.95; }
 [data-text-size="large"] { --fs: 1.15; --fs-cv: 1.06; }
-[data-text-size="xlarge"] { --fs: 1.3; --fs-cv: 1.12; }
 
 html {
   font-size: calc(16px * var(--fs));
@@ -397,4 +397,3 @@ body {
     stroke-width: 4;
   }
 }
-
