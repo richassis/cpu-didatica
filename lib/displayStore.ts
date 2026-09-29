@@ -143,7 +143,7 @@ export const useDisplayStore = create<DisplayState>()(
       showPortValues: true,
       setShowPortValues: (show) => set({ showPortValues: show }),
 
-      textSize: "medium",
+      textSize: "small",
       setTextSize: (size) => set({ textSize: size }),
 
       animationDurationMs: prefersReducedMotion() ? ANIMATION_INSTANT_MS : ANIMATION_DEFAULT_MS,
