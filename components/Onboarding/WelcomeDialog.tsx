@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { CircuitBoard, Hammer, Play } from "lucide-react";
 import { useOnboardingStore } from "@/lib/onboardingStore";
 import { useHelpStore } from "@/lib/helpStore";
-import { CREDITS } from "@/lib/helpContent";
+import SplashScreen from "@/components/Onboarding/SplashScreen";
 
 const POINTS = [
   { icon: CircuitBoard, title: "Escreva em assembly", body: "Um programa curto, ou um dos exemplos prontos." },
@@ -14,36 +14,49 @@ const POINTS = [
 ];
 
 /**
- * The first screen a new visitor meets, and again whenever they ask for it in
- * the Help. It never traps anyone: every way out marks it seen, and the tour it
+ * The first thing a new visitor meets, and again whenever they ask for it in
+ * the Help: an opening screen with the title and the credits, then this
+ * welcome. It never traps anyone: every way out marks it seen, and the tour it
  * offers is optional.
  */
 export default function WelcomeDialog() {
   const welcomeSeen = useOnboardingStore((s) => s.welcomeSeen);
   const welcomeForced = useOnboardingStore((s) => s.welcomeForced);
   const tourActive = useOnboardingStore((s) => s.tourActive);
-  const dismissWelcome = useOnboardingStore((s) => s.dismissWelcome);
-  const startTour = useOnboardingStore((s) => s.startTour);
-  const showHelp = useHelpStore((s) => s.show);
   const helpOpen = useHelpStore((s) => s.open);
 
   const open = (!welcomeSeen || welcomeForced) && !tourActive && !helpOpen;
+  if (!open || typeof document === "undefined") return null;
+
+  // A separate component, so the flow starts from the opening screen every
+  // time it is shown: closing unmounts it and takes the stage with it.
+  return <WelcomeFlow />;
+}
+
+/** The opening screen first, then the choices. */
+function WelcomeFlow() {
+  const [stage, setStage] = useState<"splash" | "choices">("splash");
+  const dismissWelcome = useOnboardingStore((s) => s.dismissWelcome);
+  const startTour = useOnboardingStore((s) => s.startTour);
+  const showHelp = useHelpStore((s) => s.show);
   const primaryRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (open) primaryRef.current?.focus();
-  }, [open]);
+    if (stage === "choices") primaryRef.current?.focus();
+  }, [stage]);
 
   useEffect(() => {
-    if (!open) return;
+    // Only Esc is handled here. Enter and Space belong to the Continuar button,
+    // which has focus: handling them as well would fire twice — once here and
+    // once as the button's own click — and skip the welcome screen.
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") dismissWelcome();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open, dismissWelcome]);
+  }, [dismissWelcome]);
 
-  if (!open || typeof document === "undefined") return null;
+  if (stage === "splash") return createPortal(<SplashScreen onContinue={() => setStage("choices")} />, document.body);
 
   return createPortal(
     <div className="fixed inset-0 z-[9998] flex items-center justify-center p-4">
@@ -98,10 +111,6 @@ export default function WelcomeDialog() {
           >
             Abrir a ajuda
           </button>
-        </div>
-
-        <div className="mt-6 border-t border-line pt-3 text-center font-mono text-micro text-fg-faint">
-          {CREDITS.project} · FURG · C3 · {CREDITS.year}
         </div>
       </div>
     </div>,
