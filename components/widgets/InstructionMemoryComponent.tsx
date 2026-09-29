@@ -91,6 +91,7 @@ export default function InstructionMemoryComponent({ component, zoom }: Props) {
                 openListing();
               }}
               className="shrink-0 rounded p-0.5 text-fg-faint transition-colors hover:text-fg"
+              data-tour="imem-list"
               title="View the whole program"
             >
               <List size={12} strokeWidth={1.5} />

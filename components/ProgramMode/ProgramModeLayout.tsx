@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import AssemblyPanel from "@/components/ProgramMode/AssemblyPanel";
 import AssembledPanel from "@/components/ProgramMode/AssembledPanel";
+import WelcomeDialog from "@/components/Onboarding/WelcomeDialog";
+import TourOverlay from "@/components/Onboarding/TourOverlay";
 import DatapathViewer from "@/components/ProgramMode/DatapathViewer";
 import MemoryPanel from "@/components/ProgramMode/MemoryPanel";
 import SimulationBar from "@/components/ProgramMode/SimulationBar";
@@ -173,6 +175,9 @@ export default function ProgramModeLayout() {
 
       {/* Bottom: the single simulation control bar. */}
       <SimulationBar />
+
+      <WelcomeDialog />
+      <TourOverlay />
     </div>
   );
 }

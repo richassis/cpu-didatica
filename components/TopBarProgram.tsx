@@ -13,6 +13,7 @@ import { useLayoutStore, ZOOM_MIN, ZOOM_MAX } from "@/lib/store";
 import { useCanvasViewStore } from "@/lib/canvasViewStore";
 import SimulationSettings from "@/components/SimulationSettings";
 import HelpDialog from "@/components/Help/HelpDialog";
+import { useHelpStore } from "@/lib/helpStore";
 import ThemeToggle from "./ThemeToggle";
 
 /**
@@ -40,7 +41,9 @@ export default function TopBarProgram() {
   const [saveOpen, setSaveOpen] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const [panel, setPanel] = useState<"settings" | null>(null);
-  const [helpOpen, setHelpOpen] = useState(false);
+  const helpOpen = useHelpStore((s) => s.open);
+  const showHelp = useHelpStore((s) => s.show);
+  const hideHelp = useHelpStore((s) => s.hide);
 
   const zoom = useLayoutStore((s) => s.zoom);
   const zoomIn = useCanvasViewStore((s) => s.zoomIn);
@@ -117,7 +120,7 @@ export default function TopBarProgram() {
           </ClusterButton>
         </Cluster>
 
-        <PanelButton label="Ajustes" active={panel === "settings"} onClick={() => togglePanel("settings")}>
+        <PanelButton tour="settings" label="Ajustes" active={panel === "settings"} onClick={() => togglePanel("settings")}>
           <Settings2 size={14} strokeWidth={1.5} />
         </PanelButton>
 
@@ -125,6 +128,7 @@ export default function TopBarProgram() {
 
         <span className="mx-1 h-5 w-px shrink-0 bg-line" />
 
+        <div data-tour="zoom">
         <Cluster>
           <button
             onClick={() => zoomOut?.()}
@@ -153,8 +157,9 @@ export default function TopBarProgram() {
             <Plus size={14} strokeWidth={1.5} />
           </button>
         </Cluster>
+        </div>
 
-        <PanelButton label="Ajuda" active={helpOpen} onClick={() => { setPanel(null); setHelpOpen(true); }}>
+        <PanelButton tour="help" label="Ajuda" active={helpOpen} onClick={() => { setPanel(null); showHelp(); }}>
           <HelpCircle size={14} strokeWidth={1.5} />
         </PanelButton>
 
@@ -195,7 +200,7 @@ export default function TopBarProgram() {
         </div>
       )}
 
-      {helpOpen && <HelpDialog onClose={() => setHelpOpen(false)} />}
+      {helpOpen && <HelpDialog onClose={hideHelp} />}
 
       {saveOpen && <SaveProgramDialog onClose={() => setSaveOpen(false)} />}
     </div>
@@ -236,15 +241,19 @@ function PanelButton({
   label,
   active,
   onClick,
+  tour,
   children,
 }: {
   label: string;
   active: boolean;
   onClick: () => void;
+  /** Anchor for the guided tour. */
+  tour?: string;
   children: React.ReactNode;
 }) {
   return (
     <button
+      data-tour={tour}
       onClick={onClick}
       aria-expanded={active}
       title={label}

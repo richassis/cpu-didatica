@@ -48,7 +48,7 @@ export default function AssembledPanel({ onToggleCollapse }: { onToggleCollapse:
   const status = mountStatus({ mountedSource, assemblySource, assembled, assemblyErrors });
 
   return (
-    <aside className="flex h-full w-[13.5rem] shrink-0 flex-col overflow-hidden border-r border-line bg-surface">
+    <aside data-tour="machine" className="flex h-full w-[13.5rem] shrink-0 flex-col overflow-hidden border-r border-line bg-surface">
       <button
         onClick={onToggleCollapse}
         aria-expanded="true"

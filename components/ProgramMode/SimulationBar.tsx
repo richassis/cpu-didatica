@@ -126,9 +126,10 @@ export default function SimulationBar() {
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 px-4 pb-3">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="rounded-2xl border border-line bg-surface px-4 py-3">
+        <div data-tour="bar" className="rounded-2xl border border-line bg-surface px-4 py-3">
           <div className="flex items-center gap-2">
             <button
+              data-tour="montar"
               onClick={() => mountProgram()}
               disabled={isLocked}
               title="Montar (compilar) o código-fonte"
@@ -146,6 +147,7 @@ export default function SimulationBar() {
             </button>
 
             <button
+              data-tour="simular"
               onClick={() => runProgram()}
               disabled={!canRun}
               title={runTitle}

@@ -182,7 +182,7 @@ export default function AssemblyPanel({ onToggleCollapse }: { onToggleCollapse: 
   const lineCount = lines.length;
 
   return (
-    <aside className="flex h-full w-full flex-col overflow-hidden border-r border-line bg-surface">
+    <aside data-tour="editor" className="flex h-full w-full flex-col overflow-hidden border-r border-line bg-surface">
 
       {/* ── Header ── */}
       <button

@@ -5,6 +5,7 @@ import { PRESET_PROGRAMS } from "@/lib/presetPrograms";
 import { SHORTCUTS } from "@/lib/helpContent";
 import { useProgramDataStore } from "@/lib/programDataStore";
 import { useExecutionStore } from "@/lib/executionStore";
+import { useOnboardingStore } from "@/lib/onboardingStore";
 
 const EXAMPLE = `        .data
 SOMA:   DB    0            ; variável, começa em 0
@@ -47,9 +48,32 @@ export default function GuideTab({ onClose }: { onClose: () => void }) {
   const isRunning = useProgramDataStore((s) => s.isRunning);
   const isTimelineActive = useExecutionStore((s) => s.isTimelineActive);
   const locked = isRunning || isTimelineActive;
+  const startTour = useOnboardingStore((s) => s.startTour);
+  const openWelcome = useOnboardingStore((s) => s.openWelcome);
 
   return (
     <div className="space-y-8">
+      <section className="flex flex-wrap gap-2">
+        <button
+          onClick={() => {
+            onClose();
+            startTour();
+          }}
+          className="h-8 rounded-lg border border-st-active bg-st-active/10 px-3 text-small text-fg transition-colors hover:bg-st-active/20"
+        >
+          Rever o tutorial
+        </button>
+        <button
+          onClick={() => {
+            onClose();
+            openWelcome();
+          }}
+          className="h-8 rounded-lg border border-line px-3 text-small text-fg-muted transition-colors hover:border-line-strong hover:text-fg"
+        >
+          Rever as boas-vindas
+        </button>
+      </section>
+
       <section>
         <Heading>Como usar o simulador</Heading>
         <ol className="space-y-3">

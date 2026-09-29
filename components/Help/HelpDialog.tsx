@@ -7,14 +7,16 @@ import GuideTab from "@/components/Help/GuideTab";
 import IsaTab from "@/components/Help/IsaTab";
 import DatapathTab from "@/components/Help/DatapathTab";
 import CreditsTab from "@/components/Help/CreditsTab";
+import FeedbackTab from "@/components/Help/FeedbackTab";
 import { CREDITS } from "@/lib/helpContent";
 
-type TabId = "guide" | "isa" | "datapath" | "credits";
+type TabId = "guide" | "isa" | "datapath" | "feedback" | "credits";
 
 const TABS: Array<{ id: TabId; label: string }> = [
   { id: "guide", label: "Guia" },
   { id: "isa", label: "ISA" },
   { id: "datapath", label: "Caminho de dados" },
+  { id: "feedback", label: "Feedback" },
   { id: "credits", label: "Créditos" },
 ];
 
@@ -34,7 +36,7 @@ export default function HelpDialog({ onClose }: { onClose: () => void }) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const tabRefs = useRef<Record<TabId, HTMLButtonElement | null>>({
-    guide: null, isa: null, datapath: null, credits: null,
+    guide: null, isa: null, datapath: null, feedback: null, credits: null,
   });
 
   // Take focus, and give it back on close.
@@ -142,6 +144,7 @@ export default function HelpDialog({ onClose }: { onClose: () => void }) {
           {tab === "guide" && <GuideTab onClose={onClose} />}
           {tab === "isa" && <IsaTab />}
           {tab === "datapath" && <DatapathTab />}
+          {tab === "feedback" && <FeedbackTab />}
           {tab === "credits" && <CreditsTab />}
         </div>
 

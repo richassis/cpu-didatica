@@ -9,7 +9,7 @@ export default function DatapathViewer() {
        anchored to an edge lands thousands of pixels outside the viewport.
        Settings, legend and zoom live in the top bar and the tick readout
        in the simulation bar; what is left is the canvas. */
-    <section className="relative flex h-full min-h-0 min-w-0 flex-col">
+    <section data-tour="datapath" className="relative flex h-full min-h-0 min-w-0 flex-col">
       <SimulatorCanvas isReadOnly />
     </section>
   );
