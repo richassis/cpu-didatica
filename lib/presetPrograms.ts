@@ -86,6 +86,8 @@ IGUAL:  STA   R3, NigualN2 ; N1 == N2
 FIM:    HLT
 `;
 
+// Hidden from the preset list for now; kept so it can come back.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const MULTIPLICACAO = `\
 ; ── Multiplicação por Somas Sucessivas ──────────────────────────────────────
 ; Calcula N1 × N2 somando N1 repetidamente N2 vezes.
@@ -169,7 +171,7 @@ export const PRESET_PROGRAMS: PresetProgram[] = [
   { id: "basico",   name: "Exemplo Básico",         source: BASICO },
   { id: "for",      name: "FOR — Contador",          source: FOR_CONTADOR },
   { id: "if-else",  name: "IF-THEN-ELSE",            source: IF_THEN_ELSE },
-  { id: "mult",     name: "Multiplicação",            source: MULTIPLICACAO },
+  // { id: "mult",     name: "Multiplicação",            source: MULTIPLICACAO },
   { id: "desvios",  name: "Desvios",                 source: DESVIOS },
   { id: "logico",   name: "Instruções Lógicas",      source: LOGICO },
 ];
