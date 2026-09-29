@@ -129,7 +129,7 @@ export const useDisplayStore = create<DisplayState>()(
     }),
     {
       name: "simulator-display",
-      version: 6,
+      version: 7,
       migrate: (persistedState) => {
         const state = persistedState as Partial<DisplayState> & {
           animationSpeed?: "fast" | "normal" | "slow";
@@ -140,8 +140,15 @@ export const useDisplayStore = create<DisplayState>()(
         // remapped rather than carried over literally.
         const fromPreset = { fast: 200, normal: 400, slow: 900 } as const;
 
+        // v7: a base the settings no longer offer (octal) would leave the
+        // student on a display with no button to leave it.
+        const offeredBases: NumericBase[] = ["hex", "dec", "decSigned", "bin"];
+        const numericBase =
+          state.numericBase && offeredBases.includes(state.numericBase) ? state.numericBase : "hex";
+
         return {
           ...state,
+          numericBase,
           // v6 removed these switches from the settings panel, so a value a
           // student switched off earlier can no longer be switched back on.
           showWireDots: true,

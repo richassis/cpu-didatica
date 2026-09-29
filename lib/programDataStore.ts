@@ -197,16 +197,53 @@ export const useProgramDataStore = create<ProgramDataState>()(
     }),
     {
       name: "simulator-program",
-      version: 1,
+      version: 2,
       // Only the document, never the run. `isRunning` in particular must not
       // come back from storage, or a reload during a run leaves the Run button
       // permanently disabled. `assembled`/`mountedSource` are not persisted
       // either — a reload comes back with the source but not yet mounted,
       // same as opening a file.
-      partialize: (state) => ({
-        assemblySource: state.assemblySource,
-        programName: state.programName,
-      }),
+      //
+      // A preset is stored by id, not by text. Storing the text froze it: after
+      // a preset was corrected (or the assembler's syntax changed) the browser
+      // kept the old copy, and the fixed preset never reached anyone who had
+      // opened the app before. Only code the student wrote is stored as text.
+      partialize: (state) => {
+        const preset = PRESET_PROGRAMS.find((p) => p.source === state.assemblySource);
+        return {
+          presetId: preset?.id ?? null,
+          assemblySource: preset ? undefined : state.assemblySource,
+          programName: state.programName,
+        };
+      },
+      // v1 stored the source text whatever it was. Keep it only if it still
+      // assembles under today's syntax; a program written for an older one (the
+      // `#` before immediates, say) would come back as a wall of errors.
+      migrate: (persisted, version) => {
+        const stored = (persisted ?? {}) as { assemblySource?: string; programName?: string };
+        if (version >= 2) return stored;
+        const result = typeof stored.assemblySource === "string" ? computeAssembled(stored.assemblySource) : null;
+        const stillValid = result !== null && result.errors.length === 0;
+        return {
+          programName: stored.programName,
+          assemblySource: stillValid ? stored.assemblySource : undefined,
+        };
+      },
+      merge: (persisted, current) => {
+        const stored = (persisted ?? {}) as {
+          presetId?: string | null;
+          assemblySource?: string;
+          programName?: string;
+        };
+        const preset = stored.presetId
+          ? PRESET_PROGRAMS.find((p) => p.id === stored.presetId)
+          : undefined;
+        return {
+          ...current,
+          assemblySource: preset?.source ?? stored.assemblySource ?? current.assemblySource,
+          programName: stored.programName ?? current.programName,
+        };
+      },
     }
   )
 );

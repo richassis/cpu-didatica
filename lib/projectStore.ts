@@ -626,6 +626,17 @@ function ensureDefaultProject(state: ProjectState): void {
     }
   }
   
+  // A cached active tab can outlive its project — closed elsewhere, or dropped
+  // by a schema change — and the canvas would then stay empty. Fall back to the
+  // default datapath, which is always loaded from the file.
+  const activeExists = state.tabs.some((t) => t.id === state.activeTabId);
+  const activeHasData =
+    state.activeTabId === DEFAULT_PROJECT_ID ||
+    (state.activeTabId !== null && state.projectData[state.activeTabId] !== undefined);
+  if (!activeExists || !activeHasData) {
+    state.activeTabId = DEFAULT_PROJECT_ID;
+  }
+
   // Migration: mark existing default project if it exists but isn't flagged
   state.tabs = state.tabs.map(tab => ({
     ...tab,
