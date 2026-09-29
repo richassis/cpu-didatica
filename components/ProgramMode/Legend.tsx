@@ -131,31 +131,10 @@ export default function Legend() {
             </div>
           </div>
 
-      <div className="mt-4 border-t border-line pt-3">
-        <div className="t-section mb-1.5">Atalhos</div>
-        <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-          <Shortcut keys="Espaço" note="reproduzir / pausar" />
-          <Shortcut keys="← →" note="um tick para trás / frente" />
-          <Shortcut keys="Home" note="início" />
-          <Shortcut keys="End" note="fim" />
-        </div>
-      </div>
-
       <p className="mt-3 border-t border-line pt-3 text-[10px] leading-snug text-fg-faint">
         As duas colunas são independentes. A forma nunca muda durante a execução, e
         a cor nunca diz qual componente você está olhando.
       </p>
-    </div>
-  );
-}
-
-function Shortcut({ keys, note }: { keys: string; note: string }) {
-  return (
-    <div className="flex items-baseline gap-2">
-      <kbd className="shrink-0 rounded border border-line px-1 font-mono text-[10px] text-fg-muted">
-        {keys}
-      </kbd>
-      <span className="truncate text-[10px] text-fg-faint">{note}</span>
     </div>
   );
 }

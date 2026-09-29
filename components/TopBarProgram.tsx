@@ -12,7 +12,7 @@ import SaveProgramDialog from "@/components/ProgramMode/SaveProgramDialog";
 import { useLayoutStore, ZOOM_MIN, ZOOM_MAX } from "@/lib/store";
 import { useCanvasViewStore } from "@/lib/canvasViewStore";
 import SimulationSettings from "@/components/SimulationSettings";
-import Legend from "@/components/ProgramMode/Legend";
+import HelpDialog from "@/components/Help/HelpDialog";
 import ThemeToggle from "./ThemeToggle";
 
 /**
@@ -39,7 +39,8 @@ export default function TopBarProgram() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [saveOpen, setSaveOpen] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
-  const [panel, setPanel] = useState<"settings" | "legend" | null>(null);
+  const [panel, setPanel] = useState<"settings" | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   const zoom = useLayoutStore((s) => s.zoom);
   const zoomIn = useCanvasViewStore((s) => s.zoomIn);
@@ -56,7 +57,7 @@ export default function TopBarProgram() {
     return () => window.removeEventListener("keydown", onKey);
   }, [panel]);
 
-  const togglePanel = (next: "settings" | "legend") => setPanel((p) => (p === next ? null : next));
+  const togglePanel = (next: "settings") => setPanel((p) => (p === next ? null : next));
 
   const lineCount = assemblySource.split("\n").length;
 
@@ -153,7 +154,7 @@ export default function TopBarProgram() {
           </button>
         </Cluster>
 
-        <PanelButton label="Ajuda" active={panel === "legend"} onClick={() => togglePanel("legend")}>
+        <PanelButton label="Ajuda" active={helpOpen} onClick={() => { setPanel(null); setHelpOpen(true); }}>
           <HelpCircle size={14} strokeWidth={1.5} />
         </PanelButton>
 
@@ -173,10 +174,10 @@ export default function TopBarProgram() {
         <div
           role="dialog"
           aria-modal="false"
-          aria-label={panel === "settings" ? "Ajustes da simulação" : "Ajuda"}
+          aria-label="Ajustes da simulação"
           className="absolute right-4 top-full z-50 mt-2 max-h-[calc(100vh-120px)] overflow-y-auto rounded-2xl border border-line bg-surface p-4"
         >
-          {panel === "settings" ? <SimulationSettings /> : <Legend />}
+          <SimulationSettings />
         </div>
       )}
 
@@ -193,6 +194,8 @@ export default function TopBarProgram() {
           </button>
         </div>
       )}
+
+      {helpOpen && <HelpDialog onClose={() => setHelpOpen(false)} />}
 
       {saveOpen && <SaveProgramDialog onClose={() => setSaveOpen(false)} />}
     </div>

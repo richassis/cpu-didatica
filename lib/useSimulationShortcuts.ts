@@ -23,7 +23,10 @@ function isTypingTarget(target: EventTarget | null): boolean {
     tag === "INPUT" ||
     tag === "TEXTAREA" ||
     tag === "SELECT" ||
-    target.isContentEditable
+    target.isContentEditable ||
+    // A modal window (Ajuda, Salvar) owns the keyboard while it is open: space
+    // must activate the focused tab or button, not start the simulation.
+    target.closest('[aria-modal="true"]') !== null
   );
 }
 
