@@ -43,7 +43,7 @@ export default function IsaTab() {
     <div className="space-y-8">
       <section>
         <h3 className="t-node mb-1 text-fg">Uma instrução tem 16 bits</h3>
-        <p className="mb-4 text-[12px] leading-relaxed text-fg-muted">
+        <p className="mb-4 text-ui leading-relaxed text-fg-muted">
           Os 5 primeiros bits são sempre o <b className="text-fg">opcode</b>, que diz qual instrução é.
           O resto depende do formato: as instruções da ULA indicam três registradores; as demais
           indicam um registrador e um operando de 8 bits (um endereço ou um valor).
@@ -63,7 +63,7 @@ export default function IsaTab() {
 
       <section>
         <h3 className="t-node mb-1 text-fg">As {INSTRUCTIONS.length} instruções</h3>
-        <p className="mb-3 text-[12px] leading-relaxed text-fg-muted">
+        <p className="mb-3 text-ui leading-relaxed text-fg-muted">
           <b className="text-fg">Rd</b> é o destino, <b className="text-fg">Rs</b>, <b className="text-fg">Ra</b> e{" "}
           <b className="text-fg">Rb</b> são fontes, <b className="text-fg">M</b> é um endereço de memória
           (0 a 255) ou label, e <b className="text-fg">N</b> é um valor de −128 a 255. Clique numa linha
@@ -71,7 +71,7 @@ export default function IsaTab() {
         </p>
 
         <div className="overflow-x-auto rounded-lg border border-line">
-          <table className="w-full border-collapse text-left text-[11px]">
+          <table className="w-full border-collapse text-left text-small">
             <thead>
               <tr className="border-b border-line bg-raised text-fg-muted">
                 <th className="px-2.5 py-1.5 font-normal">Opcode</th>
@@ -109,7 +109,7 @@ export default function IsaTab() {
             </tbody>
           </table>
         </div>
-        <p className="mt-2 text-[10px] leading-snug text-fg-faint">
+        <p className="mt-2 text-caption leading-snug text-fg-faint">
           Ticks: quantos ciclos de clock a instrução leva, contando BUSCA e DECODIFICA. As flags
           Z (zero), C (vai-um) e N (negativo) são capturadas na ULA; LDA e LDAI atualizam só Z e N.
           Os desvios leem a última flag capturada.
@@ -118,7 +118,7 @@ export default function IsaTab() {
 
       <section>
         <h3 className="t-node mb-1 text-fg">Codificador</h3>
-        <p className="mb-3 text-[12px] leading-relaxed text-fg-muted">
+        <p className="mb-3 text-ui leading-relaxed text-fg-muted">
           Digite uma instrução (<span className="font-mono">LDAI R0, -3</span>) ou uma palavra de
           máquina em hexadecimal (<span className="font-mono">0x2143</span>) ou binário, e veja os bits
           divididos em campos.
@@ -132,19 +132,19 @@ export default function IsaTab() {
           autoComplete="off"
           aria-label="Instrução ou palavra de máquina"
           placeholder="ADD R1, R2, R3"
-          className="h-9 w-full max-w-md rounded-lg border border-line bg-sunken px-3 font-mono text-[12px] text-fg placeholder:text-fg-faint focus:border-line-strong focus:outline-none"
+          className="h-9 w-full max-w-md rounded-lg border border-line bg-sunken px-3 font-mono text-ui text-fg placeholder:text-fg-faint focus:border-line-strong focus:outline-none"
         />
 
         <div className="mt-4 min-h-[88px]">
           {parsed.error && (
-            <p className="rounded-lg border border-st-error px-3 py-2 font-mono text-[11px] text-st-error">
+            <p className="rounded-lg border border-st-error px-3 py-2 font-mono text-small text-st-error">
               {parsed.error}
             </p>
           )}
 
           {decoded && parsed.word !== undefined && (
             <div className="space-y-3">
-              <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 font-mono text-[12px]">
+              <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 font-mono text-ui">
                 <span className="text-fg">
                   {decoded.mnemonic ?? "opcode desconhecido"}
                 </span>

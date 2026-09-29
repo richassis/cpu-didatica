@@ -23,7 +23,7 @@ export default function FlagSquares({ flags }: { flags: FlagSpec[] }) {
         <span
           key={f.label}
           title={f.title ?? f.label}
-          className={`rounded-md border px-1.5 font-mono text-[10px] leading-[15px] transition-colors ${
+          className={`rounded-md border px-1.5 font-mono text-cv-xs leading-[15px] transition-colors ${
             f.on
               ? "border-st-warn text-st-warn"
               : "border-line text-fg-faint"

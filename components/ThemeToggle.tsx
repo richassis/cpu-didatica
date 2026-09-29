@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { Sun, Moon } from "lucide-react";
 import { useThemeStore, applyThemeAttribute } from "@/lib/themeStore";
+import { useDisplayStore } from "@/lib/displayStore";
 
 /**
  * Switches between the light and dark colour profiles. Also the place that
@@ -16,6 +17,13 @@ export default function ThemeToggle() {
   useEffect(() => {
     applyThemeAttribute(theme);
   }, [theme]);
+
+  // The text size lives in the display settings but, like the colour profile,
+  // is a property of <html>: every rem on screen follows it.
+  const textSize = useDisplayStore((s) => s.textSize);
+  useEffect(() => {
+    document.documentElement.dataset.textSize = textSize;
+  }, [textSize]);
 
   const isDark = theme === "dark";
   const title = isDark ? "Mudar para o modo claro" : "Mudar para o modo escuro";

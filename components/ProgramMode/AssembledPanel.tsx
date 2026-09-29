@@ -48,7 +48,7 @@ export default function AssembledPanel({ onToggleCollapse }: { onToggleCollapse:
   const status = mountStatus({ mountedSource, assemblySource, assembled, assemblyErrors });
 
   return (
-    <aside className="flex h-full w-[220px] shrink-0 flex-col overflow-hidden border-r border-line bg-surface">
+    <aside className="flex h-full w-[13.5rem] shrink-0 flex-col overflow-hidden border-r border-line bg-surface">
       <button
         onClick={onToggleCollapse}
         aria-expanded="true"
@@ -58,7 +58,7 @@ export default function AssembledPanel({ onToggleCollapse }: { onToggleCollapse:
         <span className="flex items-center gap-1.5">
           <h2 className="t-panel text-fg">Ling. Máquina</h2>
           {status === "stale" && (
-            <span className="rounded-md border border-st-warn px-1 font-mono text-[9px] leading-[14px] text-st-warn">
+            <span className="rounded-md border border-st-warn px-1 font-mono text-micro leading-[14px] text-st-warn">
               desatualizado
             </span>
           )}
@@ -67,17 +67,17 @@ export default function AssembledPanel({ onToggleCollapse }: { onToggleCollapse:
       </button>
 
       {status === "none" && (
-        <div className="flex flex-1 items-center justify-center px-3 text-center text-[11px] text-fg-faint">
+        <div className="flex flex-1 items-center justify-center px-3 text-center text-small text-fg-faint">
           Pressione Montar para ver o código montado
         </div>
       )}
 
       {status === "errors" && (
         <div className="flex-1 overflow-y-auto px-3 py-2">
-          <p className="font-mono text-[11px] text-st-error">
+          <p className="font-mono text-small text-st-error">
             Montagem falhou ({assemblyErrors.length})
           </p>
-          <p className="mt-1 text-[11px] leading-snug text-fg-faint">
+          <p className="mt-1 text-small leading-snug text-fg-faint">
             Veja os erros em Ling. Montagem.
           </p>
         </div>
@@ -90,7 +90,7 @@ export default function AssembledPanel({ onToggleCollapse }: { onToggleCollapse:
           <div className="flex min-h-0 flex-1 flex-col">
             <SectionLabel>Programa</SectionLabel>
             <div className="min-h-0 flex-1 overflow-y-auto px-1 pb-1">
-              <table className="w-full border-collapse font-mono text-[11px]">
+              <table className="w-full border-collapse font-mono text-small">
                 <thead>
                   <tr className="text-fg-faint">
                     <th className="px-1.5 py-0.5 text-left font-normal">End</th>
@@ -129,7 +129,7 @@ export default function AssembledPanel({ onToggleCollapse }: { onToggleCollapse:
             <div className="flex max-h-[45%] shrink-0 flex-col border-t border-line">
               <SectionLabel>Dados</SectionLabel>
               <div className="min-h-0 flex-1 overflow-y-auto px-1 pb-1">
-                <table className="w-full border-collapse font-mono text-[11px]">
+                <table className="w-full border-collapse font-mono text-small">
                   <thead>
                     <tr className="text-fg-faint">
                       <th className="px-1.5 py-0.5 text-left font-normal">End</th>
@@ -159,5 +159,5 @@ export default function AssembledPanel({ onToggleCollapse }: { onToggleCollapse:
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <div className="shrink-0 px-2.5 pb-0.5 pt-1.5 text-[10px] text-fg-faint">{children}</div>;
+  return <div className="shrink-0 px-2.5 pb-0.5 pt-1.5 text-caption text-fg-faint">{children}</div>;
 }

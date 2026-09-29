@@ -239,7 +239,7 @@ export default function PortIndicator({
           if (!root) return null;
           return createPortal(
             <div
-              className="whitespace-nowrap rounded-lg border border-line bg-surface px-2 py-1 font-mono text-[11px]"
+              className="whitespace-nowrap rounded-lg border border-line bg-surface px-2 py-1 font-mono text-small"
               style={{
                 position: "absolute",
                 left: tooltipAnchor.x,

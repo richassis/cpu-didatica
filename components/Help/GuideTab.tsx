@@ -19,12 +19,12 @@ SOMA:   DB    0            ; variável, começa em 0
 function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (
     <li className="flex gap-3">
-      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-line font-mono text-[11px] text-fg-muted">
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-line font-mono text-small text-fg-muted">
         {n}
       </span>
       <div className="min-w-0">
         <div className="t-node text-fg">{title}</div>
-        <p className="mt-0.5 text-[12px] leading-relaxed text-fg-muted">{children}</p>
+        <p className="mt-0.5 text-ui leading-relaxed text-fg-muted">{children}</p>
       </div>
     </li>
   );
@@ -32,7 +32,7 @@ function Step({ n, title, children }: { n: number; title: string; children: Reac
 
 function Kbd({ children }: { children: React.ReactNode }) {
   return (
-    <kbd className="shrink-0 rounded border border-line px-1.5 py-0.5 font-mono text-[10px] text-fg-muted">
+    <kbd className="shrink-0 rounded border border-line px-1.5 py-0.5 font-mono text-caption text-fg-muted">
       {children}
     </kbd>
   );
@@ -79,10 +79,10 @@ export default function GuideTab({ onClose }: { onClose: () => void }) {
       <section>
         <Heading>Escrevendo em assembly</Heading>
         <div className="grid gap-4 md:grid-cols-2">
-          <pre className="overflow-x-auto rounded-lg border border-line bg-sunken p-3 font-mono text-[11px] leading-[1.6] text-fg">
+          <pre className="overflow-x-auto rounded-lg border border-line bg-sunken p-3 font-mono text-small leading-[1.6] text-fg">
             {EXAMPLE}
           </pre>
-          <ul className="space-y-1.5 text-[12px] leading-relaxed text-fg-muted">
+          <ul className="space-y-1.5 text-ui leading-relaxed text-fg-muted">
             <li><span className="font-mono text-fg">;</span> começa um comentário até o fim da linha.</li>
             <li>
               <span className="font-mono text-fg">R0</span> a <span className="font-mono text-fg">R7</span> são
@@ -118,18 +118,18 @@ export default function GuideTab({ onClose }: { onClose: () => void }) {
           {SHORTCUTS.map((s) => (
             <div key={s.keys} className="flex items-baseline gap-3">
               <Kbd>{s.keys}</Kbd>
-              <span className="text-[12px] text-fg-muted">{s.note}</span>
+              <span className="text-ui text-fg-muted">{s.note}</span>
             </div>
           ))}
         </div>
-        <p className="mt-2 text-[10px] text-fg-faint">
+        <p className="mt-2 text-caption text-fg-faint">
           Os atalhos de teclado ficam desligados enquanto você digita no editor.
         </p>
       </section>
 
       <section>
         <Heading>Ajustes e barra superior</Heading>
-        <ul className="space-y-1.5 text-[12px] leading-relaxed text-fg-muted">
+        <ul className="space-y-1.5 text-ui leading-relaxed text-fg-muted">
           <li>
             <b className="text-fg">Valores:</b> a base em que os números aparecem — hex, dec+ (sem sinal),
             dec± (com sinal, em complemento de dois) e bin. Sinais de controle, flags, endereços,
@@ -167,10 +167,10 @@ export default function GuideTab({ onClose }: { onClose: () => void }) {
                 onClose();
               }}
               title={locked ? "Encerre a simulação para trocar o programa" : "Carregar este programa no editor"}
-              className="flex items-center justify-between rounded-lg border border-line px-3 py-2 text-left text-[12px] text-fg transition-colors hover:border-line-strong hover:bg-raised disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex items-center justify-between rounded-lg border border-line px-3 py-2 text-left text-ui text-fg transition-colors hover:border-line-strong hover:bg-raised disabled:cursor-not-allowed disabled:opacity-40"
             >
               <span>{p.name}</span>
-              <span className="text-[11px] text-fg-faint">carregar</span>
+              <span className="text-small text-fg-faint">carregar</span>
             </button>
           ))}
         </div>

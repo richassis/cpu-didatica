@@ -99,6 +99,23 @@
    utility.
    ────────────────────────────────────────────────────────────────────────── */
 @theme inline {
+  /* Type scale. Everything is in rem, so the "Tamanho do texto" setting (a
+     font-size on <html>) scales the whole interface — canvas text included —
+     from one place. Nothing on screen is below 11px at the normal size. */
+  --text-xs: 0.8125rem;
+  --text-sm: 0.9375rem;
+  --text-micro: 0.6875rem;    /* 11px — the floor: badges, axis ticks */
+  --text-caption: 0.75rem;    /* 12px — captions, table heads */
+  --text-small: 0.8125rem;    /* 13px — secondary text, table cells */
+  --text-ui: 0.875rem;        /* 14px — primary UI and listings */
+  --text-lead: 1rem;          /* 16px */
+  /* Inside the canvas, drawn in canvas units and shrunk by the zoom — so
+     larger, to land near the chrome sizes at the default fitted zoom. */
+  --text-cv-xs: calc(0.75rem * var(--fs-cv) / var(--fs));    /* 12px */
+  --text-cv-sm: calc(0.875rem * var(--fs-cv) / var(--fs));   /* 14px */
+  --text-cv-md: calc(1rem * var(--fs-cv) / var(--fs));       /* 16px */
+  --text-cv-lg: calc(1.125rem * var(--fs-cv) / var(--fs));   /* 18px */
+
   --font-sans: var(--font-urbanist);
   --font-mono: var(--font-jetbrains-mono);
 
@@ -125,6 +142,18 @@
   box-sizing: border-box;
 }
 
+/* "Tamanho do texto": one factor scales every rem — text, and the spacing
+   that goes with it. Set on <html data-text-size> from the display settings.
+   The canvas follows at less than half the rate (`--fs-cv`): its boxes have a
+   fixed size, so text growing as fast as the chrome would spill out of them. */
+:root { --fs: 1; --fs-cv: 1; }
+[data-text-size="large"] { --fs: 1.15; --fs-cv: 1.06; }
+[data-text-size="xlarge"] { --fs: 1.3; --fs-cv: 1.12; }
+
+html {
+  font-size: calc(16px * var(--fs));
+}
+
 html,
 body {
   height: 100%;
@@ -148,29 +177,29 @@ body {
 
    Hierarchy comes from size and colour, not from weight — nothing on screen
    goes above 500. These classes are the only place a font-size for chrome or
-   data should be written; reach for one of them instead of `text-[10px]`.
+   data should be written; reach for one of them, or for a size from the `@theme` scale (`text-caption`, `text-ui`…), instead of a pixel value.
    ────────────────────────────────────────────────────────────────────────── */
-.t-panel   { font-family: var(--font-sans); font-size: 18px; font-weight: 500; }
-.t-node    { font-family: var(--font-sans); font-size: 13px; font-weight: 500; }
-.t-section { font-family: var(--font-sans); font-size: 12px; font-weight: 500; color: var(--text-muted); }
-.t-body    { font-family: var(--font-sans); font-size: 14px; font-weight: 400; }
+.t-panel   { font-family: var(--font-sans); font-size: 1.125rem; font-weight: 500; }
+.t-node    { font-family: var(--font-sans); font-size: 0.875rem; font-weight: 500; }
+.t-section { font-family: var(--font-sans); font-size: 0.8125rem; font-weight: 500; color: var(--text-muted); }
+.t-body    { font-family: var(--font-sans); font-size: 0.9375rem; font-weight: 400; }
 .t-metric  { font-family: var(--font-sans); font-size: 32px; font-weight: 300; }
 
 .t-value {
   font-family: var(--font-mono);
-  font-size: 15px;
+  font-size: 1.0625rem;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 .t-value-sm {
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 0.9375rem;
   font-weight: 400;
   font-variant-numeric: tabular-nums;
 }
 .t-code {
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 0.9063rem;
   font-weight: 400;
   line-height: 1.6;
 }
@@ -368,3 +397,4 @@ body {
     stroke-width: 4;
   }
 }
+

@@ -27,7 +27,7 @@ const INSTRUCTIONS = Object.values(INSTRUCTION_SET).sort((a, b) => a.opcode - b.
 
 function StateChip({ state }: { state: CpuState }) {
   return (
-    <span className="rounded-md border border-line px-1.5 py-0.5 font-mono text-[10px] text-fg-muted">
+    <span className="rounded-md border border-line px-1.5 py-0.5 font-mono text-caption text-fg-muted">
       {CPU_STATE_LABELS[state]}
     </span>
   );
@@ -51,7 +51,7 @@ export default function DatapathTab() {
     <div className="space-y-8">
       <section>
         <h3 className="t-node mb-1 text-fg">O caminho de dados</h3>
-        <p className="mb-3 text-[12px] leading-relaxed text-fg-muted">
+        <p className="mb-3 text-ui leading-relaxed text-fg-muted">
           Um esquema simplificado. As linhas azuis são fios de dados; a unidade de controle (UC) manda
           os sinais de controle para todos os blocos. O desenho completo, com todos os fios, é o que
           você vê ao lado do código.
@@ -65,8 +65,8 @@ export default function DatapathTab() {
           {COMPONENT_HELP.map((c) => (
             <div key={c.name} className="rounded-lg border border-line px-3 py-2">
               <div className="t-node text-fg">{c.name}</div>
-              <div className="font-mono text-[10px] leading-snug text-fg-faint">{c.spec}</div>
-              <p className="mt-1 text-[11px] leading-snug text-fg-muted">{c.role}</p>
+              <div className="font-mono text-caption leading-snug text-fg-faint">{c.spec}</div>
+              <p className="mt-1 text-small leading-snug text-fg-muted">{c.role}</p>
             </div>
           ))}
         </div>
@@ -74,12 +74,12 @@ export default function DatapathTab() {
 
       <section>
         <h3 className="t-node mb-1 text-fg">Sinais de controle</h3>
-        <p className="mb-3 text-[12px] leading-relaxed text-fg-muted">
+        <p className="mb-3 text-ui leading-relaxed text-fg-muted">
           A UC não calcula nada: ela liga e desliga estes sinais, estado a estado, e os blocos
           fazem o resto.
         </p>
         <div className="overflow-x-auto rounded-lg border border-line">
-          <table className="w-full border-collapse text-left text-[11px]">
+          <table className="w-full border-collapse text-left text-small">
             <thead>
               <tr className="border-b border-line bg-raised text-fg-muted">
                 <th className="px-2.5 py-1.5 font-normal">Sinal</th>
@@ -104,14 +104,14 @@ export default function DatapathTab() {
 
       <section>
         <h3 className="t-node mb-1 text-fg">Máquina de estados</h3>
-        <p className="mb-3 text-[12px] leading-relaxed text-fg-muted">
+        <p className="mb-3 text-ui leading-relaxed text-fg-muted">
           Toda instrução começa com <b className="text-fg">BUSCA</b> (FETCH) e{" "}
           <b className="text-fg">DECODIFICA</b> (DECODE). Depois, o opcode escolhe o caminho. Cada
           estado dura um tick de clock e, ao terminar, a UC volta para a BUSCA.
         </p>
 
         <div className="overflow-x-auto rounded-lg border border-line">
-          <table className="w-full border-collapse text-left text-[11px]">
+          <table className="w-full border-collapse text-left text-small">
             <thead>
               <tr className="border-b border-line bg-raised text-fg-muted">
                 <th className="px-2.5 py-1.5 font-normal">Instrução</th>
@@ -146,12 +146,12 @@ export default function DatapathTab() {
 
         <h4 className="t-section mb-2 mt-6">O que cada estado faz e quais sinais define</h4>
         <div className="overflow-x-auto rounded-lg border border-line">
-          <table className="w-full border-collapse text-left text-[11px]">
+          <table className="w-full border-collapse text-left text-small">
             <thead>
               <tr className="border-b border-line bg-raised text-fg-muted">
                 <th className="px-2.5 py-1.5 font-normal">Estado</th>
                 {SIGNALS.map((s) => (
-                  <th key={s} className="px-1.5 py-1.5 font-mono text-[10px] font-normal">{s}</th>
+                  <th key={s} className="px-1.5 py-1.5 font-mono text-caption font-normal">{s}</th>
                 ))}
                 <th className="px-2.5 py-1.5 font-normal">O que faz</th>
               </tr>
@@ -171,7 +171,7 @@ export default function DatapathTab() {
             </tbody>
           </table>
         </div>
-        <p className="mt-2 text-[10px] leading-snug text-fg-faint">
+        <p className="mt-2 text-caption leading-snug text-fg-faint">
           · o estado não mexe no sinal, que mantém o valor de antes. * só se o desvio é tomado: JMP
           sempre; JZ, JC e JN quando a flag correspondente está ligada. No estado RESET todos os
           sinais voltam ao valor inicial.
@@ -195,11 +195,11 @@ function Box({
         fill="var(--surface)" stroke="var(--border-strong)" strokeWidth={1}
         strokeDasharray={dashed ? "4 3" : undefined}
       />
-      <text x={x + w / 2} y={y + h / 2 + (sub ? -2 : 3)} textAnchor="middle" fontSize={11} fill="var(--text)" className="font-mono">
+      <text x={x + w / 2} y={y + h / 2 + (sub ? -2 : 3)} textAnchor="middle" fontSize={12.5} fill="var(--text)" className="font-mono">
         {label}
       </text>
       {sub && (
-        <text x={x + w / 2} y={y + h / 2 + 11} textAnchor="middle" fontSize={8.5} fill="var(--text-faint)" className="font-mono">
+        <text x={x + w / 2} y={y + h / 2 + 12} textAnchor="middle" fontSize={10} fill="var(--text-faint)" className="font-mono">
           {sub}
         </text>
       )}
@@ -275,8 +275,8 @@ function Schematic() {
         {/* Control unit */}
         <Box x={10} y={322} w={694} h={16} label="UC — máquina de estados que emite os sinais de controle para todos os blocos" dashed />
 
-        <text x={248} y={250} textAnchor="middle" fontSize={8.5} fill="var(--text-faint)" className="font-mono">operando M do IR</text>
-        <text x={232} y={154} textAnchor="middle" fontSize={8.5} fill="var(--text-faint)" className="font-mono">imediato · memória · ULA</text>
+        <text x={248} y={250} textAnchor="middle" fontSize={10} fill="var(--text-faint)" className="font-mono">operando M do IR</text>
+        <text x={232} y={154} textAnchor="middle" fontSize={10} fill="var(--text-faint)" className="font-mono">imediato · memória · ULA</text>
       </svg>
     </div>
   );

@@ -217,13 +217,13 @@ export default function SimulationBar() {
 
                 <span className="num ml-2 font-mono text-xs text-fg-muted">/ {totalTicks}</span>
 
-                <span className="rounded-md border border-line px-2 py-1 font-mono text-[11px] text-fg-muted">
+                <span className="rounded-md border border-line px-2 py-1 font-mono text-small text-fg-muted">
                   {opcodeLabel}
                 </span>
               </>
             ) : (
               <span
-                className={`min-w-0 truncate font-mono text-[11px] ${
+                className={`min-w-0 truncate font-mono text-small ${
                   status === "errors" ? "text-st-error" : "text-fg-faint"
                 }`}
               >

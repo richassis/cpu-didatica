@@ -87,7 +87,7 @@ export default function TopBarProgram() {
       <div className="flex min-w-0 items-center gap-3">
         <span className="t-body shrink-0 select-none text-fg">CPU Didática</span>
         <span className="h-5 w-px shrink-0 bg-line" />
-        <span className="truncate font-mono text-[11px] text-fg-faint">
+        <span className="truncate font-mono text-small text-fg-faint">
           {programName}
           <span className="text-fg-muted"> · {lineCount} linhas</span>
         </span>
@@ -185,10 +185,10 @@ export default function TopBarProgram() {
           looked like nothing happening at all. */}
       {importError && (
         <div className="absolute left-1/2 top-full z-50 mt-2 w-[420px] max-w-[90vw] -translate-x-1/2 rounded-lg border border-st-error bg-surface px-3 py-2">
-          <p className="text-[11px] leading-snug text-st-error">{importError}</p>
+          <p className="text-small leading-snug text-st-error">{importError}</p>
           <button
             onClick={() => setImportError(null)}
-            className="mt-1 text-[11px] text-fg-muted underline-offset-2 hover:underline"
+            className="mt-1 text-small text-fg-muted underline-offset-2 hover:underline"
           >
             Fechar
           </button>

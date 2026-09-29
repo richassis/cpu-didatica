@@ -60,7 +60,7 @@ export default function MemoryTable({
         <div
           className={`flex shrink-0 items-center ${gap} border-b border-line ${
             compact ? "px-3" : "px-4"
-          } py-1 font-mono text-[10px] text-fg-faint`}
+          } py-1 font-mono text-caption text-fg-faint`}
         >
           <span aria-hidden className="w-2.5 shrink-0" />
           <span className={`${addrW} shrink-0`}>{headers.addr}</span>
@@ -83,18 +83,18 @@ export default function MemoryTable({
             }
           >
             <span
-              className={`shrink-0 font-mono text-[10px] leading-none ${
+              className={`shrink-0 font-mono text-caption leading-none ${
                 isCurrent ? "text-fg" : "text-transparent"
               }`}
               aria-hidden
             >
               ▶
             </span>
-            <span className={`num ${addrW} shrink-0 font-mono text-[11px] text-fg-faint`}>
+            <span className={`num ${addrW} shrink-0 font-mono text-small text-fg-faint`}>
               {fmtAddr(addr)}
             </span>
             <span
-              className={`num flex-1 text-right font-mono text-[12px] ${
+              className={`num flex-1 text-right font-mono text-ui ${
                 isCurrent ? "text-fg" : "text-fg-muted"
               }`}
             >
@@ -102,7 +102,7 @@ export default function MemoryTable({
             </span>
             {decode && (
               <span
-                className={`${decodeW} shrink-0 text-right font-mono text-[11px] ${
+                className={`${decodeW} shrink-0 text-right font-mono text-small ${
                   isCurrent ? "text-fg" : "text-fg-faint"
                 }`}
               >

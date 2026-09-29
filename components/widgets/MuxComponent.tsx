@@ -43,7 +43,7 @@ export default function MuxComponent({ component, zoom }: Props) {
       zoom={zoom}
       silhouette="custom"
       actions={
-        <span className="shrink-0 font-mono text-[10px] leading-none text-fg-faint">
+        <span className="shrink-0 font-mono text-cv-xs leading-none text-fg-faint">
           s={clampedSel}
         </span>
       }

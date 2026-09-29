@@ -101,7 +101,7 @@ export default function BitFields({
           return (
             <div key={`${field.hi}-${field.lo}`} className="flex flex-col items-stretch" style={{ flexGrow: width, flexBasis: 0, minWidth: width * 18 }}>
               <div
-                className="mb-0.5 truncate text-center font-mono text-[10px]"
+                className="mb-0.5 truncate text-center font-mono text-caption"
                 style={{ color }}
                 title={field.meaning ? `${field.label}: ${field.meaning}` : field.label}
               >
@@ -116,14 +116,14 @@ export default function BitFields({
                   const value = word === undefined ? null : (word >>> bit) & 1;
                   return (
                     <div key={bit} className="flex flex-1 flex-col items-center py-1">
-                      <span className="font-mono text-[12px] leading-none text-fg">{value === null ? "·" : value}</span>
-                      <span className="mt-1 font-mono text-[8px] leading-none text-fg-faint">{bit}</span>
+                      <span className="font-mono text-ui leading-none text-fg">{value === null ? "·" : value}</span>
+                      <span className="mt-1 font-mono text-micro leading-none text-fg-faint">{bit}</span>
                     </div>
                   );
                 })}
               </div>
               {field.meaning && (
-                <div className="mt-0.5 truncate text-center text-[9px] text-fg-faint" title={field.meaning}>
+                <div className="mt-0.5 truncate text-center text-micro text-fg-faint" title={field.meaning}>
                   {field.meaning}
                 </div>
               )}

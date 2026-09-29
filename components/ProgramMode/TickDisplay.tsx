@@ -99,7 +99,7 @@ export default function TickDisplay() {
       </div>
       <div className="flex flex-col items-start leading-none">
         <span className="t-section leading-none">{halted ? "halted" : "tick"}</span>
-        <span className="num mt-1 font-mono text-[10px] text-fg-faint">de {totalTicks}</span>
+        <span className="num mt-1 font-mono text-caption text-fg-faint">de {totalTicks}</span>
       </div>
 
       {/*

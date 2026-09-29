@@ -27,8 +27,8 @@ function ShapeSample({
         {children}
       </div>
       <div className="min-w-0">
-        <div className="truncate text-[11px] text-fg-muted">{label}</div>
-        {note && <div className="truncate text-[10px] text-fg-faint">{note}</div>}
+        <div className="truncate text-small text-fg-muted">{label}</div>
+        {note && <div className="truncate text-caption text-fg-faint">{note}</div>}
       </div>
     </div>
   );
@@ -42,8 +42,8 @@ function StateSample({ color, label, note }: { color: string; label: string; not
         style={{ borderColor: color, background: `color-mix(in srgb, ${color} 25%, transparent)` }}
       />
       <div className="min-w-0">
-        <div className="truncate text-[11px] text-fg-muted">{label}</div>
-        <div className="truncate text-[10px] text-fg-faint">{note}</div>
+        <div className="truncate text-small text-fg-muted">{label}</div>
+        <div className="truncate text-caption text-fg-faint">{note}</div>
       </div>
     </div>
   );
@@ -123,7 +123,7 @@ export default function Legend() {
 
               <div className="mt-4 border-t border-line pt-3">
                 <div className="t-section mb-1.5">Entalhe de clock ▷</div>
-                <p className="text-[10px] leading-snug text-fg-faint">
+                <p className="text-caption leading-snug text-fg-faint">
                   Componentes com o entalhe são sequenciais — travam no clock.
                   Os que não têm são combinacionais.
                 </p>
@@ -131,7 +131,7 @@ export default function Legend() {
             </div>
           </div>
 
-      <p className="mt-3 border-t border-line pt-3 text-[10px] leading-snug text-fg-faint">
+      <p className="mt-3 border-t border-line pt-3 text-caption leading-snug text-fg-faint">
         As duas colunas são independentes. A forma nunca muda durante a execução, e
         a cor nunca diz qual componente você está olhando.
       </p>

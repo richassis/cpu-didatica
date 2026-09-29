@@ -26,7 +26,7 @@ export default function MemoryPanel() {
     <aside className="flex h-full w-full min-w-0 flex-col overflow-hidden border-r border-line bg-surface">
       <button
         onClick={close}
-        className="flex shrink-0 items-center gap-1 border-b border-line px-3 py-1.5 text-left text-[11px] text-fg-muted transition-colors hover:bg-raised hover:text-fg"
+        className="flex shrink-0 items-center gap-1 border-b border-line px-3 py-1.5 text-left text-small text-fg-muted transition-colors hover:bg-raised hover:text-fg"
       >
         <ChevronLeft size={13} strokeWidth={1.5} className="shrink-0" />
         Voltar ao código

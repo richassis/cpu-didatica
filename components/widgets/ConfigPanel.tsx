@@ -94,7 +94,7 @@ function ToggleField({
     <div className="flex items-center justify-between rounded-lg border border-line px-3 py-2">
       <div className="flex flex-col">
         <span className="text-xs text-fg">{title}</span>
-        <span className="text-[11px] text-fg-faint">{hint}</span>
+        <span className="text-cv-sm text-fg-faint">{hint}</span>
       </div>
       <label className="relative inline-flex cursor-pointer items-center">
         <input

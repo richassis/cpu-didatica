@@ -5,6 +5,7 @@ import {
   ANIMATION_MIN_MS,
   ANIMATION_MAX_MS,
   type NumericBase,
+  type TextSize,
 } from "@/lib/displayStore";
 
 /** Button labels — "decSigned" is a valid NumericBase but not a word anyone should read. */
@@ -25,6 +26,13 @@ const BASE_LABELS: Record<NumericBase, string> = {
  * setting a student is most likely to want mid-run — was unreachable during a
  * simulation. Both surfaces now mount this.
  */
+/** The button's own "A" is drawn at the size it selects (relative to the base). */
+const TEXT_SIZES: Array<{ id: TextSize; label: string; sample: string }> = [
+  { id: "normal", label: "Texto normal", sample: "0.8125rem" },
+  { id: "large", label: "Texto grande", sample: "1rem" },
+  { id: "xlarge", label: "Texto muito grande", sample: "1.25rem" },
+];
+
 const SLIDER_STEPS = 100;
 const SPEED_RATIO = Math.log(ANIMATION_MAX_MS / ANIMATION_MIN_MS);
 
@@ -47,6 +55,8 @@ export default function SimulationSettings() {
   const setShowCpuSignalWires = useDisplayStore((s) => s.setShowCpuSignalWires);
   const showDataSignalWires = useDisplayStore((s) => s.showDataSignalWires);
   const setShowDataSignalWires = useDisplayStore((s) => s.setShowDataSignalWires);
+  const textSize = useDisplayStore((s) => s.textSize);
+  const setTextSize = useDisplayStore((s) => s.setTextSize);
   const animationDurationMs = useDisplayStore((s) => s.animationDurationMs);
   const setAnimationDurationMs = useDisplayStore((s) => s.setAnimationDurationMs);
 
@@ -67,6 +77,26 @@ export default function SimulationSettings() {
             }`}
           >
             {BASE_LABELS[b]}
+          </button>
+        ))}
+      </div>
+
+      <Section title="Texto" />
+      <div className="mb-1 flex items-center gap-1">
+        {TEXT_SIZES.map(({ id, label, sample }) => (
+          <button
+            key={id}
+            onClick={() => setTextSize(id)}
+            aria-pressed={textSize === id}
+            title={label}
+            className={`flex-1 rounded-lg border px-2 py-1 transition-colors ${
+              textSize === id
+                ? "border-st-active text-st-active"
+                : "border-line text-fg-muted hover:border-line-strong hover:text-fg"
+            }`}
+            style={{ fontSize: sample }}
+          >
+            A
           </button>
         ))}
       </div>
@@ -111,7 +141,7 @@ export default function SimulationSettings() {
               "linear-gradient(var(--border), var(--border)) center/100% 2px no-repeat",
           }}
         />
-        <div className="flex items-center justify-between font-mono text-[10px] text-fg-faint">
+        <div className="flex items-center justify-between font-mono text-caption text-fg-faint">
           <span>Baixa</span>
           <span>Alta</span>
         </div>

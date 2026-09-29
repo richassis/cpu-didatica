@@ -5,7 +5,7 @@ import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayMaskStore } from "@/lib/displayMaskStore";
 import { useExecutionStore } from "@/lib/executionStore";
 import { usePlaybackStore, BOOST_RATE } from "@/lib/playbackStore";
-import { useDisplayStore, formatPortValue, isInstantSpeed, animationSpeedPxPerMs } from "@/lib/displayStore";
+import { useDisplayStore, formatPortValue, isInstantSpeed, animationSpeedPxPerMs, TEXT_SIZE_SCALE } from "@/lib/displayStore";
 import { buildSchedule, wireProgress } from "@/lib/animationSchedule";
 import { findInstructionRegisterIds, isUnsignedPort } from "@/lib/portKinds";
 import { useWireCreationStore } from "@/lib/wireCreationStore";
@@ -116,6 +116,8 @@ export default function EnhancedBusOverlay({
   const showCpuSignalWires = useDisplayStore((s) => s.showCpuSignalWires);
   const showDataSignalWires = useDisplayStore((s) => s.showDataSignalWires);
   const showWireDots = useDisplayStore((s) => s.showWireDots);
+  // The canvas follows the text size at 40% of the rate (`--fs-cv` in globals.css).
+  const textScale = 1 + (TEXT_SIZE_SCALE[useDisplayStore((s) => s.textSize)] - 1) * 0.4;
   const animationEnabled = useDisplayStore((s) => s.animationEnabled);
   const animateCpuSignals = useDisplayStore((s) => s.animateCpuSignals);
   const animateDataSignals = useDisplayStore((s) => s.animateDataSignals);
@@ -1199,15 +1201,17 @@ export default function EnhancedBusOverlay({
         // stroke out behind the glyphs. It used to be a bordered badge floating
         // 20px above the line, which scattered saturated chips across the canvas
         // and left the reader to work out which wire each one belonged to.
-        const width = marker.value.length * 6.7 + 8;
+        // 14px mono is about 8.4px a glyph; the label follows the text size.
+        const width = marker.value.length * 8.4 * textScale + 10;
+        const height = 20 * textScale;
 
         return (
           <g key={`value-${marker.id}`} transform={`translate(${marker.point.x}, ${marker.point.y})`}>
             <rect
               x={-width / 2}
-              y={-7}
+              y={-height / 2}
               width={width}
-              height={14}
+              height={height}
               style={{ fill: "var(--canvas)" }}
             />
             <text
@@ -1215,7 +1219,7 @@ export default function EnhancedBusOverlay({
               dominantBaseline="central"
               className="font-mono num"
               style={{
-                fontSize: "11px",
+                fontSize: "calc(0.875rem * var(--fs-cv) / var(--fs))",
                 fill: marker.isResting ? "var(--text-muted)" : marker.color,
               }}
             >

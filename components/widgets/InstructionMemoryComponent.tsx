@@ -81,7 +81,7 @@ export default function InstructionMemoryComponent({ component, zoom }: Props) {
         compactValue
         actions={
           <>
-            <span className="num shrink-0 font-mono text-[10px] text-fg-muted">
+            <span className="num shrink-0 font-mono text-cv-xs text-fg-muted">
               {fmtAddr(currentAddr, addrBits)}
             </span>
             <button
@@ -122,18 +122,18 @@ export default function InstructionMemoryComponent({ component, zoom }: Props) {
                 }
               >
                 <span
-                  className={`shrink-0 font-mono text-[9px] leading-none ${
+                  className={`shrink-0 font-mono text-cv-xs leading-none ${
                     isCurrent ? "text-fg" : "text-transparent"
                   }`}
                 >
                   ▶
                 </span>
-                <span className="num shrink-0 font-mono text-[11px] text-fg-faint">
+                <span className="num shrink-0 font-mono text-cv-sm text-fg-faint">
                   {fmtAddr(a, addrBits)}
                 </span>
                 <span
                   className={`num flex-1 text-right font-mono ${
-                    isCurrent ? "text-[12.5px] text-fg" : "text-[11px] text-fg-muted"
+                    isCurrent ? "text-cv-md text-fg" : "text-cv-sm text-fg-muted"
                   }`}
                 >
                   {formatPortValue(imem?.peek(a) ?? 0, base, bitWidth, true)}

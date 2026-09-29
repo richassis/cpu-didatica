@@ -14,11 +14,12 @@ import useSimulationShortcuts from "@/lib/useSimulationShortcuts";
 /** Share of the screen the code region takes before a program is running. */
 const WIDTH_BEFORE_RUN = "60%";
 /** Share once the timeline is active — the datapath is the point now. */
-const WIDTH_DURING_RUN = "26%";
+const WIDTH_DURING_RUN = "max(26%, 28rem)";
 
 /** Width of a panel collapsed to its rail, and of the Montagem panel expanded. */
 const RAIL_W = 36;
-const MONTAGEM_W = 220;
+/** In rem, so the Ling. Máquina panel grows with the text size. */
+const MONTAGEM_W_REM = 13.5;
 
 /**
  * ProgramModeLayout — Full-screen layout for Program Mode.
@@ -112,9 +113,9 @@ export default function ProgramModeLayout() {
   const codeRegionWidth = memoryOpen
     ? `${manualWidth ?? MEMORY_PANEL_W}px`
     : asmCollapsed
-      ? `${RAIL_W + (mountCollapsed ? RAIL_W : MONTAGEM_W)}px`
+      ? `calc(${RAIL_W}px + ${mountCollapsed ? `${RAIL_W}px` : `${MONTAGEM_W_REM}rem`})`
       : mountCollapsed
-        ? `calc(${baseWidth} - ${MONTAGEM_W - RAIL_W}px)`
+        ? `calc(${baseWidth} - ${MONTAGEM_W_REM}rem + ${RAIL_W}px)`
         : baseWidth;
 
   return (

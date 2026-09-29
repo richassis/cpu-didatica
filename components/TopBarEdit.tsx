@@ -73,7 +73,7 @@ export default function TopBarEdit() {
         </button>
 
         <ThemeToggle />
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-st-warn px-2.5 py-1 text-[11px] text-st-warn">
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-st-warn px-2.5 py-1 text-small text-st-warn">
           <Pencil size={12} strokeWidth={1.5} />
           Edit mode
         </span>
@@ -81,10 +81,10 @@ export default function TopBarEdit() {
 
       {saveError && (
         <div className="absolute right-4 top-full z-50 mt-2 w-[340px] rounded-lg border border-st-error bg-surface px-3 py-2">
-          <p className="text-[11px] leading-snug text-st-error">{saveError}</p>
+          <p className="text-small leading-snug text-st-error">{saveError}</p>
           <button
             onClick={() => setSaveError(null)}
-            className="mt-1 text-[11px] text-fg-muted underline-offset-2 hover:underline"
+            className="mt-1 text-small text-fg-muted underline-offset-2 hover:underline"
           >
             Fechar
           </button>

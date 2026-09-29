@@ -124,9 +124,9 @@ function HighlightedLine({ line }: { line: string }) {
 // ── Assembly Panel ────────────────────────────────────────────────────────────
 
 // Shared font / spacing constants — must match between textarea and overlay.
-const FONT_CLASS  = "font-mono text-[13px] leading-[1.6]";
+const FONT_CLASS  = "font-mono text-ui leading-[1.6]";
 const PAD_CLASS   = "px-2 pt-1 pb-4";
-const GUTTER_W    = 36; // px
+const GUTTER_W    = "2.75rem";
 
 export default function AssemblyPanel({ onToggleCollapse }: { onToggleCollapse: () => void }) {
   const assemblySource    = useProgramDataStore((s) => s.assemblySource);
@@ -194,7 +194,7 @@ export default function AssemblyPanel({ onToggleCollapse }: { onToggleCollapse: 
         <span className="flex items-center gap-2">
           <h2 className="t-panel text-fg">Ling. Montagem</h2>
           {isLocked && (
-            <span className="rounded-md border border-st-warn px-1.5 py-0.5 font-mono text-[10px] text-st-warn">
+            <span className="rounded-md border border-st-warn px-1.5 py-0.5 font-mono text-caption text-st-warn">
               travado
             </span>
           )}
@@ -212,7 +212,7 @@ export default function AssemblyPanel({ onToggleCollapse }: { onToggleCollapse: 
               if (e.target.value !== "__custom") handlePresetChange(e.target.value);
             }}
             disabled={isLocked}
-            className="h-9 flex-1 cursor-pointer rounded-lg border border-line bg-sunken px-2 font-mono text-[11px] text-fg focus:border-line-strong focus:outline-none disabled:cursor-not-allowed disabled:opacity-40"
+            className="h-9 flex-1 cursor-pointer rounded-lg border border-line bg-sunken px-2 font-mono text-small text-fg focus:border-line-strong focus:outline-none disabled:cursor-not-allowed disabled:opacity-40"
           >
             {!activePreset && (
               <option value="__custom" disabled>Personalizado</option>
@@ -231,7 +231,7 @@ export default function AssemblyPanel({ onToggleCollapse }: { onToggleCollapse: 
         <div
           ref={gutterRef}
           className={`shrink-0 select-none overflow-hidden border-r border-line text-right ${FONT_CLASS}`}
-          style={{ width: GUTTER_W, paddingTop: "4px", paddingBottom: "16px", paddingRight: 6 }}
+          style={{ width: GUTTER_W, paddingTop: "4px", paddingBottom: "16px", paddingRight: "0.5rem" }}
           aria-hidden
         >
           {Array.from({ length: lineCount }, (_, i) => (
@@ -300,23 +300,23 @@ export default function AssemblyPanel({ onToggleCollapse }: { onToggleCollapse: 
         <div className="shrink-0 space-y-1.5 border-t border-line px-3 py-2">
           {assemblyErrors.length > 0 && (
             <div className="space-y-0.5 rounded-lg border border-st-error px-2 py-1.5">
-              <p className="font-mono text-[11px] text-st-error">
+              <p className="font-mono text-small text-st-error">
                 Erros de montagem ({assemblyErrors.length})
               </p>
               {assemblyErrors.map((err, i) => (
-                <div key={i} className="font-mono text-[11px] text-fg-muted">
+                <div key={i} className="font-mono text-small text-fg-muted">
                   <span className="text-st-error">L{err.line}:</span> {err.message}
                 </div>
               ))}
             </div>
           )}
           {isLoaded && assemblyErrors.length === 0 && (
-            <div className="rounded-lg border border-st-active px-2 py-1 font-mono text-[11px] text-st-active">
+            <div className="rounded-lg border border-st-active px-2 py-1 font-mono text-small text-st-active">
               {totalTicks} ticks capturados
             </div>
           )}
           {!assemblySource.trim() && (
-            <div className="rounded-lg border border-st-warn px-2 py-1 font-mono text-[11px] text-st-warn">
+            <div className="rounded-lg border border-st-warn px-2 py-1 font-mono text-small text-st-warn">
               Código vazio — nada a montar
             </div>
           )}

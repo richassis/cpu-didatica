@@ -113,7 +113,7 @@ export default function HelpDialog({ onClose }: { onClose: () => void }) {
                 tabIndex={tab === t.id ? 0 : -1}
                 onClick={() => setTab(t.id)}
                 onKeyDown={(e) => onTabKeyDown(e, i)}
-                className={`-mb-px whitespace-nowrap border-b-2 px-3 pb-2.5 pt-1 text-[13px] transition-colors ${
+                className={`-mb-px whitespace-nowrap border-b-2 px-3 pb-2.5 pt-1 text-ui transition-colors ${
                   tab === t.id
                     ? "border-st-active text-fg"
                     : "border-transparent text-fg-muted hover:text-fg"
@@ -145,7 +145,7 @@ export default function HelpDialog({ onClose }: { onClose: () => void }) {
           {tab === "credits" && <CreditsTab />}
         </div>
 
-        <div className="shrink-0 border-t border-line px-5 py-2 text-center font-mono text-[10px] text-fg-faint">
+        <div className="shrink-0 border-t border-line px-5 py-2 text-center font-mono text-caption text-fg-faint">
           {CREDITS.project} · FURG · C3 · {CREDITS.year}
         </div>
       </div>
