@@ -120,7 +120,7 @@ export default function IsaTab() {
         <h3 className="t-node mb-1 text-fg">Codificador</h3>
         <p className="mb-3 text-[12px] leading-relaxed text-fg-muted">
           Digite uma instrução (<span className="font-mono">LDAI R0, -3</span>) ou uma palavra de
-          máquina em hexadecimal (<span className="font-mono">0x2123</span>) ou binário, e veja os bits
+          máquina em hexadecimal (<span className="font-mono">0x2143</span>) ou binário, e veja os bits
           divididos em campos.
         </p>
 

@@ -64,10 +64,8 @@ export default function DatapathTab() {
         <div className="grid gap-2 sm:grid-cols-2">
           {COMPONENT_HELP.map((c) => (
             <div key={c.name} className="rounded-lg border border-line px-3 py-2">
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="t-node text-fg">{c.name}</span>
-                <span className="truncate text-right font-mono text-[10px] text-fg-faint">{c.spec}</span>
-              </div>
+              <div className="t-node text-fg">{c.name}</div>
+              <div className="font-mono text-[10px] leading-snug text-fg-faint">{c.spec}</div>
               <p className="mt-1 text-[11px] leading-snug text-fg-muted">{c.role}</p>
             </div>
           ))}
@@ -256,7 +254,7 @@ function Schematic() {
         <Box x={480} y={192} w={40} h={26} label="B" />
         <Box x={560} y={152} w={70} h={62} label="ULA" sub="Z C N" />
         <Box x={654} y={168} w={50} h={30} label="R" />
-        <Wire points={[[464, 90], [464, 116], [385, 116], [385, 140]]} />
+        <Wire points={[[464, 64], [464, 116], [385, 116], [385, 140]]} />
         <Wire points={[[440, 161], [480, 161]]} />
         <Wire points={[[440, 205], [480, 205]]} />
         <Wire points={[[520, 161], [560, 170]]} />
@@ -272,11 +270,12 @@ function Schematic() {
         <Wire points={[[278, 292], [330, 292]]} />
         <Wire points={[[330, 302], [137, 302], [137, 228]]} />
         <Wire points={[[164, 212], [218, 196]]} />
-        <Wire points={[[500, 218], [500, 292], [440, 292]]} />
+        <Wire points={[[248, 256], [248, 276]]} />
 
         {/* Control unit */}
         <Box x={10} y={322} w={694} h={16} label="UC — máquina de estados que emite os sinais de controle para todos os blocos" dashed />
 
+        <text x={248} y={250} textAnchor="middle" fontSize={8.5} fill="var(--text-faint)" className="font-mono">operando M do IR</text>
         <text x={232} y={154} textAnchor="middle" fontSize={8.5} fill="var(--text-faint)" className="font-mono">imediato · memória · ULA</text>
       </svg>
     </div>

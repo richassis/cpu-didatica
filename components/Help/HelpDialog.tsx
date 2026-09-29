@@ -99,7 +99,7 @@ export default function HelpDialog({ onClose }: { onClose: () => void }) {
         className="relative z-10 flex h-[min(88vh,820px)] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-line bg-surface"
       >
         <div className="flex shrink-0 items-center justify-between border-b border-line px-5 pt-3">
-          <div role="tablist" aria-label="Seções da ajuda" className="flex gap-1 overflow-x-auto">
+          <div role="tablist" aria-label="Seções da ajuda" className="flex flex-wrap gap-1">
             {TABS.map((t, i) => (
               <button
                 key={t.id}
