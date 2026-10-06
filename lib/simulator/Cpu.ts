@@ -116,7 +116,7 @@ export const DEFAULT_CONTROL_SIGNALS: Readonly<ControlSignals> = {
  * │ State        │wrReg│muxAR│muxDR│wrPC │muxPC│rdMem│wrMem│muxAMem│wrIR │opULA│
  * ├──────────────┼─────┼─────┼─────┼─────┼─────┼─────┼─────┼───────┼─────┼─────┤
  * │ RESET        │  0  │  1  │  2  │  0  │  1  │  0  │  0  │   1   │  0  │ ADD │
- * │ FETCH        │  -  │  1  │  2  │  1  │  1  │  1  │  0  │   -   │  1  │  -  │
+ * │ FETCH        │  0  │  1  │  2  │  1  │  1  │  0  │  0  │   -   │  1  │  0  │
  * │ DECODE       │  -  │  -  │  -  │  0  │  -  │  -  │  -  │   -   │  0  │  -  │
  * │ READMEM      │  -  │  0  │  1  │  -  │  -  │  1  │  -  │   0   │  -  │  -  │
  * │ WRITEREG1    │  1  │  -  │  -  │  -  │  -  │  0  │  -  │   -   │  -  │  -  │
@@ -125,7 +125,7 @@ export const DEFAULT_CONTROL_SIGNALS: Readonly<ControlSignals> = {
  * │ WRITEMEM     │  -  │  -  │  -  │  -  │  -  │  -  │  1  │   -   │  -  │  -  │
  * │ READREG2     │  -  │  -  │  -  │  -  │  -  │  -  │  -  │   -   │  -  │  -  │
  * │ EXECUTE      │  -  │  -  │  -  │  -  │  -  │  -  │  -  │   -   │  -  │ dyn │
- * │ WRITEREG3    │  1  │  -  │  -  │  -  │  -  │  -  │  -  │   -   │  -  │ ADD │
+ * │ WRITEREG3    │  1  │  -  │  -  │  -  │  -  │  -  │  -  │   -   │  -  │  0  │
  * │ WRITEPC      │  -  │  -  │  -  │cond │cond │  -  │  -  │   -   │  -  │  -  │
  * └──────────────┴─────┴─────┴─────┴─────┴─────┴─────┴─────┴───────┴─────┴─────┘
  * Legend: - = not set (defaults to 0), dyn = dynamic (opcode-dependent), 
@@ -153,6 +153,7 @@ export const STATE_CONTROL_SIGNALS: Readonly<Partial<Record<CpuState, ControlSig
     muxDReg: 2,   // Select data for register
     rdMem: 0,     // Data memory read disabled during FETCH (InstructionMemory is always-on)
     wrReg: 0,
+    opULA: UlaOperation.ADD, // ULA back to its idle operation
   },
 
   // DECODE state - instruction latched, PC incremented
@@ -206,7 +207,7 @@ export const STATE_CONTROL_SIGNALS: Readonly<Partial<Record<CpuState, ControlSig
   // WRITEREG3 state - write ULA result to destination register
   [CpuState.WRITEREG3]: {
     wrReg: 1,
-    // opULA: UlaOperation.ADD, // default to ADD for non-ULA ops
+    opULA: UlaOperation.ADD, // result already latched in R; ULA back to its idle operation
   },
 
   // WRITEPC state - update PC for jumps
@@ -214,6 +215,20 @@ export const STATE_CONTROL_SIGNALS: Readonly<Partial<Record<CpuState, ControlSig
   [CpuState.WRITEPC]: {
     // Signals set conditionally in emitSignals
   },
+};
+
+/**
+ * Signals a state writes only to put a line back at rest ("limpeza") — not
+ * what the state is for. They still get written every time, but when the line
+ * was already at that value nothing actually happened on it, so the control
+ * unit doesn't light its dot (see `getDrivenControlSignalPorts`). Every other
+ * signal a state writes lights whether or not its value changed.
+ */
+export const STATE_CLEANUP_SIGNALS: Readonly<Partial<Record<CpuState, (keyof ControlSignals)[]>>> = {
+  [CpuState.FETCH]:     ["wrReg", "muxAReg", "muxDReg", "rdMem", "wrMem", "opULA"],
+  [CpuState.DECODE]:    ["wrPC", "wrIR"],
+  [CpuState.WRITEREG1]: ["rdMem"],
+  [CpuState.WRITEREG3]: ["opULA"],
 };
 
 /**
@@ -239,6 +254,9 @@ export interface CpuInternalStateSnapshot {
   latchedFlagZero: boolean;
   latchedFlagCarry: boolean;
   latchedFlagNegative: boolean;
+  latchedFlagOverflow: boolean;
+  /** Control output port names the executed state wrote (see `getDrivenControlSignalPorts`). */
+  drivenSignals: string[];
 }
 
 
@@ -256,6 +274,7 @@ export interface CpuInternalStateSnapshot {
  * - in_flagZero (1-bit): Zero flag from ULA
  * - in_flagCarry (1-bit): Carry flag from ULA
  * - in_flagNegative (1-bit): Negative flag from ULA
+ * - in_flagOverflow (1-bit): Overflow flag from ULA (signed overflow)
  * - in_flagZeroGpr (1-bit, hidden): Zero flag from the GPR's write-data bus
  *   (LDA/LDAI loading a zero value)
  * - in_flagNegativeGpr (1-bit, hidden): Negative flag from the GPR's
@@ -287,6 +306,9 @@ export class CPU implements Clockable, Connectable {
 
   // Control output port names that changed in the most recent tick.
   private _changedControlSignalPorts: Set<string> = new Set();
+
+  // Control output port names the executed state wrote, changed or not.
+  private _drivenControlSignalPorts: Set<string> = new Set();
   
   // Track the state that was just executed (whose signals are currently active)
   private _previousState: CpuState = CpuState.RESET;
@@ -295,6 +317,7 @@ export class CPU implements Clockable, Connectable {
   private _latchedFlagZero: boolean = false;
   private _latchedFlagCarry: boolean = false;
   private _latchedFlagNegative: boolean = false;
+  private _latchedFlagOverflow: boolean = false;
 
   // Testing mode: force a specific opcode
   private _testingModeOpcode: Opcode | null = null;
@@ -305,6 +328,7 @@ export class CPU implements Clockable, Connectable {
   readonly in_flagZero: InputPort<number>;
   readonly in_flagCarry: InputPort<number>;
   readonly in_flagNegative: InputPort<number>;
+  readonly in_flagOverflow: InputPort<number>;
   readonly in_flagZeroGpr: InputPort<number>;
   readonly in_flagNegativeGpr: InputPort<number>;
 
@@ -331,6 +355,7 @@ export class CPU implements Clockable, Connectable {
     this.in_flagZero = new InputPort<number>("in_flagZero", "number", 1, 0);
     this.in_flagCarry = new InputPort<number>("in_flagCarry", "number", 1, 0);
     this.in_flagNegative = new InputPort<number>("in_flagNegative", "number", 1, 0);
+    this.in_flagOverflow = new InputPort<number>("in_flagOverflow", "number", 1, 0);
     this.in_flagZeroGpr = new InputPort<number>("in_flagZeroGpr", "number", 1, 0);
     this.in_flagNegativeGpr = new InputPort<number>("in_flagNegativeGpr", "number", 1, 0);
 
@@ -440,6 +465,7 @@ export class CPU implements Clockable, Connectable {
       in_flagZero: this.in_flagZero,
       in_flagCarry: this.in_flagCarry,
       in_flagNegative: this.in_flagNegative,
+      in_flagOverflow: this.in_flagOverflow,
       in_flagZeroGpr: this.in_flagZeroGpr,
       in_flagNegativeGpr: this.in_flagNegativeGpr,
       out_muxPC: this.out_muxPC,
@@ -501,12 +527,26 @@ export class CPU implements Clockable, Connectable {
     return this._latchedFlagNegative;
   }
 
+  get latchedFlagOverflow(): boolean {
+    return this._latchedFlagOverflow;
+  }
+
   /**
    * Returns CPU control output port names that changed on the latest tick.
    * Example values: "out_wrIR", "out_rdMem".
    */
   getChangedControlSignalPorts(): string[] {
     return Array.from(this._changedControlSignalPorts);
+  }
+
+  /**
+   * Returns CPU control output port names the executed state wrote, whether
+   * or not the value changed — a signal the state drives to 0 is still one it
+   * drives — except cleanup writes that left the line as it was (see
+   * `STATE_CLEANUP_SIGNALS`). This is what the control unit's signal dots show.
+   */
+  getDrivenControlSignalPorts(): string[] {
+    return Array.from(this._drivenControlSignalPorts);
   }
 
   /** Pause or resume the CPU without affecting halted state. */
@@ -559,6 +599,8 @@ export class CPU implements Clockable, Connectable {
     this.resetLatchedFlags();
     // Apply RESET state control signals immediately
     this.emitSignals(CpuState.RESET, Opcode.HLT, true);
+    // RESET only restores defaults — no state has driven anything yet.
+    this._drivenControlSignalPorts.clear();
     this.out_state.set(CpuState.RESET);
     this.out_halted.set(false);
     // After reset, the next state should be FETCH
@@ -580,6 +622,8 @@ export class CPU implements Clockable, Connectable {
     this._latchedFlagZero = snapshot.latchedFlagZero ?? false;
     this._latchedFlagCarry = snapshot.latchedFlagCarry ?? false;
     this._latchedFlagNegative = snapshot.latchedFlagNegative ?? false;
+    this._latchedFlagOverflow = snapshot.latchedFlagOverflow ?? false;
+    this._drivenControlSignalPorts = new Set(snapshot.drivenSignals ?? []);
   }
 
   /**
@@ -606,6 +650,7 @@ export class CPU implements Clockable, Connectable {
     force_update: boolean = false
   ): void {
     const prevValue = port.value;
+    this._drivenControlSignalPorts.add(port.name);
     if (prevValue !== value) {
       this._changedControlSignalPorts.add(port.name);
     }
@@ -644,10 +689,19 @@ export class CPU implements Clockable, Connectable {
     const isReadReg =
       this._previousState === CpuState.READREG1 ||
       this._previousState === CpuState.READREG2;
+    // A register fed by the ULA result (R) only latches on EXECUTE, so it keeps
+    // the result after opULA drops back to ADD in WRITEREG3/FETCH.
+    const isExecute = this._previousState === CpuState.EXECUTE;
+    const ulaResults = this.ulaResultPorts();
     for (const entry of this._registeredComponents.values()) {
+      const gated = entry.component as unknown as {
+        setWriteActive?: (a: boolean) => void;
+        in_data?: InputPort<number>;
+      };
       if (entry.type === "PipelineRegister") {
-        (entry.component as unknown as { setWriteActive?: (a: boolean) => void })
-          .setWriteActive?.(isReadReg);
+        gated.setWriteActive?.(isReadReg);
+      } else if (entry.type === "Register" && gated.in_data?.source && ulaResults.has(gated.in_data.source)) {
+        gated.setWriteActive?.(isExecute);
       }
     }
 
@@ -809,6 +863,7 @@ export class CPU implements Clockable, Connectable {
   private doReset(): void {
     // Emit RESET state signals (clears all signals)
     this.emitSignals(CpuState.RESET, this.getActiveOpcode(), true);
+    this._drivenControlSignalPorts.clear();
     // Track that we executed RESET
     this._previousState = CpuState.RESET;
     // Transition to FETCH on next tick
@@ -879,6 +934,8 @@ export class CPU implements Clockable, Connectable {
 
   /** HALT state - CPU remains halted until reset. */
   private doHalt(): void {
+    this._changedControlSignalPorts.clear();
+    this._drivenControlSignalPorts.clear();
     this._previousState = CpuState.HALT;
     this._halted = true;
     this._state = CpuState.HALT;
@@ -896,6 +953,7 @@ export class CPU implements Clockable, Connectable {
   private emitSignals(state: CpuState, opcode: Opcode, force_write: boolean = false): void {
     // Recomputed once per CPU tick/state emission.
     this._changedControlSignalPorts.clear();
+    this._drivenControlSignalPorts.clear();
 
     // Get base configuration for this state
     const config = STATE_CONTROL_SIGNALS[state];
@@ -964,9 +1022,28 @@ export class CPU implements Clockable, Connectable {
         }
         break;
     }
+
+    // A cleanup write that found the line already at rest didn't do anything.
+    for (const name of STATE_CLEANUP_SIGNALS[state] ?? []) {
+      const portName = `out_${name}`;
+      if (!this._changedControlSignalPorts.has(portName)) {
+        this._drivenControlSignalPorts.delete(portName);
+      }
+    }
   }
 
   // ── Helpers ──────────────────────────────────────────────────
+
+  /** The result output port of every registered ULA. */
+  private ulaResultPorts(): Set<OutputPort<number>> {
+    const ports = new Set<OutputPort<number>>();
+    for (const entry of this._registeredComponents.values()) {
+      if (entry.type !== "UlaComponent") continue;
+      const result = (entry.component as unknown as { out_result?: OutputPort<number> }).out_result;
+      if (result) ports.add(result);
+    }
+    return ports;
+  }
 
   private opcodeToUlaOp(opcode: Opcode): UlaOperation {
     return OPCODE_TO_ULA_OP[opcode] ?? UlaOperation.ADD;
@@ -976,6 +1053,7 @@ export class CPU implements Clockable, Connectable {
     this._latchedFlagZero = false;
     this._latchedFlagCarry = false;
     this._latchedFlagNegative = false;
+    this._latchedFlagOverflow = false;
   }
 
   /**
@@ -994,11 +1072,12 @@ export class CPU implements Clockable, Connectable {
       this._latchedFlagZero = Boolean(this.in_flagZero.get());
       this._latchedFlagCarry = Boolean(this.in_flagCarry.get());
       this._latchedFlagNegative = Boolean(this.in_flagNegative.get());
+      this._latchedFlagOverflow = Boolean(this.in_flagOverflow.get());
     } else if (
       this._previousState === CpuState.WRITEREG1 ||
       this._previousState === CpuState.WRITEREG2
     ) {
-      // LDA/LDAI don't touch carry — only the ULA can set it.
+      // LDA/LDAI don't touch carry or overflow — only the ULA can set them.
       this._latchedFlagZero = Boolean(this.in_flagZeroGpr.get());
       this._latchedFlagNegative = Boolean(this.in_flagNegativeGpr.get());
     }

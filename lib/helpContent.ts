@@ -51,7 +51,7 @@ export const STATE_HELP: Partial<Record<CpuState, string>> = {
   [CpuState.READREG1]:  "STA: lê o registrador fonte para o A.",
   [CpuState.WRITEMEM]:  "STA: grava o A em DMem[M].",
   [CpuState.READREG2]:  "Instruções da ULA: lê os dois registradores fonte para A e B.",
-  [CpuState.EXECUTE]:   "A ULA calcula A op B e as flags Z, C e N são capturadas.",
+  [CpuState.EXECUTE]:   "A ULA calcula A op B e as flags Z, C, N e V são capturadas.",
   [CpuState.WRITEREG3]: "Grava o resultado da ULA (R) no registrador destino.",
   [CpuState.WRITEPC]:   "Desvios: se a condição vale, carrega o endereço M no PC.",
   [CpuState.HALT]:      "A execução terminou.",
@@ -67,7 +67,7 @@ export const SIGNAL_HELP: Record<string, { does: string; values?: string }> = {
   muxAReg: { does: "Qual campo da instrução endereça a escrita no GPR.", values: "0 = campo do registrador · 1 = campo destino da ULA" },
   muxDReg: { does: "Qual dado é escrito no GPR.", values: "0 = imediato · 1 = memória de dados · 2 = resultado da ULA" },
   wrReg:   { does: "Habilita a escrita no banco de registradores." },
-  opULA:   { does: "Qual operação a ULA realiza.", values: "0 ADD · 1 SUB · 4 AND · 5 OR · 6 NOT" },
+  opULA:   { does: "Qual operação a ULA realiza.", values: "0 ADD · 1 SUB · 4 AND · 6 OR · 7 NOT" },
 };
 
 export interface ComponentHelp {
@@ -80,7 +80,7 @@ export const COMPONENT_HELP: ComponentHelp[] = [
   { name: "IMem", spec: "256 palavras de 16 bits · endereço de 8 bits", role: "Guarda as instruções do programa. É só de leitura durante a execução." },
   { name: "DMem", spec: "256 palavras de 16 bits · endereço de 8 bits", role: "Guarda os dados do programa. Lê com rdMem e escreve com wrMem." },
   { name: "GPR", spec: "8 registradores de 16 bits (R0 a R7) · endereço de 3 bits", role: "Banco de registradores: duas leituras ao mesmo tempo e uma escrita, com wrReg." },
-  { name: "ULA", spec: "entradas e saída de 16 bits · função de 3 bits · flags Z, C, N", role: "Realiza as operações aritméticas e lógicas escolhidas por opULA." },
+  { name: "ULA", spec: "entradas e saída de 16 bits · função de 3 bits · flags Z, C, N, V", role: "Realiza as operações aritméticas e lógicas escolhidas por opULA." },
   { name: "MUX PC", spec: "2 entradas", role: "O PC recebe PC+1 (fluxo normal) ou o endereço de um desvio." },
   { name: "MUX endereço do GPR", spec: "2 entradas", role: "Escolhe qual campo da instrução endereça a escrita no banco de registradores." },
   { name: "MUX dado do GPR", spec: "3 entradas", role: "Escolhe o dado escrito no GPR: imediato, memória de dados ou resultado da ULA." },

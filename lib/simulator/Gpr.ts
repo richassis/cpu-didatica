@@ -197,10 +197,18 @@ export class Gpr implements Clockable, Connectable {
     return (1 << this.bitWidth) - 1;
   }
 
+  /** Whether the last `commit()` wrote a register, whether or not its value changed. */
+  get wroteLastCommit(): boolean {
+    return this._wroteLastCommit;
+  }
+
+  private _wroteLastCommit = false;
+
   /**
    * Sequential phase: apply pending write.
    */
   commit(): void {
+    this._wroteLastCommit = Boolean(this.in_writeEnable.get());
     if (this.in_writeEnable.get()) {
       const addr = this.clampIndex(this.in_writeAddr.get());
       const mask = (1 << this.bitWidth) - 1;

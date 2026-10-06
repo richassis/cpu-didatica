@@ -39,6 +39,8 @@ export class Ula implements Clockable, Connectable {
   readonly out_carry: OutputPort<number>;
   /** Output: negative flag */
   readonly out_negative: OutputPort<number>;
+  /** Output: overflow flag (signed overflow) */
+  readonly out_overflow: OutputPort<number>;
 
   constructor(id: string, name: string, bitWidth = 16) {
     this.id = id;
@@ -70,11 +72,15 @@ export class Ula implements Clockable, Connectable {
     );
     this.out_carry = new OutputPort<number>(
       "carry", "number", 1, 0,
-      "Carry/overflow flag"
+      "Carry flag (unsigned carry-out of the adder)"
     );
     this.out_negative = new OutputPort<number>(
       "negative", "number", 1, 0,
       "Negative flag (MSB set)"
+    );
+    this.out_overflow = new OutputPort<number>(
+      "overflow", "number", 1, 0,
+      "Overflow flag (signed result out of range)"
     );
   }
 
@@ -89,6 +95,7 @@ export class Ula implements Clockable, Connectable {
       zero: this.out_zero,
       carry: this.out_carry,
       negative: this.out_negative,
+      overflow: this.out_overflow,
     };
   }
 
@@ -134,6 +141,10 @@ export class Ula implements Clockable, Connectable {
     return this.out_negative.value !== 0;
   }
 
+  get overflow(): boolean {
+    return this.out_overflow.value !== 0;
+  }
+
   /** Return the result as a zero-padded hex string. */
   resultHex(): string {
     const digits = Math.ceil(this.bitWidth / 4);
@@ -157,7 +168,8 @@ export class Ula implements Clockable, Connectable {
         raw = a + b;
         break;
       case UlaOperation.SUB:
-        raw = a - b;
+        // Two's-complement subtraction, the way the adder does it: A + ~B + 1.
+        raw = a + (~b & this.max) + 1;
         break;
       case UlaOperation.AND:
         raw = a & b;
@@ -173,24 +185,32 @@ export class Ula implements Clockable, Connectable {
         break;
     }
 
-    // Mask to bitWidth and update flags. `raw & this.max` is two's-complement
-    // correct: a negative `raw` (e.g. SUB with a < b) wraps to the right bit
-    // pattern (2 - 5 → 0xFFFD at 16 bits) the same way any other value does.
+    // Mask to bitWidth and update flags. `raw & this.max` wraps the same way
+    // the hardware does (2 - 5 → 0xFFFD at 16 bits).
     const result = this.clamp(raw & this.max);
-    // Carry only applies to arithmetic operations — bitwise ops (AND, OR, NOT) never overflow.
-    // This is unsigned carry-out (ADD) / borrow (SUB), not signed overflow — a
-    // signed-range overflow like 0x7FFF + 1 sets no flag here. There is no
-    // dedicated overflow (V) flag in this ISA; JN/JC read this and `negative`
-    // as-is. Known gap, not fixed as part of adding signed decimal support.
-    const carry = (op === UlaOperation.ADD || op === UlaOperation.SUB) && (raw > this.max || raw < 0) ? 1 : 0;
+    const sign = 1 << (this.bitWidth - 1);
+    const arithmetic = op === UlaOperation.ADD || op === UlaOperation.SUB;
+    // Carry is the adder's unsigned carry-out, for ADD and SUB alike — so on a
+    // SUB it is 1 when there is NO borrow (A >= B). Bitwise ops never carry.
+    const carry = arithmetic && raw > this.max ? 1 : 0;
+    // Overflow: the signed result does not fit. ADD overflows when both operands
+    // share a sign the result lacks; SUB when the operands differ in sign and
+    // the result's sign differs from A's.
+    let overflow = 0;
+    if (op === UlaOperation.ADD) {
+      overflow = (~(a ^ b) & (a ^ result) & sign) !== 0 ? 1 : 0;
+    } else if (op === UlaOperation.SUB) {
+      overflow = ((a ^ b) & (a ^ result) & sign) !== 0 ? 1 : 0;
+    }
     const zero = result === 0 ? 1 : 0;
-    const negative = (result & (1 << (this.bitWidth - 1))) !== 0 ? 1 : 0;
+    const negative = (result & sign) !== 0 ? 1 : 0;
 
     // Update output ports (propagates to connected inputs immediately)
     this.out_result.set(result);
     this.out_carry.set(carry);
     this.out_zero.set(zero);
     this.out_negative.set(negative);
+    this.out_overflow.set(overflow);
 
     return result;
   }
@@ -212,6 +232,7 @@ export class Ula implements Clockable, Connectable {
     this.out_zero.set(0);
     this.out_carry.set(0);
     this.out_negative.set(0);
+    this.out_overflow.set(0);
   }
 
   // ── Clockable callback ───────────────────────────────────────

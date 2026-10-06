@@ -25,6 +25,12 @@ export class Register implements Clockable, Connectable {
    */
   private _writeActive = true;
 
+  /** True once the CPU has taken over `_writeActive` (see `setWriteActive`). */
+  private _gated = false;
+
+  /** See `wroteLastCommit`. */
+  private _wroteLastCommit = false;
+
   // ── Ports ────────────────────────────────────────────────────
 
   /** Input: value to latch into the register. */
@@ -75,7 +81,19 @@ export class Register implements Clockable, Connectable {
   }
 
   setWriteActive(active: boolean): void {
+    this._gated = true;
     this._writeActive = active;
+  }
+
+  /**
+   * Whether the last `commit()` performed a *conditional* write — its
+   * write-enable was asserted, or the CPU opened its write gate — whether or
+   * not the stored value changed. A register that latches unconditionally on
+   * every tick (no write-enable, never gated) always reports false: it is
+   * always "writing", so that says nothing about this tick.
+   */
+  get wroteLastCommit(): boolean {
+    return this._wroteLastCommit;
   }
 
   // ── Connectable interface ────────────────────────────────────
@@ -140,9 +158,11 @@ export class Register implements Clockable, Connectable {
    * Sequential phase: latch data when write-enable is high and write is active.
    */
   commit(): void {
+    this._wroteLastCommit = false;
     if (!this._writeActive) return;
     if (!this.in_writeEnable || this.in_writeEnable.value !== 0) {
       this.out_value.set(this.clamp(this.in_data.value));
+      this._wroteLastCommit = this._gated || this.in_writeEnable !== undefined;
     }
   }
 

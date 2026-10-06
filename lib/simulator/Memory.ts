@@ -132,12 +132,20 @@ export class Memory implements Clockable, Connectable {
     }
   }
 
+  /** Whether the last `commit()` wrote a cell, whether or not its value changed. */
+  get wroteLastCommit(): boolean {
+    return this._wroteLastCommit;
+  }
+
+  private _wroteLastCommit = false;
+
   /**
    * Sequential phase: write to memory when enabled.
    */
   commit(): void {
     const addr  = this.clampAddr(this.in_addr.value);
     const wr    = this.in_wrMem.value !== 0;
+    this._wroteLastCommit = wr;
 
     if (wr) {
       this._cells[addr] = this.clampWord(this.in_data.value);

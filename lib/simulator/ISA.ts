@@ -189,8 +189,8 @@ export enum UlaOperation {
   ADD = 0,
   SUB = 1,
   AND = 4,
-  OR  = 5,
-  NOT = 6,
+  OR  = 6,
+  NOT = 7,
 }
 
 /**

@@ -65,6 +65,7 @@ export default function UlaComponent({ component, zoom }: Props) {
               { label: "Z", on: cpu?.latchedFlagZero ?? false, title: "Zero" },
               { label: "C", on: cpu?.latchedFlagCarry ?? false, title: "Carry" },
               { label: "N", on: cpu?.latchedFlagNegative ?? false, title: "Negative" },
+              { label: "V", on: cpu?.latchedFlagOverflow ?? false, title: "Overflow" },
             ]}
           />
         </div>

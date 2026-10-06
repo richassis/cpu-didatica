@@ -109,9 +109,10 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
         "b": { side: "left", offset: 86.5 },        // Data input → left
         "operation": { side: "top", offset: 50 }, // Control signal → top
         "result": { side: "right", offset: 52 },  // Data output → right
-        "zero":     { side: "bottom", offset: 25,  hidden: true },
-        "carry":    { side: "bottom", offset: 50,  hidden: true },
-        "negative": { side: "bottom", offset: 75,  hidden: true },
+        "zero":     { side: "bottom", offset: 20,  hidden: true },
+        "carry":    { side: "bottom", offset: 40,  hidden: true },
+        "negative": { side: "bottom", offset: 60,  hidden: true },
+        "overflow": { side: "bottom", offset: 80,  hidden: true },
       },
     },
   },
@@ -263,6 +264,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
         "in_flagZero":     { side: "left", hidden: true },
         "in_flagCarry":    { side: "left", hidden: true },
         "in_flagNegative": { side: "left", hidden: true },
+        "in_flagOverflow": { side: "left", hidden: true },
         // GPR-sourced Z/N, fed by the write-data comparator on the GPR
         // (LDA/LDAI) — OR'd with the ULA-sourced flags above when latching.
         "in_flagZeroGpr":     { side: "left", hidden: true },

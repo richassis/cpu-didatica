@@ -19,6 +19,7 @@
           "in_flagZero": 0,
           "in_flagCarry": 0,
           "in_flagNegative": 0,
+          "in_flagOverflow": 0,
           "in_flagZeroGpr": 0,
           "in_flagNegativeGpr": 0,
           "out_muxPC": 1,
@@ -129,7 +130,8 @@
           "result": 0,
           "zero": 0,
           "carry": 0,
-          "negative": 0
+          "negative": 0,
+          "overflow": 0
         }
       }
     },
@@ -543,6 +545,16 @@
       "sourcePortName": "carry",
       "targetComponentId": "cpu-1",
       "targetPortName": "in_flagCarry",
+      "label": "",
+      "visible": false,
+      "nodes": []
+    },
+    {
+      "id": "hidden-ula-overflow-cpu",
+      "sourceComponentId": "ula-1",
+      "sourcePortName": "overflow",
+      "targetComponentId": "cpu-1",
+      "targetPortName": "in_flagOverflow",
       "label": "",
       "visible": false,
       "nodes": []

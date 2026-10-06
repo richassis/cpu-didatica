@@ -132,6 +132,8 @@ function toCpuInternalState(index: number): CpuInternalStateSnapshot {
       latchedFlagZero: false,
       latchedFlagCarry: false,
       latchedFlagNegative: false,
+      latchedFlagOverflow: false,
+      drivenSignals: [],
     };
   }
 
@@ -144,6 +146,8 @@ function toCpuInternalState(index: number): CpuInternalStateSnapshot {
     latchedFlagZero: cpu.latchedFlagZero,
     latchedFlagCarry: cpu.latchedFlagCarry,
     latchedFlagNegative: cpu.latchedFlagNegative,
+    latchedFlagOverflow: cpu.latchedFlagOverflow,
+    drivenSignals: cpu.getDrivenControlSignalPorts(),
   };
 }
 
@@ -186,64 +190,44 @@ function buildSubstepGroups(cpu: CPU | null, executedState: CpuState): SubstepGr
     .map(([order, componentIds]) => ({ order, componentIds }));
 }
 
-function arrChanged(x?: number[], y?: number[]): boolean {
-  if (x === y) return false;
-  if (!x || !y || x.length !== y.length) return true;
-  for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return true;
-  return false;
-}
-
 /**
  * Components that took part in this tick beyond sending a value from a substep
  * group — so the node lighting can also mark the ones that *received* something.
- * Two sources, both deliberately narrow so the whole datapath doesn't light
- * every tick from combinational ripple:
+ * A block lights because it *operated*, not because its value moved: writing
+ * the same value it already held is still a write. Two sources, both
+ * deliberately narrow so the whole datapath doesn't light every tick from
+ * combinational ripple:
  *
- *  1. Clocked storage that latched a NEW value — a register whose output moved,
- *     a GPR that was written, a memory cell that was written.
+ *  1. Clocked storage that performed a write this tick (`wroteLastCommit`) — a
+ *     register whose write-enable or CPU gate was open, a GPR or memory cell
+ *     that was written. Read from the live objects, so this must run right
+ *     after the tick.
  *  2. A component on the receiving end of a write-enable control signal that is
- *     ASSERTED this tick (a wire out of the CPU driven non-zero) — that signal
+ *     ASSERTED this tick (a wire out of the CPU at non-zero) — that signal
  *     means "you are latching now". "O recebimento de sinal de controle também
- *     deve acender o componente." The clearing edge doesn't count, and mux
- *     selects don't either — a mux lights from its own `tickSteps`.
+ *     deve acender o componente." Mux selects don't count — a mux lights from
+ *     its own `tickSteps`.
  */
 const ENABLE_SIGNAL_PORTS = new Set(["out_wrPC", "out_wrIR", "out_wrReg", "out_wrMem"]);
 function computeActivatedComponents(
   cpu: CPU | null,
   wires: WireDescriptor[],
-  pre: TickSnapshot,
   post: TickSnapshot,
 ): string[] {
   if (!cpu) return [];
   const ids = new Set<string>();
 
-  for (const comp of cpu.getRegisteredComponents()) {
-    const a = pre.state.get(comp.id);
-    const b = post.state.get(comp.id);
-    if (!a || !b) continue;
-
-    let latched = false;
-    switch (comp.type) {
-      case "Register":
-      case "PipelineRegister":
-        latched = a.ports.value !== b.ports.value;
-        break;
-      case "GprComponent":
-        latched = arrChanged(a.registers, b.registers);
-        break;
-      case "MemoryComponent":
-        latched = arrChanged(a.cells, b.cells);
-        break;
-    }
-    if (latched) ids.add(comp.id);
+  // A HALT tick doesn't tick the datapath, so the flags would be stale.
+  for (const comp of cpu.halted ? [] : cpu.getRegisteredComponents()) {
+    const storage = comp.component as unknown as { wroteLastCommit?: boolean };
+    if (storage.wroteLastCommit) ids.add(comp.id);
   }
 
   for (const w of wires) {
     if (w.sourceComponentId !== cpu.id) continue;
     if (!ENABLE_SIGNAL_PORTS.has(w.sourcePortName)) continue;
-    const before = pre.state.get(w.sourceComponentId)?.ports[w.sourcePortName];
     const after = post.state.get(w.sourceComponentId)?.ports[w.sourcePortName];
-    if (before !== after && after) ids.add(w.targetComponentId);
+    if (after) ids.add(w.targetComponentId);
   }
 
   return [...ids];
@@ -496,7 +480,6 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
           activatedComponentIds: computeActivatedComponents(
             sim.getPrimaryCpu(),
             wires,
-            preSnapshot,
             postSnapshot,
           ),
         });

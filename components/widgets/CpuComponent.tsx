@@ -74,11 +74,11 @@ export default function CpuComponent({ component, zoom }: Props) {
   const halted = cpu ? cpu.halted : false;
   const paused = cpu ? cpu.paused : false;
   const signals = cpu ? readSignals(cpu) : {};
+  // A dot lights when the executed state writes that signal — even to 0, and
+  // even when the value doesn't change. The value printed under it tells which.
+  const driven = new Set(cpu ? cpu.getDrivenControlSignalPorts() : []);
 
-  const isOn = (name: string) => {
-    const v = signals[name];
-    return (typeof v === "boolean" ? (v ? 1 : 0) : (v ?? 0)) !== 0;
-  };
+  const isOn = (name: string) => driven.has(`out_${name}`);
 
   return (
     <NodeShell
@@ -99,6 +99,7 @@ export default function CpuComponent({ component, zoom }: Props) {
               { label: "Z", on: !!cpu && cpu.latchedFlagZero, title: "Zero flag" },
               { label: "C", on: !!cpu && cpu.latchedFlagCarry, title: "Carry flag" },
               { label: "N", on: !!cpu && cpu.latchedFlagNegative, title: "Negative flag" },
+              { label: "V", on: !!cpu && cpu.latchedFlagOverflow, title: "Overflow flag" },
             ]}
           />
           <button
