@@ -4,8 +4,8 @@ import {
   useDisplayStore,
   ANIMATION_MIN_MS,
   ANIMATION_MAX_MS,
-  isInstantSpeed,
   type NumericBase,
+  type TextSize,
 } from "@/lib/displayStore";
 
 /** Button labels — "decSigned" is a valid NumericBase but not a word anyone should read. */
@@ -26,6 +26,26 @@ const BASE_LABELS: Record<NumericBase, string> = {
  * setting a student is most likely to want mid-run — was unreachable during a
  * simulation. Both surfaces now mount this.
  */
+/** The button's own "A" is drawn at the size it selects (relative to the base). */
+const TEXT_SIZES: Array<{ id: TextSize; label: string; sample: string }> = [
+  { id: "small", label: "Texto pequeno", sample: "0.75rem" },
+  { id: "medium", label: "Texto médio", sample: "0.9375rem" },
+  { id: "large", label: "Texto grande", sample: "1.125rem" },
+];
+
+const SLIDER_STEPS = 100;
+const SPEED_RATIO = Math.log(ANIMATION_MAX_MS / ANIMATION_MIN_MS);
+
+/** Slider position 0 (slow) to `SLIDER_STEPS` (fast) for a stored duration. */
+function speedToSlider(durationMs: number): number {
+  const clamped = Math.min(ANIMATION_MAX_MS, Math.max(ANIMATION_MIN_MS, durationMs));
+  return Math.round((Math.log(ANIMATION_MAX_MS / clamped) / SPEED_RATIO) * SLIDER_STEPS);
+}
+
+function sliderToDuration(position: number): number {
+  return ANIMATION_MAX_MS * Math.exp(-(position / SLIDER_STEPS) * SPEED_RATIO);
+}
+
 export default function SimulationSettings() {
   const numericBase = useDisplayStore((s) => s.numericBase);
   const setNumericBase = useDisplayStore((s) => s.setNumericBase);
@@ -35,20 +55,10 @@ export default function SimulationSettings() {
   const setShowCpuSignalWires = useDisplayStore((s) => s.setShowCpuSignalWires);
   const showDataSignalWires = useDisplayStore((s) => s.showDataSignalWires);
   const setShowDataSignalWires = useDisplayStore((s) => s.setShowDataSignalWires);
-  const showWireDots = useDisplayStore((s) => s.showWireDots);
-  const setShowWireDots = useDisplayStore((s) => s.setShowWireDots);
-  const showPortValues = useDisplayStore((s) => s.showPortValues);
-  const setShowPortValues = useDisplayStore((s) => s.setShowPortValues);
-  const animationEnabled = useDisplayStore((s) => s.animationEnabled);
-  const setAnimationEnabled = useDisplayStore((s) => s.setAnimationEnabled);
-  const animateCpuSignals = useDisplayStore((s) => s.animateCpuSignals);
-  const setAnimateCpuSignals = useDisplayStore((s) => s.setAnimateCpuSignals);
-  const animateDataSignals = useDisplayStore((s) => s.animateDataSignals);
-  const setAnimateDataSignals = useDisplayStore((s) => s.setAnimateDataSignals);
+  const textSize = useDisplayStore((s) => s.textSize);
+  const setTextSize = useDisplayStore((s) => s.setTextSize);
   const animationDurationMs = useDisplayStore((s) => s.animationDurationMs);
   const setAnimationDurationMs = useDisplayStore((s) => s.setAnimationDurationMs);
-
-  const instant = isInstantSpeed(animationDurationMs);
 
   return (
     <div className="w-72">
@@ -71,6 +81,26 @@ export default function SimulationSettings() {
         ))}
       </div>
 
+      <Section title="Texto" />
+      <div className="mb-1 flex items-center gap-1">
+        {TEXT_SIZES.map(({ id, label, sample }) => (
+          <button
+            key={id}
+            onClick={() => setTextSize(id)}
+            aria-pressed={textSize === id}
+            title={label}
+            className={`flex-1 rounded-lg border px-2 py-1 transition-colors ${
+              textSize === id
+                ? "border-st-active text-st-active"
+                : "border-line text-fg-muted hover:border-line-strong hover:text-fg"
+            }`}
+            style={{ fontSize: sample }}
+          >
+            A
+          </button>
+        ))}
+      </div>
+
       <Section title="Sinais" />
       <div className="space-y-1">
         {/* The master switch. It used to exist only on the edit-mode FAB, which
@@ -89,63 +119,31 @@ export default function SimulationSettings() {
           onChange={setShowDataSignalWires}
           disabled={!showWiresAndPorts}
         />
-        <Toggle
-          label="Pontos de valor"
-          on={showWireDots}
-          onChange={setShowWireDots}
-          disabled={!showWiresAndPorts}
-        />
-        <Toggle
-          label="Valores nas portas"
-          on={showPortValues}
-          onChange={setShowPortValues}
-          disabled={!showWiresAndPorts}
-        />
-      </div>
-
-      <Section title="Animação" />
-      <div className="space-y-1">
-        <Toggle label="Ativada" on={animationEnabled} onChange={setAnimationEnabled} />
-        <Toggle
-          label="Sinais de controle"
-          on={animateCpuSignals}
-          onChange={setAnimateCpuSignals}
-          disabled={!animationEnabled}
-        />
-        <Toggle
-          label="Fluxo de dados"
-          on={animateDataSignals}
-          onChange={setAnimateDataSignals}
-          disabled={!animationEnabled}
-        />
       </div>
 
       <Section title="Velocidade" />
+      {/* Left is slow, right is fast. The store keeps the time a dot takes to
+          cross a reference wire, where smaller is faster, and the slider runs
+          on its logarithm: speed is a ratio, so equal steps along the bar are
+          equal factors of speed, and the middle is a middling speed. */}
       <div className="px-1">
-        <div className="mb-1.5 flex items-baseline justify-between">
-          <span className="text-xs text-fg-muted">Por passo</span>
-          <span className="num font-mono text-xs text-fg">
-            {instant ? "instantâneo" : `${animationDurationMs} ms`}
-          </span>
-        </div>
         <input
           type="range"
-          min={ANIMATION_MIN_MS}
-          max={ANIMATION_MAX_MS}
-          step={10}
-          value={animationDurationMs}
-          disabled={!animationEnabled}
-          onChange={(e) => setAnimationDurationMs(Number(e.target.value))}
-          aria-label="Velocidade da animação em milissegundos por passo"
-          className="timeline-slider h-4 w-full cursor-pointer appearance-none bg-transparent disabled:opacity-40"
+          min={0}
+          max={SLIDER_STEPS}
+          step={1}
+          value={speedToSlider(animationDurationMs)}
+          onChange={(e) => setAnimationDurationMs(sliderToDuration(Number(e.target.value)))}
+          aria-label="Velocidade da animação"
+          className="timeline-slider h-4 w-full cursor-pointer appearance-none bg-transparent"
           style={{
             background:
               "linear-gradient(var(--border), var(--border)) center/100% 2px no-repeat",
           }}
         />
-        <div className="flex items-center justify-between font-mono text-[10px] text-fg-faint">
-          <span>instantâneo</span>
-          <span>lento</span>
+        <div className="flex items-center justify-between font-mono text-caption text-fg-faint">
+          <span>Baixa</span>
+          <span>Alta</span>
         </div>
       </div>
     </div>

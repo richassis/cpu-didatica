@@ -16,8 +16,9 @@ import { useDisplayMaskStore } from "./displayMaskStore";
  * What a node paints this tick.
  *
  * - "idle":    not participating in this tick, or no animation running. Neutral.
- * - "pending": participates in this tick but its wires have not arrived yet.
- * - "active":  executing this tick, value already latched. Accent + glow.
+ * - "pending": participates in this tick but has not acted or received yet.
+ * - "active":  executing this tick — its substep has started, or its value is
+ *              already latched. Accent + glow.
  * - "error":   unexpected HLT, overflow, bad address. Set explicitly by a widget.
  */
 export type NodeState = "idle" | "pending" | "active" | "error";
@@ -27,13 +28,15 @@ export type NodeState = "idle" | "pending" | "active" | "error";
  *
  * Two ways a node earns its glow:
  *  - `participates`: it is in this tick's substep groups because it *drives* a
- *    wire this state. Staged by its own outgoing-wire animation.
+ *    wire this state. Lit when its own substep starts (`isSending`), because
+ *    acting is what the glow tells the reader — even when nothing is ever
+ *    delivered to it in this state (the GPR at READREG, A and B at EXECUTE).
  *  - `activated`: it is not in a substep group, but its state still changed this
  *    tick — it *received* a value (an input port moved, a cell was written, a
  *    control signal arrived). Staged by its incoming wire: dim until that wire
  *    lands (`isRevealed`), then bright.
  *
- * Without both gates every already-revealed component would read as active and
+ * Without these gates every already-revealed component would read as active and
  * the accent would stop meaning anything.
  */
 export function useNodeState(componentId: string): NodeState {
@@ -43,8 +46,9 @@ export function useNodeState(componentId: string): NodeState {
   );
   const activated = useDisplayMaskStore((s) => s.activatedComponents.has(componentId));
   const isRevealed = useDisplayMaskStore((s) => s.revealedComponents.has(componentId));
+  const isSending = useDisplayMaskStore((s) => s.sendingComponents.has(componentId));
 
   if (!isActive) return "idle";
   if (!participates && !activated) return "idle";
-  return isRevealed ? "active" : "pending";
+  return isRevealed || isSending ? "active" : "pending";
 }

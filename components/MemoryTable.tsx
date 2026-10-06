@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useDisplayStore, formatNum } from "@/lib/displayStore";
+import { useDisplayStore, formatPortValue } from "@/lib/displayStore";
 
 /**
  * The scrollable address→value list shared by the edit-mode modal
@@ -19,6 +19,8 @@ export default function MemoryTable({
   read,
   decode,
   scrollBlock = "center",
+  compact = false,
+  headers,
 }: {
   wordCount: number;
   bitWidth: number;
@@ -29,8 +31,18 @@ export default function MemoryTable({
   /** Optional second column — instruction memory renders mnemonics. */
   decode?: (word: number) => string;
   scrollBlock?: ScrollLogicalPosition;
+  /** Tighter columns, for the narrow side-by-side memory panel. */
+  compact?: boolean;
+  /** Column captions above the rows. */
+  headers?: { addr: string; word: string; decode?: string };
 }) {
+  const gap = compact ? "gap-1.5" : "gap-3";
+  const addrW = compact ? "w-10" : "w-16";
+  const decodeW = compact ? "w-14" : "w-16";
   const base = useDisplayStore((s) => s.numericBase);
+  // A table with a decoded column is instruction memory: its words are
+  // encodings, never signed data.
+  const unsigned = decode !== undefined;
   const currentRowRef = useRef<HTMLDivElement>(null);
 
   const rows = Array.from({ length: wordCount }, (_, addr) => ({ addr, value: read(addr) }));
@@ -43,14 +55,27 @@ export default function MemoryTable({
     "0x" + addr.toString(16).toUpperCase().padStart(Math.ceil(addrBits / 4), "0");
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+    <div className="flex min-h-0 flex-1 flex-col">
+      {headers && (
+        <div
+          className={`flex shrink-0 items-center ${gap} border-b border-line ${
+            compact ? "px-3" : "px-4"
+          } py-1 font-mono text-caption text-fg-faint`}
+        >
+          <span aria-hidden className="w-2.5 shrink-0" />
+          <span className={`${addrW} shrink-0`}>{headers.addr}</span>
+          <span className="flex-1 text-right">{headers.word}</span>
+          {decode && <span className={`${decodeW} shrink-0 text-right`}>{headers.decode}</span>}
+        </div>
+      )}
+      <div className={`min-h-0 flex-1 overflow-y-auto ${compact ? "px-1" : "px-2"} py-2`}>
       {rows.map(({ addr, value }) => {
         const isCurrent = addr === currentAddr;
         return (
           <div
             key={addr}
             ref={isCurrent ? currentRowRef : undefined}
-            className="flex items-center gap-3 rounded px-2 py-1"
+            className={`flex items-center ${gap} rounded px-1.5 py-1`}
             style={
               isCurrent
                 ? { background: "color-mix(in srgb, var(--st-data) 10%, transparent)" }
@@ -58,26 +83,26 @@ export default function MemoryTable({
             }
           >
             <span
-              className={`shrink-0 font-mono text-[10px] leading-none ${
+              className={`shrink-0 font-mono text-caption leading-none ${
                 isCurrent ? "text-fg" : "text-transparent"
               }`}
               aria-hidden
             >
               ▶
             </span>
-            <span className="num w-16 shrink-0 font-mono text-[11px] text-fg-faint">
+            <span className={`num ${addrW} shrink-0 font-mono text-small text-fg-faint`}>
               {fmtAddr(addr)}
             </span>
             <span
-              className={`num flex-1 text-right font-mono text-[12px] ${
+              className={`num flex-1 text-right font-mono text-ui ${
                 isCurrent ? "text-fg" : "text-fg-muted"
               }`}
             >
-              {formatNum(value, base, bitWidth)}
+              {formatPortValue(value, base, bitWidth, unsigned)}
             </span>
             {decode && (
               <span
-                className={`w-16 shrink-0 text-right font-mono text-[11px] ${
+                className={`${decodeW} shrink-0 text-right font-mono text-small ${
                   isCurrent ? "text-fg" : "text-fg-faint"
                 }`}
               >
@@ -87,6 +112,7 @@ export default function MemoryTable({
           </div>
         );
       })}
+      </div>
     </div>
   );
 }

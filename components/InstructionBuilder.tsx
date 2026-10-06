@@ -270,17 +270,17 @@ export default function InstructionBuilder({ imem, onClose, initialAddress = 0 }
               <div>
                 <div className="text-fg-muted mb-1">OPCODE</div>
                 <div className="text-fg font-medium">{breakdown.opcodeBits}</div>
-                <div className="text-fg-faint text-[10px]">[15:11]</div>
+                <div className="text-fg-faint text-caption">[15:11]</div>
               </div>
               <div>
                 <div className="text-fg-muted mb-1">GPR</div>
                 <div className="text-st-active font-medium">{breakdown.field1}</div>
-                <div className="text-fg-faint text-[10px]">[10:8]</div>
+                <div className="text-fg-faint text-caption">[10:8]</div>
               </div>
               <div>
                 <div className="text-fg-muted mb-1">OPERAND</div>
                 <div className="text-fg font-medium">{breakdown.field2}</div>
-                <div className="text-fg-faint text-[10px]">[7:0]</div>
+                <div className="text-fg-faint text-caption">[7:0]</div>
               </div>
             </div>
           ) : (
@@ -288,27 +288,27 @@ export default function InstructionBuilder({ imem, onClose, initialAddress = 0 }
               <div>
                 <div className="text-fg-muted mb-1">OPCODE</div>
                 <div className="text-fg font-medium">{breakdown.opcodeBits}</div>
-                <div className="text-fg-faint text-[10px]">[15:11]</div>
+                <div className="text-fg-faint text-caption">[15:11]</div>
               </div>
               <div>
                 <div className="text-fg-muted mb-1">SRC_A</div>
                 <div className="text-st-active font-medium">{breakdown.srcABits}</div>
-                <div className="text-fg-faint text-[10px]">[10:8]</div>
+                <div className="text-fg-faint text-caption">[10:8]</div>
               </div>
               <div>
                 <div className="text-fg-muted mb-1">SRC_B</div>
                 <div className="text-fg font-medium">{breakdown.srcBBits}</div>
-                <div className="text-fg-faint text-[10px]">[7:5]</div>
+                <div className="text-fg-faint text-caption">[7:5]</div>
               </div>
               <div>
                 <div className="text-fg-muted mb-1">PAD</div>
                 <div className="text-fg-faint font-medium">{breakdown.padBits}</div>
-                <div className="text-fg-faint text-[10px]">[4:3]</div>
+                <div className="text-fg-faint text-caption">[4:3]</div>
               </div>
               <div>
                 <div className="text-fg-muted mb-1">DST</div>
                 <div className="text-st-warn font-medium">{breakdown.dstBits}</div>
-                <div className="text-fg-faint text-[10px]">[2:0]</div>
+                <div className="text-fg-faint text-caption">[2:0]</div>
               </div>
             </div>
           )}

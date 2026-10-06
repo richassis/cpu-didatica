@@ -94,7 +94,7 @@ function AddComponentModalContent({ onClose }: { onClose: () => void }) {
                     </span>
                     <div className="text-left">
                       <div className="text-sm text-fg">{def.label}</div>
-                      <div className="text-[11px] text-fg-faint">
+                      <div className="text-small text-fg-faint">
                         {def.description} · {def.defaultWidth}×{def.defaultHeight}px
                       </div>
                     </div>

@@ -8,6 +8,10 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+/** "Tamanho do texto": a factor on the root font size (see `--fs` in globals.css). */
+export type TextSize = "small" | "medium" | "large";
+export const TEXT_SIZE_SCALE: Record<TextSize, number> = { small: 0.875, medium: 1, large: 1.15 };
+
 export type NumericBase = "hex" | "dec" | "decSigned" | "bin" | "oct";
 
 /**
@@ -19,22 +23,40 @@ export type NumericBase = "hex" | "dec" | "decSigned" | "bin" | "oct";
  * impossible for watching a program run. The range is now continuous and starts
  * far lower.
  */
-export const ANIMATION_MIN_MS = 50;
-export const ANIMATION_MAX_MS = 3000;
-export const ANIMATION_DEFAULT_MS = 400;
+export const ANIMATION_MIN_MS = 1200;
+export const ANIMATION_MAX_MS = 6000;
+export const ANIMATION_DEFAULT_MS = 2000;
 
 /**
- * At the bottom of the range the flow animation is skipped entirely and values
- * snap — a slider position rather than a separate switch, so "as fast as
- * possible" is where the student already expects to find it.
+ * At or below this the flow animation is skipped entirely and values snap. The
+ * slider no longer reaches it — the fast end used to be so fast the dots could
+ * not be followed — but the store still starts there under a reduced-motion
+ * preference, and `isInstantSpeed` honours it.
  */
-export const ANIMATION_INSTANT_MS = ANIMATION_MIN_MS;
+export const ANIMATION_INSTANT_MS = 50;
+
+/**
+ * The slider's value is a time — how long a dot takes to cross a wire of this
+ * length — and the speed follows from it. The wires themselves vary from about
+ * a hundred pixels to well over a thousand; timing them by a fixed duration
+ * made the long ones race, so every wire now gets the same speed instead.
+ */
+export const ANIMATION_REFERENCE_PX = 400;
+
+/** Dot speed, in canvas pixels per millisecond, for a stored duration. */
+export function animationSpeedPxPerMs(durationMs: number): number {
+  return ANIMATION_REFERENCE_PX / Math.max(1, durationMs);
+}
 
 export function isInstantSpeed(durationMs: number): boolean {
   return durationMs <= ANIMATION_INSTANT_MS;
 }
 
 interface DisplayState {
+  /** Interface-wide text size. */
+  textSize: TextSize;
+  setTextSize: (size: TextSize) => void;
+
   numericBase: NumericBase;
   setNumericBase: (base: NumericBase) => void;
   
@@ -121,6 +143,9 @@ export const useDisplayStore = create<DisplayState>()(
       showPortValues: true,
       setShowPortValues: (show) => set({ showPortValues: show }),
 
+      textSize: "small",
+      setTextSize: (size) => set({ textSize: size }),
+
       animationDurationMs: prefersReducedMotion() ? ANIMATION_INSTANT_MS : ANIMATION_DEFAULT_MS,
       setAnimationDurationMs: (ms) =>
         set({
@@ -129,31 +154,61 @@ export const useDisplayStore = create<DisplayState>()(
     }),
     {
       name: "simulator-display",
-      version: 5,
+      version: 10,
       migrate: (persistedState) => {
-        const state = persistedState as Partial<DisplayState> & {
-          animationSpeed?: "fast" | "normal" | "slow";
-        };
+        const state = persistedState as Partial<DisplayState>;
 
-        // v4 stored a preset name plus two derived durations. The presets were
-        // an order of magnitude too slow to watch a program run, so they are
-        // remapped rather than carried over literally.
-        const fromPreset = { fast: 200, normal: 400, slow: 900 } as const;
+        // v7: a base the settings no longer offer (octal) would leave the
+        // student on a display with no button to leave it.
+        const offeredBases: NumericBase[] = ["hex", "dec", "decSigned", "bin"];
+        const numericBase =
+          state.numericBase && offeredBases.includes(state.numericBase) ? state.numericBase : "hex";
 
         return {
           ...state,
-          showWireDots: state.showWireDots ?? true,
-          animationEnabled: state.animationEnabled ?? true,
-          animateCpuSignals: state.animateCpuSignals ?? true,
-          animateDataSignals: state.animateDataSignals ?? true,
-          showPortValues: state.showPortValues ?? true,
+          numericBase,
+          // v9 added the text size and v10 moved its scale down a step: what
+          // was "normal" is now "medium", and the two larger sizes are "large".
+          textSize: ((): TextSize => {
+            const stored = state.textSize as string | undefined;
+            if (stored === "small" || stored === "medium" || stored === "large") return stored;
+            return stored === "xlarge" ? "large" : "medium";
+          })(),
+          // v6 removed these switches from the settings panel, so a value a
+          // student switched off earlier can no longer be switched back on.
+          showWireDots: true,
+          animationEnabled: true,
+          animateCpuSignals: true,
+          animateDataSignals: true,
+          showPortValues: true,
+          // v8 moved the whole speed scale toward the slow end. A stored value
+          // from the old scale would land far too fast on the new one, so it
+          // is replaced by the new default — except the "instant" a
+          // reduced-motion preference chose.
           animationDurationMs:
-            state.animationDurationMs ?? fromPreset[state.animationSpeed ?? "normal"],
+            typeof state.animationDurationMs === "number" &&
+            state.animationDurationMs <= ANIMATION_INSTANT_MS
+              ? state.animationDurationMs
+              : ANIMATION_DEFAULT_MS,
         };
       },
     }
   )
 );
+
+/**
+ * `formatNum` for a port value. `unsigned` marks values that are not data —
+ * control lines, flags, addresses, opcodes, instruction words (see
+ * `isUnsignedPort`) — which the signed-decimal base shows as plain decimal.
+ */
+export function formatPortValue(
+  value: number,
+  base: NumericBase,
+  bitWidth: number | undefined,
+  unsigned: boolean,
+): string {
+  return formatNum(value, unsigned && base === "decSigned" ? "dec" : base, bitWidth);
+}
 
 /**
  * Format a numeric value according to the selected numeric base.

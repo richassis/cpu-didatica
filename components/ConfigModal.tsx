@@ -5,7 +5,8 @@ import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useLayoutStore, ComponentInstance } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
-import { useDisplayStore, formatNum } from "@/lib/displayStore";
+import { useDisplayStore, formatPortValue } from "@/lib/displayStore";
+import { useIsUnsignedPort } from "@/lib/portKinds";
 import { getWidgetDefinition } from "@/lib/widgetDefinitions";
 import { ConfigPanelForType, ComponentConfig } from "@/components/widgets/ConfigPanel";
 import { CpuState, CPU_STATE_LABELS, ALL_CPU_STATES, isClockable, Constant } from "@/lib/simulator";
@@ -286,8 +287,11 @@ export default function ConfigModal({ component, onClose }: Props) {
     touch();
   };
 
-  const formatValue = (value: unknown, bitWidth: number | null): string => {
-    if (typeof value === "number") return formatNum(value, base, bitWidth ?? undefined);
+  const isUnsignedPort = useIsUnsignedPort();
+  const formatValue = (value: unknown, bitWidth: number | null, portKey: string): string => {
+    if (typeof value === "number") {
+      return formatPortValue(value, base, bitWidth ?? undefined, isUnsignedPort(component.id, portKey));
+    }
     if (typeof value === "boolean") return value ? "1" : "0";
     return String(value);
   };
@@ -306,7 +310,7 @@ export default function ConfigModal({ component, onClose }: Props) {
         <div className="flex shrink-0 items-center justify-between border-b border-line px-4 py-3">
           <div>
             <h2 className="t-panel text-fg">{def?.label ?? component.type}</h2>
-            <p className="mt-0.5 font-mono text-[11px] text-fg-faint">
+            <p className="mt-0.5 font-mono text-small text-fg-faint">
               id: {component.id.slice(0, 8)}
             </p>
           </div>
@@ -331,18 +335,18 @@ export default function ConfigModal({ component, onClose }: Props) {
 
               {inputPorts.length > 0 && (
                 <div className="space-y-1.5">
-                  <div className="mb-1 text-[11px] text-fg-muted">Inputs</div>
+                  <div className="mb-1 text-small text-fg-muted">Inputs</div>
                   {inputPorts.map((port) => {
                     const key = port.name;
-                    const inputVal = portInputs[key] ?? formatValue(port.value, port.bitWidth);
+                    const inputVal = portInputs[key] ?? formatValue(port.value, port.bitWidth, key);
                     return (
                       <div key={key} className="flex items-center gap-2">
-                        <span className="w-24 shrink-0 truncate font-mono text-[11px] text-fg-muted">{key}</span>
+                        <span className="w-24 shrink-0 truncate font-mono text-small text-fg-muted">{key}</span>
                         <input
                           type="text"
                           value={inputVal}
                           onChange={(e) => setPortInputs((prev) => ({ ...prev, [key]: e.target.value }))}
-                          className="num h-9 flex-1 rounded-lg border border-line bg-sunken px-2 font-mono text-[11px] text-fg focus:border-line-strong focus:outline-none"
+                          className="num h-9 flex-1 rounded-lg border border-line bg-sunken px-2 font-mono text-small text-fg focus:border-line-strong focus:outline-none"
                           placeholder={port.dataType === "boolean" ? "0 / 1" : "0x0000"}
                         />
                       </div>
@@ -353,18 +357,18 @@ export default function ConfigModal({ component, onClose }: Props) {
 
               {outputPorts.length > 0 && (
                 <div className="space-y-1.5">
-                  <div className="mb-1 text-[11px] text-fg-muted">Outputs</div>
+                  <div className="mb-1 text-small text-fg-muted">Outputs</div>
                   {outputPorts.map((port) => {
                     const key = port.name;
-                    const inputVal = portInputs[key] ?? formatValue(port.value, port.bitWidth);
+                    const inputVal = portInputs[key] ?? formatValue(port.value, port.bitWidth, key);
                     return (
                       <div key={key} className="flex items-center gap-2">
-                        <span className="w-24 shrink-0 truncate font-mono text-[11px] text-fg-muted">{key}</span>
+                        <span className="w-24 shrink-0 truncate font-mono text-small text-fg-muted">{key}</span>
                         <input
                           type="text"
                           value={inputVal}
                           onChange={(e) => setPortInputs((prev) => ({ ...prev, [key]: e.target.value }))}
-                          className="num h-9 flex-1 rounded-lg border border-line bg-sunken px-2 font-mono text-[11px] text-fg focus:border-line-strong focus:outline-none"
+                          className="num h-9 flex-1 rounded-lg border border-line bg-sunken px-2 font-mono text-small text-fg focus:border-line-strong focus:outline-none"
                           placeholder={port.dataType === "boolean" ? "0 / 1" : "0x0000"}
                         />
                       </div>
@@ -379,7 +383,7 @@ export default function ConfigModal({ component, onClose }: Props) {
           {isCpu && (
             <div className="space-y-3 border-b border-line p-4">
               <h3 className="t-section">Testing mode</h3>
-              <p className="text-[11px] text-fg-faint">
+              <p className="text-small text-fg-faint">
                 Select an instruction to force the CPU in_opcode port and keep it set.
               </p>
               
@@ -419,23 +423,23 @@ export default function ConfigModal({ component, onClose }: Props) {
                     return (
                       <div key={mnemonic} className="space-y-2">
                         <div className="flex items-center gap-2">
-                          <span className="font-mono text-[12px] text-fg">{mnemonic}</span>
-                          <span className="num font-mono text-[11px] text-fg-faint">
+                          <span className="font-mono text-ui text-fg">{mnemonic}</span>
+                          <span className="num font-mono text-small text-fg-faint">
                             0x{descriptor.opcode.toString(16).toUpperCase().padStart(2, "0")}
                           </span>
                         </div>
 
-                        <p className="text-[11px] text-fg-muted">{descriptor.description}</p>
+                        <p className="text-small text-fg-muted">{descriptor.description}</p>
 
-                        <div className="text-[11px] text-fg-faint">Format: {isStandard ? "Standard" : "ULA"}</div>
+                        <div className="text-small text-fg-faint">Format: {isStandard ? "Standard" : "ULA"}</div>
 
                         <div className="space-y-1">
                           <div className="t-section">Pipeline steps</div>
                           <div className="flex flex-wrap gap-1">
-                            <span className="rounded-md border border-line px-2 py-1 font-mono text-[11px] text-fg-muted">
+                            <span className="rounded-md border border-line px-2 py-1 font-mono text-small text-fg-muted">
                               FETCH
                             </span>
-                            <span className="rounded-md border border-line px-2 py-1 font-mono text-[11px] text-fg-muted">
+                            <span className="rounded-md border border-line px-2 py-1 font-mono text-small text-fg-muted">
                               DECODE
                             </span>
 
@@ -443,13 +447,13 @@ export default function ConfigModal({ component, onClose }: Props) {
                               steps.map((state, idx) => (
                                 <span
                                   key={idx}
-                                  className="rounded-md border border-line px-2 py-1 font-mono text-[11px] text-fg-muted"
+                                  className="rounded-md border border-line px-2 py-1 font-mono text-small text-fg-muted"
                                 >
                                   {CPU_STATE_LABELS[state] || `STATE_${state}`}
                                 </span>
                               ))
                             ) : (
-                              <span className="text-[11px] italic text-fg-faint">no extra steps</span>
+                              <span className="text-small italic text-fg-faint">no extra steps</span>
                             )}
                           </div>
                         </div>
@@ -468,13 +472,13 @@ export default function ConfigModal({ component, onClose }: Props) {
                 <h3 className="t-section">Animation steps</h3>
                 <button
                   onClick={handleTickComponent}
-                  className="rounded-lg border border-line px-2 py-1 text-[11px] text-fg-muted transition-colors hover:border-line-strong hover:text-fg"
+                  className="rounded-lg border border-line px-2 py-1 text-small text-fg-muted transition-colors hover:border-line-strong hover:text-fg"
                   title="Manually tick this component"
                 >
                   Tick Now
                 </button>
               </div>
-              <p className="text-[11px] text-fg-faint">
+              <p className="text-small text-fg-faint">
                 Select which CPU states animate the wires of this component. Functional execution runs every CPU tick.
               </p>
               <div className="grid grid-cols-3 gap-1.5">
@@ -484,7 +488,7 @@ export default function ConfigModal({ component, onClose }: Props) {
                     <button
                       key={state}
                       onClick={() => toggleTickStep(state)}
-                      className={`rounded-md border px-2 py-1 font-mono text-[11px] transition-colors ${
+                      className={`rounded-md border px-2 py-1 font-mono text-small transition-colors ${
                         isActive
                           ? "border-st-active text-st-active"
                           : "border-line text-fg-faint hover:border-line-strong hover:text-fg"
@@ -498,7 +502,7 @@ export default function ConfigModal({ component, onClose }: Props) {
 
               <div className="space-y-2 border-t border-line pt-2">
                 <h4 className="t-section">Animation substep order</h4>
-                <p className="text-[11px] text-fg-faint">
+                <p className="text-small text-fg-faint">
                   Lower values animate earlier inside the same CPU state. Leave blank to use default order (0).
                 </p>
                 <div className="grid grid-cols-3 gap-2">
@@ -506,14 +510,14 @@ export default function ConfigModal({ component, onClose }: Props) {
                     const value = tickOrderByState[state];
                     return (
                       <label key={`order-${state}`} className="flex flex-col gap-1">
-                        <span className="font-mono text-[11px] text-fg-muted">{CPU_STATE_LABELS[state]}</span>
+                        <span className="font-mono text-small text-fg-muted">{CPU_STATE_LABELS[state]}</span>
                         <input
                           type="number"
                           min={0}
                           step={1}
                           value={value ?? ""}
                           onChange={(e) => setTickOrderForState(state, e.target.value)}
-                          className="num h-9 rounded-lg border border-line bg-sunken px-2 font-mono text-[11px] text-fg focus:border-line-strong focus:outline-none"
+                          className="num h-9 rounded-lg border border-line bg-sunken px-2 font-mono text-small text-fg focus:border-line-strong focus:outline-none"
                           placeholder="0"
                         />
                       </label>
@@ -534,13 +538,13 @@ export default function ConfigModal({ component, onClose }: Props) {
                 )}
               </h3>
               {componentWires.length === 0 ? (
-                <p className="text-[11px] italic text-fg-faint">No connections</p>
+                <p className="text-small italic text-fg-faint">No connections</p>
               ) : (
                 <div className="space-y-1">
                   {componentWires.map((wire) => {
                     const isSource = wire.sourceComponentId === component.id;
                     return (
-                      <div key={wire.id} className="flex items-center gap-2 rounded-lg border border-line px-2 py-1.5 text-[11px]">
+                      <div key={wire.id} className="flex items-center gap-2 rounded-lg border border-line px-2 py-1.5 text-small">
                         {/* Source side */}
                         <span className={`truncate font-mono ${isSource ? "text-fg" : "text-fg-muted"}`}>
                           {labelFor(wire.sourceComponentId)}.{wire.sourcePortName}

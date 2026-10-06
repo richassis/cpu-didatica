@@ -2,6 +2,7 @@
 
 import { Props } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
+import { useDisplayMaskStore } from "@/lib/displayMaskStore";
 import { useDisplayStore, formatNum, type NumericBase } from "@/lib/displayStore";
 import NodeShell from "@/components/widgets/NodeShell";
 
@@ -29,7 +30,11 @@ export default function GprComponent({ component, zoom }: Props) {
   const readAddrA = gpr?.in_readAddrA?.value ?? 0;
   const readAddrB = gpr?.in_readAddrB?.value ?? 0;
   const writeAddr = gpr?.in_writeAddr?.value ?? 0;
-  const wrEnable = (gpr?.in_writeEnable?.value ?? 0) !== 0;
+  // The write-enable lands with the control signals, ahead of the address and
+  // data wires. The write target is only marked once those have arrived (the
+  // component is revealed), or W would sit on the previous write's register.
+  const revealed = useDisplayMaskStore((s) => s.isRevealed(id));
+  const wrEnable = revealed && (gpr?.in_writeEnable?.value ?? 0) !== 0;
 
   // The bank holds eight values but only one is interesting at a time, so the
   // headline is whichever register this tick touches — that is the part that
@@ -92,11 +97,11 @@ function GprRow({ index, value, bitWidth, base, tag }: GprRowProps) {
       className="flex items-center gap-1.5 rounded px-1.5 py-[3px] transition-colors"
       style={tag ? { background: "color-mix(in srgb, var(--st-data) 8%, transparent)" } : undefined}
     >
-      <span className="w-5 shrink-0 font-mono text-[12.5px] text-fg-faint">R{index}</span>
-      <span className={`num flex-1 text-right font-mono text-[12.5px] ${tag ? "text-fg" : "text-fg-muted"}`}>
+      <span className="w-5 shrink-0 font-mono text-cv-md text-fg-faint">R{index}</span>
+      <span className={`num flex-1 text-right font-mono text-cv-md ${tag ? "text-fg" : "text-fg-muted"}`}>
         {displayed}
       </span>
-      {tag && <span className="w-4 shrink-0 font-mono text-[9px] text-fg-faint">{tag}</span>}
+      {tag && <span className="w-4 shrink-0 font-mono text-cv-xs text-fg-faint">{tag}</span>}
     </div>
   );
 }

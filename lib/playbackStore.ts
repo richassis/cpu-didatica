@@ -35,13 +35,31 @@ import { useDisplayStore } from "./displayStore";
  */
 const INTER_TICK_PAUSE_MS = 60;
 
+/** How much faster the animation runs while the accelerate control is held. */
+export const BOOST_RATE = 3;
+
 interface PlaybackState {
   /** True while the timeline is advancing on its own. */
   isPlaying: boolean;
 
+  /**
+   * True while the accelerate control is held. The overlay runs its animation
+   * clock at `BOOST_RATE` times real time meanwhile — the same animation, just
+   * sooner, never a jump to the next tick.
+   */
+  boost: boolean;
+  setBoost: (on: boolean) => void;
+
   play: () => void;
   pause: () => void;
   toggle: () => void;
+
+  /**
+   * How long the last tick's animation was scheduled to take. The overlay
+   * reports it when a pass starts; the backstop timer sizes itself from it, since
+   * a tick's length now depends on its wires and not on a fixed step.
+   */
+  setLastPassMs: (ms: number) => void;
 
   /**
    * Called by the wire-animation overlay when a tick's animation pass ends.
@@ -80,12 +98,20 @@ function clearAdvance() {
 }
 
 /**
- * Longest a single tick can reasonably animate: the per-step duration times a
- * generous substep count, plus a floor for the short ones.
+ * Duration of the most recent animation pass, as scheduled. Before any pass has
+ * reported, the backstop falls back to the per-step estimate.
+ */
+let lastPassMs = 0;
+
+/**
+ * Longest a single tick can reasonably animate: twice the last scheduled pass
+ * plus a second of slack, with a floor for the short ones. A tick's length
+ * depends on the wires it animates, so a fixed multiple of the step duration
+ * no longer bounds it.
  */
 function watchdogDelay(): number {
   const perStep = useDisplayStore.getState().animationDurationMs;
-  return Math.max(2000, perStep * 12);
+  return Math.max(2000, perStep * 12, lastPassMs * 2 + 1000);
 }
 
 /** Advance one tick if playback is still running, or stop at the end. */
@@ -115,6 +141,15 @@ function advance(set: (partial: { isPlaying: boolean }) => void, isPlaying: () =
 
 export const usePlaybackStore = create<PlaybackState>()((set, get) => ({
   isPlaying: false,
+
+  boost: false,
+  setBoost: (on) => {
+    if (get().boost !== on) set({ boost: on });
+  },
+
+  setLastPassMs: (ms) => {
+    lastPassMs = ms;
+  },
 
   play: () => {
     const execution = useExecutionStore.getState();

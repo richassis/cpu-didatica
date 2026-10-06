@@ -9,8 +9,8 @@ import { usePlaybackStore } from "@/lib/playbackStore";
  *
  * The tick was previously written twice — a 32px figure inside the timeline
  * card and a small `T{n}` in the canvas clock toolbar — and neither read as an
- * instrument. This is the single counter, parked in a corner of the canvas at a
- * size you can read from across a classroom.
+ * instrument. This is the single counter, now part of the simulation bar, sitting
+ * beside the player it belongs to.
  *
  * Drawn as inline SVG rather than with a display webfont: the repo has no font
  * files, and a seven-segment shape is seven polygons.
@@ -54,7 +54,7 @@ const ALL_SEGMENTS = Object.keys(SEGMENT_PATHS);
 function Digit({ char, lit }: { char: string; lit: string }) {
   const on = DIGIT_SEGMENTS[char] ?? "";
   return (
-    <svg viewBox="0 0 36 64" className="h-11 w-auto" aria-hidden>
+    <svg viewBox="0 0 36 64" className="h-7 w-auto" aria-hidden>
       {ALL_SEGMENTS.map((seg) => {
         const isOn = on.includes(seg);
         return (
@@ -89,17 +89,17 @@ export default function TickDisplay() {
 
   return (
     <div
-      className="pointer-events-none absolute bottom-6 right-6 z-30 flex flex-col items-end gap-1 rounded-xl border border-line bg-surface px-3 py-2"
+      className="flex items-center gap-2 rounded-lg border border-line px-2 py-1"
       style={{ background: "var(--surface)" }}
     >
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-0.5">
         {digits.map((char, i) => (
           <Digit key={i} char={char} lit={lit} />
         ))}
       </div>
-      <div className="flex w-full items-baseline justify-between gap-3">
+      <div className="flex flex-col items-start leading-none">
         <span className="t-section leading-none">{halted ? "halted" : "tick"}</span>
-        <span className="num font-mono text-[11px] text-fg-faint">of {totalTicks}</span>
+        <span className="num mt-1 font-mono text-caption text-fg-faint">de {totalTicks}</span>
       </div>
 
       {/*

@@ -38,10 +38,10 @@ export default function DecoderComponent({ component, zoom }: Props) {
       zoom={zoom}
       value={
         <span className="flex flex-col items-center leading-none">
-          <span className="font-mono text-[13px] font-medium">
+          <span className="font-mono text-cv-md font-medium">
             {dec ? getMnemonic(dec) : "HLT"}
           </span>
-          <span className="num mt-1 font-mono text-[9px] text-fg-faint">{bin5(op)}</span>
+          <span className="num mt-1 font-mono text-cv-xs text-fg-faint">{bin5(op)}</span>
         </span>
       }
     />

@@ -40,7 +40,8 @@ function readSignals(cpu: CPU): Record<string, number | boolean> {
 function formatSignal(value: number | boolean, bits: number, base: NumericBase): string {
   if (typeof value === "boolean") return value ? "1" : "0";
   if (bits <= 1) return String(Number(value));
-  return formatNum(Number(value), base, bits);
+  // Every control line is unsigned, whatever the base.
+  return formatNum(Number(value), base === "decSigned" ? "dec" : base, bits);
 }
 
 /**
@@ -89,7 +90,7 @@ export default function CpuComponent({ component, zoom }: Props) {
       actions={
         <>
           {paused && (
-            <span className="shrink-0 rounded-md border border-st-warn px-1.5 py-0.5 font-mono text-[10px] text-st-warn">
+            <span className="shrink-0 rounded-md border border-st-warn px-1.5 py-0.5 font-mono text-cv-xs text-st-warn">
               PAUSED
             </span>
           )}
@@ -154,11 +155,11 @@ export default function CpuComponent({ component, zoom }: Props) {
                   active ? "bg-st-active" : "bg-line-strong"
                 }`}
               />
-              <span className={`font-mono text-[11px] leading-none ${active ? "text-fg" : "text-fg-faint"}`}>
+              <span className={`font-mono text-cv-sm leading-none ${active ? "text-fg" : "text-fg-faint"}`}>
                 {name}
               </span>
               <span
-                className={`num font-mono text-[12.5px] leading-none ${active ? "text-fg" : "text-fg-faint"}`}
+                className={`num font-mono text-cv-md leading-none ${active ? "text-fg" : "text-fg-faint"}`}
               >
                 {formatSignal(signals[name] ?? 0, SIGNAL_BITS[name] ?? 1, base)}
               </span>

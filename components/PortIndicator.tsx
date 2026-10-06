@@ -5,7 +5,8 @@ import { createPortal } from "react-dom";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useLayoutStore } from "@/lib/store";
 import { useWireCreationStore } from "@/lib/wireCreationStore";
-import { useDisplayStore, formatNum } from "@/lib/displayStore";
+import { useDisplayStore, formatPortValue } from "@/lib/displayStore";
+import { useIsUnsignedPort } from "@/lib/portKinds";
 import type { PortSide } from "@/lib/portPositioning";
 
 const DRAG_THRESHOLD = 4; // px of movement before we consider it a drag
@@ -104,6 +105,8 @@ export default function PortIndicator({
   const component = components.find(c => c.id === componentId);
   const componentType = component?.type ?? "";
   const isControlSignal = isControlSignalPort(componentType, portName, direction);
+  const isUnsignedPort = useIsUnsignedPort();
+  const unsigned = isUnsignedPort(componentId, portName);
 
   const portValue = useMemo(() => {
     void revision;
@@ -116,13 +119,13 @@ export default function PortIndicator({
 
     const val = port.value;
     if (typeof val === "number") {
-      return formatNum(val, base, port.bitWidth ?? undefined);
+      return formatPortValue(val, base, port.bitWidth ?? undefined, unsigned);
     }
     if (typeof val === "boolean") {
       return val ? "1" : "0";
     }
     return String(val);
-  }, [componentId, portName, objects, revision, base]);
+  }, [componentId, portName, objects, revision, base, unsigned]);
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     if (e.button !== 0) return;
@@ -236,7 +239,7 @@ export default function PortIndicator({
           if (!root) return null;
           return createPortal(
             <div
-              className="whitespace-nowrap rounded-lg border border-line bg-surface px-2 py-1 font-mono text-[11px]"
+              className="whitespace-nowrap rounded-lg border border-line bg-surface px-2 py-1 font-mono text-small"
               style={{
                 position: "absolute",
                 left: tooltipAnchor.x,

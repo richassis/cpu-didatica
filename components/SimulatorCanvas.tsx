@@ -25,6 +25,7 @@ import { useAuthoring } from "@/lib/modeStore";
 import { CanvasEditingProvider } from "@/components/CanvasEditingContext";
 import { EDITOR_ENABLED } from "@/lib/editorFlag";
 import { useExecutionStore } from "@/lib/executionStore";
+import { useCanvasViewStore } from "@/lib/canvasViewStore";
 import { GRID_SIZE, snapToGrid } from "@/lib/wireRouting";
 import { calculatePortPosition, type PortSide } from "@/lib/portPositioning";
 import WidgetRenderer from "./WidgetRenderer";
@@ -407,7 +408,7 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
   }, [fitToScreen]);
 
   // Keep the datapath fitted when its own pane resizes without the window
-  // resizing — Program Mode's code region widens and narrows around Executar,
+  // resizing — Program Mode's code region widens and narrows around Simular,
   // which changes how much width the datapath gets without ever firing a
   // window resize event.
   useEffect(() => {
@@ -417,6 +418,28 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
     ro.observe(el);
     return () => ro.disconnect();
   }, [fitToScreen]);
+
+  // Read-only canvas: the zoom controls live in the top bar, which reaches
+  // them through this store. Refs keep the registered handlers current
+  // without re-registering on every zoom step.
+  const zoomRef = useRef(zoom);
+  const recentreRef = useRef(recentre);
+  const fitRef = useRef(fitToScreen);
+  useEffect(() => {
+    zoomRef.current = zoom;
+    recentreRef.current = recentre;
+    fitRef.current = fitToScreen;
+  });
+  const registerView = useCanvasViewStore((s) => s.register);
+  useEffect(() => {
+    if (!isReadOnly) return;
+    registerView({
+      zoomIn: () => recentreRef.current(Math.min(ZOOM_MAX, zoomRef.current + ZOOM_STEP)),
+      zoomOut: () => recentreRef.current(Math.max(ZOOM_MIN, zoomRef.current - ZOOM_STEP)),
+      fit: () => fitRef.current(),
+    });
+    return () => registerView(null);
+  }, [isReadOnly, registerView]);
 
   return (
     <div
@@ -546,6 +569,7 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
         {/* Zoom controls — the only way to zoom. Wheel zoom and drag-to-pan are
             gone on purpose: they used to fire by accident all the time. The
             percentage doubles as "fit to screen". */}
+        {!isReadOnly && (
         <div
           className="flex items-center gap-1 overflow-hidden rounded-full border border-line bg-surface px-1"
           onMouseDown={(e) => e.stopPropagation()}
@@ -571,6 +595,7 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
             aria-label="Aumentar zoom"
           ><Plus size={14} strokeWidth={1.5} /></button>
         </div>
+        )}
 
         {/* Main FAB button */}
         {!isReadOnly && (

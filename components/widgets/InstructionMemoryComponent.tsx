@@ -5,10 +5,10 @@ import { createPortal } from "react-dom";
 import { List } from "lucide-react";
 import { Props } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
-import { useExecutionStore } from "@/lib/executionStore";
+import { useExecutingAddr } from "@/lib/useExecutingAddr";
 import { useMemoryPanelStore } from "@/lib/memoryPanelStore";
 import { useCanvasEditing } from "@/components/CanvasEditingContext";
-import { useDisplayStore, formatNum } from "@/lib/displayStore";
+import { useDisplayStore, formatPortValue } from "@/lib/displayStore";
 import { EDITOR_ENABLED } from "@/lib/editorFlag";
 import NodeShell from "@/components/widgets/NodeShell";
 import MemoryViewer from "@/components/MemoryViewer";
@@ -53,19 +53,15 @@ export default function InstructionMemoryComponent({ component, zoom }: Props) {
 
   // While a program runs, the PC register races ahead to PC+1 during the
   // instruction it fetched, so `imem.in_addr` no longer points at the
-  // instruction being executed. The timeline carries that address separately.
-  const isTimelineActive = useExecutionStore((s) => s.isTimelineActive);
-  const executingAddr = useExecutionStore((s) =>
-    s.isTimelineActive ? s.frames[s.currentIndex]?.postTick?.pc : undefined
-  );
+  // instruction being executed. The timeline carries that address separately,
+  // and it only moves once the PC's wire has reached this memory.
+  const executingAddr = useExecutingAddr(id);
 
   const wordCount = imem?.wordCount ?? 256;
   const bitWidth = imem?.bitWidth ?? 16;
   const addrBits = Math.max(1, Math.ceil(Math.log2(wordCount)));
   const currentAddr =
-    isTimelineActive && executingAddr !== undefined
-      ? executingAddr
-      : imem?.in_addr.value ?? 0;
+    executingAddr !== undefined ? executingAddr : imem?.in_addr.value ?? 0;
 
   const readWord = useCallback((addr: number) => imem?.peek(addr) ?? 0, [imem]);
 
@@ -85,7 +81,7 @@ export default function InstructionMemoryComponent({ component, zoom }: Props) {
         compactValue
         actions={
           <>
-            <span className="num shrink-0 font-mono text-[10px] text-fg-muted">
+            <span className="num shrink-0 font-mono text-cv-xs text-fg-muted">
               {fmtAddr(currentAddr, addrBits)}
             </span>
             <button
@@ -95,6 +91,7 @@ export default function InstructionMemoryComponent({ component, zoom }: Props) {
                 openListing();
               }}
               className="shrink-0 rounded p-0.5 text-fg-faint transition-colors hover:text-fg"
+              data-tour="imem-list"
               title="View the whole program"
             >
               <List size={12} strokeWidth={1.5} />
@@ -126,21 +123,21 @@ export default function InstructionMemoryComponent({ component, zoom }: Props) {
                 }
               >
                 <span
-                  className={`shrink-0 font-mono text-[9px] leading-none ${
+                  className={`shrink-0 font-mono text-cv-xs leading-none ${
                     isCurrent ? "text-fg" : "text-transparent"
                   }`}
                 >
                   ▶
                 </span>
-                <span className="num shrink-0 font-mono text-[11px] text-fg-faint">
+                <span className="num shrink-0 font-mono text-cv-sm text-fg-faint">
                   {fmtAddr(a, addrBits)}
                 </span>
                 <span
                   className={`num flex-1 text-right font-mono ${
-                    isCurrent ? "text-[12.5px] text-fg" : "text-[11px] text-fg-muted"
+                    isCurrent ? "text-cv-md text-fg" : "text-cv-sm text-fg-muted"
                   }`}
                 >
-                  {formatNum(imem?.peek(a) ?? 0, base, bitWidth)}
+                  {formatPortValue(imem?.peek(a) ?? 0, base, bitWidth, true)}
                 </span>
               </div>
             );

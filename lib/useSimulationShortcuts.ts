@@ -23,7 +23,10 @@ function isTypingTarget(target: EventTarget | null): boolean {
     tag === "INPUT" ||
     tag === "TEXTAREA" ||
     tag === "SELECT" ||
-    target.isContentEditable
+    target.isContentEditable ||
+    // A modal window (Ajuda, Salvar) owns the keyboard while it is open: space
+    // must activate the focused tab or button, not start the simulation.
+    target.closest('[aria-modal="true"]') !== null
   );
 }
 
@@ -64,12 +67,30 @@ export default function useSimulationShortcuts() {
           playback.pause();
           execution.goToEnd();
           break;
+        case "f":
+        case "F":
+          // Hold to run the animation faster; released in onKeyUp.
+          playback.setBoost(true);
+          break;
         default:
           break;
       }
     };
 
+    // Release is handled wherever focus is, and even outside a text field: a key
+    // let go after focus moved must not leave the animation sped up.
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.key === "f" || event.key === "F") usePlaybackStore.getState().setBoost(false);
+    };
+    const onBlur = () => usePlaybackStore.getState().setBoost(false);
+
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    window.addEventListener("blur", onBlur);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("blur", onBlur);
+    };
   }, []);
 }

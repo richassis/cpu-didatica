@@ -42,6 +42,20 @@ interface DisplayMaskState {
   activatedComponents: Set<string>;
 
   /**
+   * Components whose substep has started — they are acting (sending) even if no
+   * wire has delivered a value to them. Drives the node glow only; it is NOT a
+   * reveal, so `revealedComponents` keeps meaning "the new value is latched".
+   */
+  sendingComponents: Set<string>;
+
+  /**
+   * A substep started: light every component at that order or an earlier one.
+   * Earlier orders are included so a component with no visible wire in its own
+   * step still lights no later than the steps after it.
+   */
+  markSending: (order: number) => void;
+
+  /**
    * Initialize for a new tick animation.
    * Applies the baseSnapshot to live simulator objects so widgets start showing old values.
    */
@@ -78,6 +92,23 @@ interface DisplayMaskState {
    * full reveal.
    */
   revealInputPort: (componentId: string, portName: string) => void;
+
+  /**
+   * Reveal a single named output port early. Built for a MUX's result: it is
+   * combinational, so once its `sel` has landed its output is the post-tick
+   * value — the wire leaving it must animate that value, not the stale one
+   * the pre-tick snapshot left there until the MUX's own (later) reveal.
+   * Sequential components must NOT use this: they hold their old output
+   * until their incoming wire delivers.
+   */
+  revealOutputPort: (componentId: string, portName: string) => void;
+
+  /**
+   * Reveal every output port of a purely combinational component (MUX, ULA,
+   * adder, incrementer, decoder) — same reasoning as `revealOutputPort`, for a
+   * component whose several outputs all settle in the evaluate phase.
+   */
+  revealOutputPorts: (componentId: string) => void;
 
   /**
    * Force-reveal all remaining components.
@@ -172,6 +203,7 @@ export const useDisplayMaskStore = create<DisplayMaskState>()((set, get) => ({
   revealedComponents: new Set(),
   substepGroups: [],
   activatedComponents: new Set(),
+  sendingComponents: new Set(),
 
   init: (baseSnapshot, targetSnapshot, substepGroups, activatedComponentIds = []) => {
     // Apply the BASE snapshot to live simulator objects so all widgets/wires
@@ -204,8 +236,20 @@ export const useDisplayMaskStore = create<DisplayMaskState>()((set, get) => ({
       targetSnapshot,
       substepGroups,
       activatedComponents,
+      sendingComponents: new Set(),
       revealedComponents: revealed,
     });
+  },
+
+  markSending: (order) => {
+    const { isActive, substepGroups, sendingComponents } = get();
+    if (!isActive) return;
+
+    const next = new Set(sendingComponents);
+    for (const group of substepGroups) {
+      if (group.order <= order) group.componentIds.forEach((id) => next.add(id));
+    }
+    if (next.size !== sendingComponents.size) set({ sendingComponents: next });
   },
 
   revealComponents: (componentIds) => {
@@ -253,6 +297,53 @@ export const useDisplayMaskStore = create<DisplayMaskState>()((set, get) => ({
     useSimulatorStore.setState((s) => ({ revision: s.revision + 1 }));
   },
 
+  revealOutputPort: (componentId, portName) => {
+    const { targetSnapshot, isActive } = get();
+    if (!isActive || !targetSnapshot) return;
+
+    const value = targetSnapshot.state.get(componentId)?.ports[portName];
+    if (typeof value !== "number") return;
+
+    const obj = useSimulatorStore.getState().objects.get(componentId);
+    if (!obj || !("getPorts" in obj)) return;
+    const port = (obj as {
+      getPorts: () => Record<
+        string,
+        { direction: string; set?: (v: number) => void; setWithoutPropagate?: (v: number) => void }
+      >;
+    }).getPorts()[portName];
+    if (!port || port.direction !== "output") return;
+
+    // Without propagation, like every other reveal: the value must not flow
+    // into not-yet-revealed components.
+    if (port.setWithoutPropagate) port.setWithoutPropagate(value);
+    else port.set?.(value);
+    useSimulatorStore.setState((s) => ({ revision: s.revision + 1 }));
+  },
+
+  revealOutputPorts: (componentId) => {
+    const { targetSnapshot, isActive } = get();
+    if (!isActive || !targetSnapshot) return;
+
+    const targetState = targetSnapshot.state.get(componentId);
+    const obj = useSimulatorStore.getState().objects.get(componentId);
+    if (!targetState || !obj || !("getPorts" in obj)) return;
+
+    const portMap = (obj as {
+      getPorts: () => Record<
+        string,
+        { direction: string; set?: (v: number) => void; setWithoutPropagate?: (v: number) => void }
+      >;
+    }).getPorts();
+    for (const [key, value] of Object.entries(targetState.ports)) {
+      const port = portMap[key];
+      if (!port || port.direction !== "output" || typeof value !== "number") continue;
+      if (port.setWithoutPropagate) port.setWithoutPropagate(value);
+      else port.set?.(value);
+    }
+    useSimulatorStore.setState((s) => ({ revision: s.revision + 1 }));
+  },
+
   revealAll: () => {
     const { targetSnapshot, isActive } = get();
     if (!isActive || !targetSnapshot) return;
@@ -273,6 +364,7 @@ export const useDisplayMaskStore = create<DisplayMaskState>()((set, get) => ({
       revealedComponents: new Set(),
       substepGroups: [],
       activatedComponents: new Set(),
+      sendingComponents: new Set(),
     });
   },
 

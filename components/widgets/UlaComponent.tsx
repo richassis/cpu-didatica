@@ -47,7 +47,7 @@ export default function UlaComponent({ component, zoom }: Props) {
           {formatNum(ula?.in_a?.value ?? 0, base, bw)}
         </span>
 
-        <span className="font-mono text-[15px] leading-none text-fg">{opSymbol(op)}</span>
+        <span className="font-mono text-cv-lg leading-none text-fg">{opSymbol(op)}</span>
 
         {op !== UlaOperation.NOT && (
           <span className="t-value-sm text-fg-muted">

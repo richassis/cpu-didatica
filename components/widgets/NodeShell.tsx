@@ -142,6 +142,7 @@ export default function NodeShell({
         {...(editing ? listeners : {})}
         {...(editing ? attributes : {})}
         data-draggable
+        data-node-type={type}
         data-state={nodeState}
         className={`node group relative flex select-none flex-col ${
           editing ? "cursor-grab active:cursor-grabbing" : ""

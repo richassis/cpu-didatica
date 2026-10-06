@@ -6,6 +6,7 @@ import { Props } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useMemoryPanelStore } from "@/lib/memoryPanelStore";
 import { useCanvasEditing } from "@/components/CanvasEditingContext";
+import { useDisplayMaskStore } from "@/lib/displayMaskStore";
 import { useDisplayStore, formatNum, type NumericBase } from "@/lib/displayStore";
 import NodeShell from "@/components/widgets/NodeShell";
 import MemoryViewer from "@/components/MemoryViewer";
@@ -46,8 +47,12 @@ export default function MemoryComponent({ component, zoom }: Props) {
   const bitWidth = mem?.bitWidth ?? 16;
   const addrBits = Math.max(1, Math.ceil(Math.log2(wordCount)));
   const addr = mem?.in_addr.value ?? 0;
-  const rdMem = (mem?.in_rdMem.value ?? 0) !== 0;
-  const wrMem = (mem?.in_wrMem.value ?? 0) !== 0;
+  // Enables land with the control signals, ahead of the address and data wires;
+  // the headline waits for the component to be revealed so it never pairs the
+  // new enable with the previous access's data.
+  const revealed = useDisplayMaskStore((s) => s.isRevealed(id));
+  const rdMem = revealed && (mem?.in_rdMem.value ?? 0) !== 0;
+  const wrMem = revealed && (mem?.in_wrMem.value ?? 0) !== 0;
   const dataIn = mem?.in_data.value ?? 0;
   const dataOut = mem?.output ?? 0;
 
@@ -82,7 +87,7 @@ export default function MemoryComponent({ component, zoom }: Props) {
             <List size={12} strokeWidth={1.5} />
           </button>
           {(rdMem || wrMem) && (
-            <span className="shrink-0 rounded-md border border-st-warn px-1 font-mono text-[9px] leading-[14px] text-st-warn">
+            <span className="shrink-0 rounded-md border border-st-warn px-1 font-mono text-cv-xs leading-[14px] text-st-warn">
               {wrMem ? "WR" : "RD"}
             </span>
           )}
@@ -142,18 +147,18 @@ export default function MemoryComponent({ component, zoom }: Props) {
                 }
               >
                 <span
-                  className={`shrink-0 font-mono text-[9px] leading-none ${
+                  className={`shrink-0 font-mono text-cv-xs leading-none ${
                     isActive ? "text-fg" : "text-transparent"
                   }`}
                 >
                   ▶
                 </span>
-                <span className="num shrink-0 font-mono text-[11px] text-fg-faint">
+                <span className="num shrink-0 font-mono text-cv-sm text-fg-faint">
                   {fmtAddr(a, addrBits)}
                 </span>
                 <span
                   className={`num flex-1 text-right font-mono ${
-                    isActive ? "text-[12.5px] text-fg" : "text-[11px] text-fg-muted"
+                    isActive ? "text-cv-md text-fg" : "text-cv-sm text-fg-muted"
                   }`}
                 >
                   {formatNum(mem?.peek(a) ?? 0, base, bitWidth)}
@@ -221,13 +226,13 @@ function EditRow({
         isActive ? { background: "color-mix(in srgb, var(--st-data) 8%, transparent)" } : undefined
       }
     >
-      <span className="num w-10 shrink-0 font-mono text-[9px] text-fg-faint">
+      <span className="num w-10 shrink-0 font-mono text-cv-xs text-fg-faint">
         {fmtAddr(addr, addrBits)}
       </span>
       <input
         ref={inputRef}
         type="text"
-        className="min-w-0 flex-1 rounded border border-line bg-sunken px-1 py-px font-mono text-[10px] text-fg focus:border-line-strong focus:outline-none"
+        className="min-w-0 flex-1 rounded border border-line bg-sunken px-1 py-px font-mono text-cv-xs text-fg focus:border-line-strong focus:outline-none"
         value={draft ?? displayed}
         onFocus={() => setDraft(draft ?? displayed)}
         onChange={(e) => setDraft(e.target.value)}

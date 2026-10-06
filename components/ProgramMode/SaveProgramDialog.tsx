@@ -98,7 +98,7 @@ export default function SaveProgramDialog({ onClose }: Props) {
           className="mb-1.5 h-9 w-full rounded-lg border border-line bg-sunken px-2.5 font-mono text-xs text-fg focus:border-line-strong focus:outline-none"
         />
 
-        <p className="mb-5 font-mono text-[11px] text-fg-faint">
+        <p className="mb-5 font-mono text-small text-fg-faint">
           Será salvo como <span className="text-fg-muted">{fileName}</span>
         </p>
 
@@ -121,7 +121,7 @@ export default function SaveProgramDialog({ onClose }: Props) {
           ))}
         </div>
 
-        <div className="mb-5 border-t border-line pt-3 font-mono text-[11px] text-fg-faint">
+        <div className="mb-5 border-t border-line pt-3 font-mono text-small text-fg-faint">
           {lineCount} {lineCount === 1 ? "linha" : "linhas"} · {byteCount} bytes
         </div>
 

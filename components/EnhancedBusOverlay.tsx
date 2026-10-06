@@ -4,8 +4,10 @@ import { useLayoutStore, CANVAS_WIDTH, CANVAS_HEIGHT } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayMaskStore } from "@/lib/displayMaskStore";
 import { useExecutionStore } from "@/lib/executionStore";
-import { usePlaybackStore } from "@/lib/playbackStore";
-import { useDisplayStore, formatNum, isInstantSpeed } from "@/lib/displayStore";
+import { usePlaybackStore, BOOST_RATE } from "@/lib/playbackStore";
+import { useDisplayStore, formatPortValue, isInstantSpeed, animationSpeedPxPerMs, TEXT_SIZE_SCALE } from "@/lib/displayStore";
+import { buildSchedule, wireProgress } from "@/lib/animationSchedule";
+import { findInstructionRegisterIds, isUnsignedPort } from "@/lib/portKinds";
 import { useWireCreationStore } from "@/lib/wireCreationStore";
 import { useWireSelectionStore } from "@/lib/wireSelectionStore";
 import { useProjectStore } from "@/lib/projectStore";
@@ -30,8 +32,18 @@ import {
 } from "@/lib/wireRouting";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import type { WireDescriptor } from "@/lib/simulator";
-import { Register } from "@/lib/simulator";
+import { Adder, Decoder, Incrementer, Mux, Register, Ula } from "@/lib/simulator";
 
+/** Components whose outputs settle in the evaluate phase, with no commit. */
+function isCombinational(obj: unknown): boolean {
+  return (
+    obj instanceof Mux ||
+    obj instanceof Ula ||
+    obj instanceof Adder ||
+    obj instanceof Incrementer ||
+    obj instanceof Decoder
+  );
+}
 
 const HIT_AREA_WIDTH = 14;
 
@@ -43,8 +55,28 @@ interface WireRenderData {
   sourceEscape: Point;
   targetEscape: Point;
   value: string;
+  /** Length of the path in canvas pixels — a dot's travel time follows from it. */
+  length: number;
+  /**
+   * What the wire shows while resting at its target: the value it last
+   * delivered, from the timeline. Undefined outside the timeline and for CPU
+   * control signals, which show their live value.
+   */
+  restingValue?: string;
   isCpuControlSignal: boolean;
 }
+
+/** Total length of a polyline, in the same units as its points. */
+function pathLength(path: Point[]): number {
+  let total = 0;
+  for (let i = 0; i < path.length - 1; i++) {
+    total += Math.hypot(path[i + 1].x - path[i].x, path[i + 1].y - path[i].y);
+  }
+  return total;
+}
+
+/** A step made only of very short wires still lasts this long, so it can be seen. */
+const MIN_STEP_MS = 80;
 
 function normalizeNodes(nodes: Array<{ x: number; y: number }>): Point[] {
   const snapped = nodes.map((node) => ({
@@ -74,6 +106,9 @@ export default function EnhancedBusOverlay({
   const animationCycle = useSimulatorStore((s) => s.animationCycle);
   const displayMaskActive = useDisplayMaskStore((s) => s.isActive);
   const isTimelineActive = useExecutionStore((s) => s.isTimelineActive);
+  const frameWireValues = useExecutionStore((s) =>
+    s.isTimelineActive ? s.frames[s.currentIndex]?.wireValues : undefined
+  );
   const getPrimaryCpu = useSimulatorStore((s) => s.getPrimaryCpu);
   const getComponentTickSteps = useSimulatorStore((s) => s.getComponentTickSteps);
   const getComponentTickOrderByState = useSimulatorStore((s) => s.getComponentTickOrderByState);
@@ -81,6 +116,8 @@ export default function EnhancedBusOverlay({
   const showCpuSignalWires = useDisplayStore((s) => s.showCpuSignalWires);
   const showDataSignalWires = useDisplayStore((s) => s.showDataSignalWires);
   const showWireDots = useDisplayStore((s) => s.showWireDots);
+  // The canvas follows the text size at 40% of the rate (`--fs-cv` in globals.css).
+  const textScale = 1 + (TEXT_SIZE_SCALE[useDisplayStore((s) => s.textSize)] - 1) * 0.4;
   const animationEnabled = useDisplayStore((s) => s.animationEnabled);
   const animateCpuSignals = useDisplayStore((s) => s.animateCpuSignals);
   const animateDataSignals = useDisplayStore((s) => s.animateDataSignals);
@@ -120,7 +157,8 @@ export default function EnhancedBusOverlay({
   const wireDataByIdRef = useRef<Map<string, WireRenderData>>(new Map());
   const lastAnimatedCycleRef = useRef<number | null>(null);
   /** Substep order values already revealed in the current animation pass. */
-  const revealedGroupsRef = useRef<Set<number>>(new Set());
+  /** Substep orders whose start-of-substep reveals have already run. */
+  const startedGroupsRef = useRef<Set<number>>(new Set());
 
   /**
    * Display settings, mirrored into a ref and read at pass start.
@@ -188,9 +226,32 @@ export default function EnhancedBusOverlay({
       return { pos, side: placement.side };
     };
 
+    const instructionRegisterIds = findInstructionRegisterIds(components, projectWires);
+
+    const formatWireNumber = (wire: WireDescriptor, raw: number): string => {
+      const sourceObj = objects.get(wire.sourceComponentId);
+      const ports = sourceObj && "getPorts" in sourceObj
+        ? (sourceObj as { getPorts: () => Record<string, { bitWidth: number | null }> }).getPorts()
+        : {};
+      const unsigned = isUnsignedPort(
+        components.find((c) => c.id === wire.sourceComponentId)?.type ?? "",
+        wire.sourcePortName,
+        instructionRegisterIds.has(wire.sourceComponentId),
+      );
+      return formatPortValue(raw, base, ports[wire.sourcePortName]?.bitWidth ?? 16, unsigned);
+    };
+
     const resolveWireValue = (wire: WireDescriptor): string => {
       const sourceObj = objects.get(wire.sourceComponentId);
       if (!sourceObj || !("getPorts" in sourceObj)) return "?";
+
+      // Control lines, flags, addresses, opcodes and instruction words are not
+      // data: the signed-decimal base must not read them as negative.
+      const unsigned = isUnsignedPort(
+        components.find((c) => c.id === wire.sourceComponentId)?.type ?? "",
+        wire.sourcePortName,
+        instructionRegisterIds.has(wire.sourceComponentId),
+      );
 
       // For Register output ports during LIVE ticking, use the pre-commit
       // snapshot so the animation shows the value the register was *driving*
@@ -202,7 +263,7 @@ export default function EnhancedBusOverlay({
       // the stale `preCommitValue` here would show the last batch tick's value
       // (e.g. PC showing 0x001C instead of 0x0000 on the first run).
       if (!displayMaskActive && sourceObj instanceof Register && wire.sourcePortName === "value") {
-        return formatNum(sourceObj.preCommitValue, base, sourceObj.bitWidth);
+        return formatPortValue(sourceObj.preCommitValue, base, sourceObj.bitWidth, unsigned);
       }
 
       const ports = (sourceObj as { getPorts: () => Record<string, { value: unknown; bitWidth: number | null }> }).getPorts();
@@ -211,7 +272,7 @@ export default function EnhancedBusOverlay({
 
       const raw = port.value;
       if (typeof raw === "number") {
-        return formatNum(raw, base, port.bitWidth ?? 16);
+        return formatPortValue(raw, base, port.bitWidth ?? 16, unsigned);
       }
 
       return String(raw);
@@ -258,12 +319,17 @@ export default function EnhancedBusOverlay({
         sourceEscape,
         targetEscape,
         value: resolveWireValue(wire),
+        length: pathLength(path),
+        restingValue:
+          !isCpuControlSignal && frameWireValues?.has(wire.id)
+            ? formatWireNumber(wire, frameWireValues.get(wire.id)!)
+            : undefined,
         isCpuControlSignal,
       });
     }
 
     return data;
-  }, [projectWires, components, objects, base, revision, displayMaskActive]);
+  }, [projectWires, components, objects, base, revision, displayMaskActive, frameWireValues]);
 
   const wireDataById = useMemo(() => {
     const map = new Map<string, WireRenderData>();
@@ -298,7 +364,7 @@ export default function EnhancedBusOverlay({
 
     lastAnimatedCycleRef.current = animationCycle;
     // Fresh pass: nothing revealed yet.
-    revealedGroupsRef.current = new Set();
+    startedGroupsRef.current = new Set();
 
     const {
       showCpuSignalWires,
@@ -435,15 +501,33 @@ export default function EnhancedBusOverlay({
     const sortedNonCpuGroups = Array.from(nonCpuOrderGroups.entries())
       .sort((a, b) => a[0] - b[0]);
 
-    const startTime = Date.now();
-    // CPU changed signals animate concurrently in a single phase before data substeps.
-    const effectiveCpuDuration = animCpuIds.length > 0 ? animationDurationMs : 0;
-    const nonCpuStaggerStep = animationDurationMs;
-    const nonCpuGroupCount = sortedNonCpuGroups.length;
-    const nonCpuPhaseDuration = nonCpuGroupCount > 0
-      ? animationDurationMs * nonCpuGroupCount
-      : 0;
-    const totalDuration = effectiveCpuDuration + nonCpuPhaseDuration;
+    // Every dot crosses its wire at the same speed, so a long wire takes longer
+    // than a short one. Steps still run in order; a step lasts as long as its
+    // longest wire, and each wire lands on its own within it.
+    const lengthOf = (id: string) => wireDataByIdRef.current.get(id)?.length ?? 0;
+    const schedule = buildSchedule({
+      cpuWires: animCpuIds.map((id) => ({ id, length: lengthOf(id) })),
+      dataGroups: sortedNonCpuGroups.map(([order, ids]) => ({
+        order,
+        wires: ids.map((id) => ({ id, length: lengthOf(id) })),
+      })),
+      speedPxPerMs: animationSpeedPxPerMs(animationDurationMs),
+      minStepMs: MIN_STEP_MS,
+    });
+    const totalDuration = schedule.total;
+    usePlaybackStore.getState().setLastPassMs(totalDuration);
+
+    // A component is revealed when the last wire feeding it in its step lands.
+    const landed = new Set<string>();
+    const pendingByGroup = new Map<number, Map<string, number>>();
+    for (const group of schedule.groups) {
+      const pending = new Map<string, number>();
+      for (const w of group.wires) {
+        const targetId = wireDataByIdRef.current.get(w.id)?.wire.targetComponentId;
+        if (targetId) pending.set(targetId, (pending.get(targetId) ?? 0) + 1);
+      }
+      pendingByGroup.set(group.order, pending);
+    }
 
     // If data animation is disabled, reveal all data components immediately so
     // they show post-tick values; CPU signal animation (if any) runs on top.
@@ -495,10 +579,34 @@ export default function EnhancedBusOverlay({
       usePlaybackStore.getState().notifyTickAnimationComplete();
     };
 
-    const finishTimer = window.setTimeout(finish, totalDuration);
+    // The pass runs on its own clock, which follows real time at the current
+    // rate: 1x normally, `BOOST_RATE`x while the accelerate control is held. The
+    // schedule is untouched — progress, reveals and the end of the pass all
+    // depend on this clock alone, so speeding it up speeds all of them together
+    // without skipping anything.
+    let clockRate = usePlaybackStore.getState().boost ? BOOST_RATE : 1;
+    let clock = 0;
+    let lastFrame = performance.now();
+    const advanceClock = () => {
+      const now = performance.now();
+      clock += (now - lastFrame) * clockRate;
+      lastFrame = now;
+      return clock;
+    };
+
+    // The timer that guarantees the pass ends must track the rate too: the real
+    // time left is the clock time left divided by the rate.
+    let finishTimer = window.setTimeout(finish, totalDuration / clockRate);
+    const unsubscribeBoost = usePlaybackStore.subscribe((state, previous) => {
+      if (state.boost === previous.boost) return;
+      advanceClock();
+      clockRate = state.boost ? BOOST_RATE : 1;
+      window.clearTimeout(finishTimer);
+      finishTimer = window.setTimeout(finish, Math.max(0, totalDuration - clock) / clockRate);
+    });
 
     const animate = () => {
-      const elapsed = Date.now() - startTime;
+      const elapsed = advanceClock();
       if (elapsed >= totalDuration) {
         finish();
         return;
@@ -507,90 +615,82 @@ export default function EnhancedBusOverlay({
       const progress = new Map<string, number>();
 
       // ── CPU phase: changed control-signal wires animate concurrently ──────
-      for (const id of animCpuIds) {
-        progress.set(id, 0);
-      }
-      if (animCpuIds.length > 0 && effectiveCpuDuration > 0) {
-        const cpuProgress = Math.min(1, elapsed / effectiveCpuDuration);
-        for (const id of animCpuIds) {
-          progress.set(id, cpuProgress);
-        }
-        // Once the CPU phase ends, mark these wires as settled and light up any
-        // component that received a control signal but does not drive a wire
-        // this state (so it never gets a substep reveal of its own). A component
-        // that IS in a substep group is left to its own incoming data wire.
-        if (cpuProgress >= 1 && !revealedGroupsRef.current.has(-1)) {
-          revealedGroupsRef.current.add(-1);
-          setSettledDots((prev) => {
-            const next = new Set(prev);
-            for (const wireId of animCpuIds) next.add(wireId);
-            return next;
-          });
+      // A control signal delivers only the port it drives (a write-enable, an
+      // ALU operation, a MUX select) — never the component's data. So only that
+      // input port is revealed when its wire lands; the component's stored
+      // value and outputs wait for the data wire that actually carries them (or
+      // for the end of the pass when no data wire is animated).
+      for (const timing of schedule.cpu.wires) {
+        const p = wireProgress(timing, elapsed);
+        progress.set(timing.id, p);
+        if (p < 1 || landed.has(timing.id)) continue;
 
-          const groupedIds = new Set(
-            useDisplayMaskStore.getState().substepGroups.flatMap((g) => g.componentIds)
-          );
-          const cpuTargetIds: string[] = [];
-          for (const wireId of animCpuIds) {
-            const wireData = wireDataByIdRef.current.get(wireId);
-            const targetId = wireData?.wire.targetComponentId;
-            if (!targetId) continue;
+        landed.add(timing.id);
+        setSettledDots((prev) => new Set(prev).add(timing.id));
 
-            if (!groupedIds.has(targetId)) {
-              cpuTargetIds.push(targetId);
-            } else if (wireData!.wire.targetPortName === "sel") {
-              // A MUX's select line, fed by this control-signal wire. The MUX
-              // is also grouped into a later data substep (for the value
-              // flowing through it), but the *selection* itself must switch
-              // now, in step with the control signal actually arriving — not
-              // wait for that later substep, by which point the animation
-              // would already show data flowing through using the stale,
-              // pre-tick selection.
-              useDisplayMaskStore.getState().revealInputPort(targetId, "sel");
-            }
-          }
-          if (cpuTargetIds.length > 0) {
-            useDisplayMaskStore.getState().revealComponents(cpuTargetIds);
-          }
+        const wire = wireDataByIdRef.current.get(timing.id)?.wire;
+        if (!wire) continue;
+        const mask = useDisplayMaskStore.getState();
+        mask.revealInputPort(wire.targetComponentId, wire.targetPortName);
+        // A MUX select also fixes the MUX's output: the wire leaving it must
+        // carry the newly selected value, not the previous selection.
+        if (wire.targetPortName === "sel") {
+          mask.revealOutputPort(wire.targetComponentId, "result");
         }
       }
 
       // ── Data substep phases: sequential, one group per substep ────────────
-      for (const id of animNonCpuIds) {
-        progress.set(id, 0);
-      }
-      if (elapsed > effectiveCpuDuration && animationDurationMs > 0 && sortedNonCpuGroups.length > 0) {
-        const compElapsed = elapsed - effectiveCpuDuration;
+      for (const group of schedule.groups) {
+        const order = group.order;
+        for (const timing of group.wires) {
+          progress.set(timing.id, wireProgress(timing, elapsed));
+        }
+        if (elapsed <= group.start) continue;
 
-        sortedNonCpuGroups.forEach(([order, groupIds], index) => {
-          const groupStart = index * nonCpuStaggerStep;
-          const groupProgress = Math.min(1, Math.max(0, (compElapsed - groupStart) / animationDurationMs));
-          for (const id of groupIds) {
-            progress.set(id, groupProgress);
+        // A purely combinational component (MUX, ULA, adder, incrementer,
+        // decoder) computes its outputs in the evaluate phase, before any
+        // commit, so its output is already the post-tick value when its
+        // outgoing wire starts flowing. Revealing it here keeps the wire from
+        // animating the pre-tick value whenever nothing revealed the
+        // component earlier (e.g. a MUX whose `sel` did not change, or an
+        // operand wire that sits in the same substep as the result).
+        // Sequential components are excluded on purpose: they keep driving
+        // their old value until their own incoming wire delivers.
+        if (!startedGroupsRef.current.has(order)) {
+          startedGroupsRef.current.add(order);
+          // Whatever acts in this step lights now, not when a value lands on it.
+          useDisplayMaskStore.getState().markSending(order);
+          const objs = useSimulatorStore.getState().objects;
+          const combinationalIds = new Set<string>();
+          for (const timing of group.wires) {
+            const sourceId = wireDataByIdRef.current.get(timing.id)?.wire.sourceComponentId;
+            const source = sourceId ? objs.get(sourceId) : undefined;
+            if (sourceId && isCombinational(source)) combinationalIds.add(sourceId);
           }
-
-          // ENGINE TICK: once this substep's wires finish, reveal the components
-          // those wires TARGET — a component latches its new value only after the
-          // wires feeding into it arrive. This keeps a register (e.g. PC) showing
-          // its old value while it drives an earlier substep, updating only once
-          // its own incoming wire (the last substep) completes.
-          if (groupProgress >= 1 && !revealedGroupsRef.current.has(order)) {
-            revealedGroupsRef.current.add(order);
-            const targetIds: string[] = [];
-            for (const wireId of groupIds) {
-              const targetId = wireDataByIdRef.current.get(wireId)?.wire.targetComponentId;
-              if (targetId) targetIds.push(targetId);
-            }
-            useDisplayMaskStore.getState().revealComponents(targetIds);
-
-            // These wires have now delivered — keep a resting dot at their target.
-            setSettledDots((prev) => {
-              const next = new Set(prev);
-              for (const wireId of groupIds) next.add(wireId);
-              return next;
-            });
+          for (const id of combinationalIds) {
+            useDisplayMaskStore.getState().revealOutputPorts(id);
           }
-        });
+        }
+
+        // ENGINE TICK: a component latches its new value only after the wires
+        // feeding it arrive — all of them, when it has several. This keeps a
+        // register (e.g. PC) showing its old value while it drives an earlier
+        // substep, updating only once its own incoming wire (the last substep)
+        // lands. A short wire no longer waits for the longest one of its step.
+        const pending = pendingByGroup.get(order);
+        for (const timing of group.wires) {
+          if (elapsed < timing.arrival || landed.has(timing.id)) continue;
+
+          landed.add(timing.id);
+          // The wire has delivered — keep a resting dot at its target.
+          setSettledDots((prev) => new Set(prev).add(timing.id));
+
+          const targetId = wireDataByIdRef.current.get(timing.id)?.wire.targetComponentId;
+          if (!targetId || !pending) continue;
+          const remaining = (pending.get(targetId) ?? 1) - 1;
+          pending.set(targetId, remaining);
+          if (remaining <= 0) useDisplayMaskStore.getState().revealComponents([targetId]);
+        }
       }
 
       setAnimationProgress(progress);
@@ -600,6 +700,7 @@ export default function EnhancedBusOverlay({
     animationRef.current = requestAnimationFrame(animate);
 
     return () => {
+      unsubscribeBoost();
       window.clearTimeout(kickoff);
       window.clearTimeout(finishTimer);
       if (animationRef.current) {
@@ -835,7 +936,9 @@ export default function EnhancedBusOverlay({
     return [{
       id: wireData.wire.id,
       point: getPointAlongPath(wireData.path, progress),
-      value: wireData.value,
+      // At rest, the value the wire delivered — not its source, which may have
+      // moved on since (a register that updated later, logic re-evaluated).
+      value: progress >= 1 ? (wireData.restingValue ?? wireData.value) : wireData.value,
       color: wireData.isCpuControlSignal ? "var(--wire-control)" : "var(--wire-data)",
       isResting: progress >= 1,
       // Resting markers sit on top of the destination widget, so push the badge
@@ -1098,15 +1201,17 @@ export default function EnhancedBusOverlay({
         // stroke out behind the glyphs. It used to be a bordered badge floating
         // 20px above the line, which scattered saturated chips across the canvas
         // and left the reader to work out which wire each one belonged to.
-        const width = marker.value.length * 6.7 + 8;
+        // 14px mono is about 8.4px a glyph; the label follows the text size.
+        const width = marker.value.length * 8.4 * textScale + 10;
+        const height = 20 * textScale;
 
         return (
           <g key={`value-${marker.id}`} transform={`translate(${marker.point.x}, ${marker.point.y})`}>
             <rect
               x={-width / 2}
-              y={-7}
+              y={-height / 2}
               width={width}
-              height={14}
+              height={height}
               style={{ fill: "var(--canvas)" }}
             />
             <text
@@ -1114,7 +1219,7 @@ export default function EnhancedBusOverlay({
               dominantBaseline="central"
               className="font-mono num"
               style={{
-                fontSize: "11px",
+                fontSize: "calc(0.875rem * var(--fs-cv) / var(--fs))",
                 fill: marker.isResting ? "var(--text-muted)" : marker.color,
               }}
             >

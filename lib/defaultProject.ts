@@ -30,10 +30,12 @@ export function isDefaultProject(projectId: string | null): boolean {
 export async function createDefaultProject(): Promise<ProjectData> {
   try {
     // In a developer build this file is rewritten by edit mode, so a cached
-    // response means "I edited, refreshed, and got the old datapath back". In
-    // a published build it is immutable per deploy, so let the browser cache it.
+    // response means "I edited, refreshed, and got the old datapath back".
+    // A published build revalidates instead of trusting the browser's copy:
+    // after a deploy, a stale layout paired with new code is a broken app
+    // that only clearing the site's data fixes. Revalidation costs a 304.
     const response = await fetch('/default-project.cpud', {
-      cache: EDITOR_ENABLED ? 'no-store' : 'default',
+      cache: EDITOR_ENABLED ? 'no-store' : 'no-cache',
     });
     if (!response.ok) {
       throw new Error(`Failed to load default project: ${response.status}`);
