@@ -8,6 +8,7 @@ import CpuFsmGraph from "@/components/widgets/CpuFsmGraph";
 import FlagSquares from "@/components/widgets/FlagSquares";
 import { CpuState, CONTROL_SIGNAL_DEFS } from "@/lib/simulator/Cpu";
 import type { CPU } from "@/lib/simulator/Cpu";
+import { CPU_SIDE_INPUT_OFFSET } from "@/lib/widgetDefinitions";
 
 /**
  * The 10 control-signal outputs, in the order the CPU class declares them —
@@ -83,6 +84,27 @@ export default function CpuComponent({ component, zoom }: Props) {
       control
       dense
       state={halted ? "error" : undefined}
+      // The two side inputs' names, just above their ports — not level with
+      // them, or the value tag a live wire draws at the port covers the name.
+      // In `frame` because it renders straight into the node's root — the same
+      // box the ports' `top: offset%` is measured against — not below the
+      // title like children.
+      frame={
+        <>
+          <span
+            className="absolute left-2 z-20 font-mono text-cv-sm leading-none text-fg-muted"
+            style={{ top: `${CPU_SIDE_INPUT_OFFSET}%`, transform: "translateY(calc(-100% - 10px))" }}
+          >
+            OPCODE
+          </span>
+          <span
+            className="absolute right-2 z-20 font-mono text-cv-sm leading-none text-fg-muted"
+            style={{ top: `${CPU_SIDE_INPUT_OFFSET}%`, transform: "translateY(calc(-100% - 10px))" }}
+          >
+            FLAGS
+          </span>
+        </>
+      }
       actions={
         <FlagSquares
           flags={[
@@ -104,8 +126,10 @@ export default function CpuComponent({ component, zoom }: Props) {
 
       {/* Signal strip: one dot per bottom control port, positioned with the
           same (i+1)/(n+1) formula the port itself is auto-placed with, so a
-          dot sits directly under its port regardless of the node's width. */}
-      <div className="relative h-11 shrink-0 border-t border-line">
+          dot sits directly under its port regardless of the node's width.
+          Tall enough that the value row ends clear of the port squares
+          straddling the bottom edge. */}
+      <div className="relative h-16 shrink-0 border-t border-line">
         {BOTTOM_SIGNAL_ORDER.map((name, i) => {
           const active = isOn(name);
           const left = ((i + 1) / (BOTTOM_SIGNAL_ORDER.length + 1)) * 100;

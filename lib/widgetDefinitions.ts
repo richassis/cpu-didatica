@@ -22,6 +22,12 @@ export interface WidgetDefinition {
   portConfig?: ComponentPortConfig;
 }
 
+/**
+ * Height of the UC's two side inputs (opcode, flags), as a % of the node's
+ * height: 256px of the default 336, grid-aligned and just above the signal
+ * strip. Shared with CpuComponent, which draws each input's name beside it.
+ */
+export const CPU_SIDE_INPUT_OFFSET = (256 / 336) * 100;
 
 /**
  * Central registry of all widget definitions.
@@ -256,18 +262,18 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     defaultWidth: 901,  // 44 grid cells — 10 bottom ports at 64px pitch, room for the FSM columns
     defaultHeight: 336, // 21 grid cells — FETCH/DECODE stacked above the branch fan
     description: "Control unit (UC) — FSM state and control signals",
-    // CPU: opcode in at the bottom-left, the flags bus in on the right, all
+    // CPU: opcode in on the left, the flags bus in on the right, both at the
+    // same height just above the signal strip and named by CpuComponent; all
     // control signal outputs on the bottom, aligned under the FSM graph they
     // drive. GPR flags stay hidden on the left.
     portConfig: {
       defaultInputSide: "left",
       defaultOutputSide: "right",
       ports: {
-        // Opcode from the decoder, at the bottom-left corner — the decoder
-        // sits below, so the wire goes straight up instead of around the UC.
-        "in_opcode": { side: "bottom", offset: 2 },
+        // Opcode from the decoder, on the left edge.
+        "in_opcode": { side: "left", offset: CPU_SIDE_INPUT_OFFSET },
         // The ULA's 4-bit flags bus (Z C N V), coming in from the right.
-        "in_flags": { side: "right" },
+        "in_flags": { side: "right", offset: CPU_SIDE_INPUT_OFFSET },
         // GPR-sourced Z/N, fed by the write-data comparator on the GPR
         // (LDA/LDAI) — OR'd with the ULA-sourced flags above when latching.
         "in_flagZeroGpr":     { side: "left", hidden: true },
