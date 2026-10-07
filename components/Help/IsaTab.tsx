@@ -106,7 +106,8 @@ export default function IsaTab() {
         <p className="mb-3 text-ui leading-relaxed text-fg-muted">
           <b className="text-fg">Rd</b> é o destino, <b className="text-fg">Rs</b>, <b className="text-fg">Ra</b> e{" "}
           <b className="text-fg">Rb</b> são fontes, <b className="text-fg">M</b> é um endereço de memória
-          (0 a 255) ou label, e <b className="text-fg">N</b> é um valor de −128 a 255. Clique numa linha
+          (0 a 255) ou label, e <b className="text-fg">N</b> é um valor de −128 a 127 (de 128 a 255 é o mesmo
+          byte, lido como negativo). Clique numa linha
           para ver a instrução codificada abaixo.
         </p>
 

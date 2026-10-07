@@ -147,8 +147,8 @@ FIM:    HLT
 const LOGICO = `\
 ; ── Instruções Lógicas ──────────────────────────────────────────────────────
 ; Demonstra AND, OR e NOT com padrões de bits de 16 bits.
-; Entradas: R0=170 (10101010), R1=204 (11001100)
-; Resultados: AND=136, OR=238, NOT(170)=65365
+; Entradas: R0=85 (01010101), R1=51 (00110011)
+; Resultados: AND=17, OR=119, NOT(85)=0xFFAA (−86)
 
         .data
 RES_AND: DB   0             ; resultado de R0 AND R1
@@ -156,11 +156,11 @@ RES_OR:  DB   0             ; resultado de R0 OR R1
 RES_NOT: DB   0             ; resultado de NOT R0
 
         .code
-        LDAI  R0, 170      ; R0 = 10101010
-        LDAI  R1, 204      ; R1 = 11001100
-        AND   R0, R1, R2   ; R2 = R0 AND R1 = 10001000 = 136
-        OR    R0, R1, R3   ; R3 = R0 OR  R1 = 11101110 = 238
-        NOT   R0, R4        ; R4 = NOT R0    = 1111...01010101
+        LDAI  R0, 85       ; R0 = 01010101
+        LDAI  R1, 51       ; R1 = 00110011
+        AND   R0, R1, R2   ; R2 = R0 AND R1 = 00010001 = 17
+        OR    R0, R1, R3   ; R3 = R0 OR  R1 = 01110111 = 119
+        NOT   R0, R4        ; R4 = NOT R0    = 11111111 10101010 = 0xFFAA (−86)
         STA   R2, RES_AND
         STA   R3, RES_OR
         STA   R4, RES_NOT

@@ -147,7 +147,10 @@ export default function GuideTab({ onClose }: { onClose: () => void }) {
             </li>
             <li>
               <b className="text-fg">Cuidado:</b> no <span className="font-mono text-fg">LDAI</span> o
-              imediato tem só 8 bits (−128 a 255). Endereços de memória vão de 0 a 255.
+              imediato tem só 8 bits: vai de −128 a 127. Valores de 128 a 255 também são aceitos, mas
+              o bit 7 é estendido como sinal e eles viram negativos
+              (<span className="font-mono text-fg">LDAI R0, 200</span> carrega −56). Endereços de memória
+              vão de 0 a 255.
             </li>
           </ul>
         </div>
