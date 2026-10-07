@@ -74,16 +74,12 @@ export default function InstructionMemoryComponent({ component, zoom }: Props) {
       <NodeShell
         component={component}
         zoom={zoom}
-        sequential
         spine
         dense
         value={decodeMnemonic(imem?.peek(currentAddr) ?? 0)}
         compactValue
         actions={
           <>
-            <span className="num shrink-0 font-mono text-cv-xs text-fg-muted">
-              {fmtAddr(currentAddr, addrBits)}
-            </span>
             <button
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => {

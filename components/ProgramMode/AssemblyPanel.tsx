@@ -134,8 +134,6 @@ export default function AssemblyPanel({ onToggleCollapse }: { onToggleCollapse: 
   const assemblyErrors    = useProgramDataStore((s) => s.assemblyErrors);
   const assembled         = useProgramDataStore((s) => s.assembled);
 
-  const isLoaded          = useExecutionStore((s) => s.isLoaded);
-  const totalTicks        = useExecutionStore((s) => s.totalTicks);
   const isTimelineActive  = useExecutionStore((s) => s.isTimelineActive);
   const frames            = useExecutionStore((s) => s.frames);
   const currentIndex      = useExecutionStore((s) => s.currentIndex);
@@ -296,7 +294,7 @@ export default function AssemblyPanel({ onToggleCollapse }: { onToggleCollapse: 
       </div>
 
       {/* ── Status / errors ── */}
-      {(assemblyErrors.length > 0 || isLoaded || !assemblySource.trim()) && (
+      {(assemblyErrors.length > 0 || !assemblySource.trim()) && (
         <div className="shrink-0 space-y-1.5 border-t border-line px-3 py-2">
           {assemblyErrors.length > 0 && (
             <div className="space-y-0.5 rounded-lg border border-st-error px-2 py-1.5">
@@ -308,11 +306,6 @@ export default function AssemblyPanel({ onToggleCollapse }: { onToggleCollapse: 
                   <span className="text-st-error">L{err.line}:</span> {err.message}
                 </div>
               ))}
-            </div>
-          )}
-          {isLoaded && assemblyErrors.length === 0 && (
-            <div className="rounded-lg border border-st-active px-2 py-1 font-mono text-small text-st-active">
-              {totalTicks} ticks capturados
             </div>
           )}
           {!assemblySource.trim() && (

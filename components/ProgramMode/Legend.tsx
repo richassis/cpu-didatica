@@ -1,6 +1,6 @@
 "use client";
 
-import { Silhouette, ClockNotch, MemorySpine } from "@/components/widgets/silhouettes";
+import { Silhouette, MemorySpine } from "@/components/widgets/silhouettes";
 
 /**
  * How to read the canvas.
@@ -58,13 +58,11 @@ export default function Legend() {
               <div className="space-y-2">
                 <ShapeSample label="Registrador" note="guarda um único valor">
                   <span className="node--boxed absolute inset-0 rounded-[6px]" />
-                  <ClockNotch />
                 </ShapeSample>
 
                 <ShapeSample label="Memória" note="lombada na borda esquerda">
                   <span className="node--boxed absolute inset-0 rounded-[6px]" />
                   <MemorySpine />
-                  <ClockNotch />
                 </ShapeSample>
 
                 <ShapeSample label="ULA" note="trapézio com entalhe">
@@ -111,21 +109,8 @@ export default function Legend() {
                   note="fora deste tick"
                 />
               </div>
-
-              <div className="mt-4 border-t border-line pt-3">
-                <div className="t-section mb-1.5">Entalhe de clock ▷</div>
-                <p className="text-caption leading-snug text-fg-faint">
-                  Componentes com o entalhe são sequenciais — travam no clock.
-                  Os que não têm são combinacionais.
-                </p>
-              </div>
             </div>
           </div>
-
-      <p className="mt-3 border-t border-line pt-3 text-caption leading-snug text-fg-faint">
-        As duas colunas são independentes. A forma nunca muda durante a execução, e
-        a cor nunca diz qual componente você está olhando.
-      </p>
     </div>
   );
 }

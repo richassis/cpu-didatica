@@ -29,10 +29,10 @@ function opName(op: number): string {
 export default function UlaComponent({ component, zoom }: Props) {
   const revision = useSimulatorStore((s) => s.revision);
   const ula = useSimulatorStore((s) => s.getUla(component.id));
-  // Flags are a status register: what was latched on the last EXECUTE, cleared
-  // until the first ALU operation. The CPU owns that latch, so read it there
-  // rather than from the ULA's live combinational outputs (which sit at
-  // 0 + 0 = 0 → Z whenever the ULA is idle).
+  // The ULA's own flags: what its last operation produced, cleared until the
+  // first one. LDA/LDAI change the control unit's Z/N but never these. The CPU
+  // owns that latch, so read it there rather than from the ULA's live
+  // combinational outputs (which follow whatever opULA is driving now).
   const cpu = useSimulatorStore((s) => s.getPrimaryCpu());
   void revision;
 
@@ -46,10 +46,10 @@ export default function UlaComponent({ component, zoom }: Props) {
         <div>
           <FlagSquares
             flags={[
-              { label: "Z", on: cpu?.latchedFlagZero ?? false, title: "Zero" },
-              { label: "C", on: cpu?.latchedFlagCarry ?? false, title: "Carry" },
-              { label: "N", on: cpu?.latchedFlagNegative ?? false, title: "Negative" },
-              { label: "V", on: cpu?.latchedFlagOverflow ?? false, title: "Overflow" },
+              { label: "Z", on: cpu?.ulaFlags.zero ?? false, title: "Zero" },
+              { label: "C", on: cpu?.ulaFlags.carry ?? false, title: "Carry" },
+              { label: "N", on: cpu?.ulaFlags.negative ?? false, title: "Negative" },
+              { label: "V", on: cpu?.ulaFlags.overflow ?? false, title: "Overflow" },
             ]}
           />
         </div>

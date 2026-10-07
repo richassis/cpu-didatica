@@ -193,6 +193,12 @@ export enum UlaOperation {
 }
 
 /**
+ * Bit positions in the ULA's 4-bit flags bus (`Ula.out_flags` → CPU
+ * `in_flags`): Z C N V, most significant first.
+ */
+export const FLAG_BITS = { zero: 3, carry: 2, negative: 1, overflow: 0 } as const;
+
+/**
  * Maps each ALU-class opcode to the corresponding {@link UlaOperation}.
  * Only opcodes that actually drive the ULA are present; others are absent.
  */

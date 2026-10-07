@@ -17,6 +17,13 @@ SOMA:   DB    0            ; variável, começa em 0
         STA   R2, SOMA     ; DMem[SOMA] = R2
         HLT`;
 
+/** The same two values, 1 and −1, in each notation a 16-bit variable accepts. */
+const NUMBER_FORMATS = [
+  ["decimal", "1", "-1"],
+  ["hexadecimal", "0x0001", "0xFFFF"],
+  ["binário", "0b0000000000000001", "0b1111111111111111"],
+] as const;
+
 function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (
     <li className="flex gap-3">
@@ -125,12 +132,22 @@ export default function GuideTab({ onClose }: { onClose: () => void }) {
               uma palavra da memória de dados, na ordem em que aparece, com o valor inicial (0 se omitido).
             </li>
             <li>
-              Números: decimal (<span className="font-mono text-fg">10</span>), negativo (
-              <span className="font-mono text-fg">-5</span>), hexadecimal (
-              <span className="font-mono text-fg">0xFF</span> ou <span className="font-mono text-fg">0FFh</span>).
+              Variáveis (<span className="font-mono text-fg">DB</span>) têm 16 bits e podem ser escritas em:
+              <table className="mt-1.5 font-mono text-small">
+                <tbody>
+                  {NUMBER_FORMATS.map(([base, one, minusOne]) => (
+                    <tr key={base}>
+                      <td className="pr-4 font-sans text-fg-muted">{base}</td>
+                      <td className="pr-4 text-right text-fg">{one}</td>
+                      <td className="text-right text-fg">{minusOne}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </li>
             <li>
-              <span className="font-mono text-fg">LDAI</span> aceita de −128 a 255. Endereços de memória vão de 0 a 255.
+              <b className="text-fg">Cuidado:</b> no <span className="font-mono text-fg">LDAI</span> o
+              imediato tem só 8 bits (−128 a 255). Endereços de memória vão de 0 a 255.
             </li>
           </ul>
         </div>

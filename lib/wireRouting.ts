@@ -456,7 +456,12 @@ export function buildWirePath(
     );
 
   if (nodes.length > 0) {
-    return smoothOrthogonalPath(assemble(simplifyOrthogonalPath(enforceOrthogonal(nodes))), obstacles);
+    return smoothOrthogonalPath(
+      assemble(simplifyOrthogonalPath(enforceOrthogonal(nodes))),
+      obstacles,
+      undefined,
+      endpointBoxes,
+    );
   }
 
   // The two components this wire connects are scored too, but only over the run
@@ -487,7 +492,7 @@ export function buildWirePath(
     }
   }
 
-  return smoothOrthogonalPath(assemble(best), obstacles);
+  return smoothOrthogonalPath(assemble(best), obstacles, undefined, endpointBoxes);
 }
 
 /**
@@ -502,16 +507,23 @@ export function buildWirePath(
  * The first and last segments are never touched: they are the port escape stubs,
  * and rewriting them would make a wire leave its port sideways through the
  * widget body.
+ *
+ * `endpointBoxes` — the two components the wire connects — block shortcuts too,
+ * but un-inflated: the wire legitimately runs right up to them, it just must
+ * not cut back across one (a register whose input and output are on opposite
+ * sides from where its wires need to go would otherwise be crossed straight
+ * through).
  */
 export function smoothOrthogonalPath(
   points: Point[],
   obstacles: AABB[] = [],
   margin = 8,
+  endpointBoxes: AABB[] = [],
 ): Point[] {
   let path = simplifyOrthogonalPath(points);
   if (path.length <= 3) return path;
 
-  const boxes = obstacles.map((box) => inflateBounds(box, margin));
+  const boxes = [...obstacles.map((box) => inflateBounds(box, margin)), ...endpointBoxes];
   const isClear = (segment: Point[]) => boxes.every((box) => !pathIntersectsAABB(segment, box));
 
   let improved = true;

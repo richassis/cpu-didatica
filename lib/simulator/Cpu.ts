@@ -1,5 +1,5 @@
 import type { Clockable } from "./Clockable";
-import { Opcode, UlaOperation, OPCODE_TO_ULA_OP } from "./ISA";
+import { Opcode, UlaOperation, OPCODE_TO_ULA_OP, FLAG_BITS } from "./ISA";
 import { InputPort, OutputPort, type Connectable, type PortMap } from "./Port";
 import { CpuState, ALL_CPU_STATES } from "./CpuState";
 import { DEFAULT_TICK_STEPS } from "./CpuSteps";
@@ -230,6 +230,16 @@ export const STATE_CLEANUP_SIGNALS: Readonly<Partial<Record<CpuState, (keyof Con
   [CpuState.WRITEREG3]: ["opULA"],
 };
 
+/** Z/C/N/V as one record. */
+export interface UlaFlags {
+  zero: boolean;
+  carry: boolean;
+  negative: boolean;
+  overflow: boolean;
+}
+
+const NO_FLAGS: Readonly<UlaFlags> = { zero: false, carry: false, negative: false, overflow: false };
+
 /**
  * Component registry entry for step-based ticking.
  */
@@ -249,11 +259,13 @@ export interface CpuInternalStateSnapshot {
   halted: boolean;
   totalTicks: number;
   previousState: CpuState;
-  /** ULA flags as latched on the last EXECUTE — the status-register view. */
+  /** The control unit's status flags — set by ULA operations and by LDA/LDAI (Z, N). */
   latchedFlagZero: boolean;
   latchedFlagCarry: boolean;
   latchedFlagNegative: boolean;
   latchedFlagOverflow: boolean;
+  /** The ULA's own flags — set only by ULA operations (EXECUTE). */
+  ulaFlags?: UlaFlags;
   /** Control output port names the executed state wrote (see `getDrivenControlSignalPorts`). */
   drivenSignals: string[];
 }
@@ -270,10 +282,7 @@ export interface CpuInternalStateSnapshot {
  *
  * Ports:
  * - in_opcode (5-bit): The decoded opcode from the Decoder
- * - in_flagZero (1-bit): Zero flag from ULA
- * - in_flagCarry (1-bit): Carry flag from ULA
- * - in_flagNegative (1-bit): Negative flag from ULA
- * - in_flagOverflow (1-bit): Overflow flag from ULA (signed overflow)
+ * - in_flags (4-bit): The ULA's flags bus, Z C N V (see `FLAG_BITS`)
  * - in_flagZeroGpr (1-bit, hidden): Zero flag from the GPR's write-data bus
  *   (LDA/LDAI loading a zero value)
  * - in_flagNegativeGpr (1-bit, hidden): Negative flag from the GPR's
@@ -281,8 +290,10 @@ export interface CpuInternalStateSnapshot {
  * - out_wrReg, out_muxAReg, out_muxDReg, etc.: Control signal outputs
  * - out_state (3-bit): Current FSM state (for debugging/UI)
  *
- * Status flags (Z/N) are effectively an OR between the ULA's flags and the
- * GPR's: `latchFlagsIfProduced()` samples whichever source's operation just
+ * Two flag sets are kept. The ULA's own flags (`ulaFlags`) change only when
+ * the ULA operates. The control unit's flags (`latchedFlag*`, what the jumps
+ * read) change on ULA operations too, and also on LDA/LDAI (Z/N) — which is
+ * effectively an OR between the ULA's flags and the GPR's: `latchFlagsIfProduced()` samples whichever source's operation just
  * finished (ULA after EXECUTE, GPR after a LDA/LDAI write commits in
  * WRITEREG1/WRITEREG2), so a flag left over on the *other* input from an
  * earlier, unrelated instruction never bleeds into the freshly latched value.
@@ -318,16 +329,16 @@ export class CPU implements Clockable, Connectable {
   private _latchedFlagNegative: boolean = false;
   private _latchedFlagOverflow: boolean = false;
 
+  // The ULA's own flags (captured on EXECUTE only)
+  private _ulaFlags: UlaFlags = { ...NO_FLAGS };
+
   // Testing mode: force a specific opcode
   private _testingModeOpcode: Opcode | null = null;
   private _testingModeEnabled: boolean = false;
 
   // ── Input Ports ──────────────────────────────────────────────
   readonly in_opcode: InputPort<number>;
-  readonly in_flagZero: InputPort<number>;
-  readonly in_flagCarry: InputPort<number>;
-  readonly in_flagNegative: InputPort<number>;
-  readonly in_flagOverflow: InputPort<number>;
+  readonly in_flags: InputPort<number>;
   readonly in_flagZeroGpr: InputPort<number>;
   readonly in_flagNegativeGpr: InputPort<number>;
 
@@ -351,10 +362,7 @@ export class CPU implements Clockable, Connectable {
 
     // Input ports
     this.in_opcode = new InputPort<number>("in_opcode", "opcode", 5, Opcode.HLT);
-    this.in_flagZero = new InputPort<number>("in_flagZero", "number", 1, 0);
-    this.in_flagCarry = new InputPort<number>("in_flagCarry", "number", 1, 0);
-    this.in_flagNegative = new InputPort<number>("in_flagNegative", "number", 1, 0);
-    this.in_flagOverflow = new InputPort<number>("in_flagOverflow", "number", 1, 0);
+    this.in_flags = new InputPort<number>("in_flags", "number", 4, 0);
     this.in_flagZeroGpr = new InputPort<number>("in_flagZeroGpr", "number", 1, 0);
     this.in_flagNegativeGpr = new InputPort<number>("in_flagNegativeGpr", "number", 1, 0);
 
@@ -461,10 +469,7 @@ export class CPU implements Clockable, Connectable {
   getPorts(): PortMap {
     return {
       in_opcode: this.in_opcode,
-      in_flagZero: this.in_flagZero,
-      in_flagCarry: this.in_flagCarry,
-      in_flagNegative: this.in_flagNegative,
-      in_flagOverflow: this.in_flagOverflow,
+      in_flags: this.in_flags,
       in_flagZeroGpr: this.in_flagZeroGpr,
       in_flagNegativeGpr: this.in_flagNegativeGpr,
       out_muxPC: this.out_muxPC,
@@ -528,6 +533,11 @@ export class CPU implements Clockable, Connectable {
 
   get latchedFlagOverflow(): boolean {
     return this._latchedFlagOverflow;
+  }
+
+  /** The ULA's own flags, as of its last operation (LDA/LDAI never touch them). */
+  get ulaFlags(): Readonly<UlaFlags> {
+    return this._ulaFlags;
   }
 
   /**
@@ -622,6 +632,7 @@ export class CPU implements Clockable, Connectable {
     this._latchedFlagCarry = snapshot.latchedFlagCarry ?? false;
     this._latchedFlagNegative = snapshot.latchedFlagNegative ?? false;
     this._latchedFlagOverflow = snapshot.latchedFlagOverflow ?? false;
+    this._ulaFlags = { ...(snapshot.ulaFlags ?? NO_FLAGS) };
     this._drivenControlSignalPorts = new Set(snapshot.drivenSignals ?? []);
   }
 
@@ -1052,10 +1063,11 @@ export class CPU implements Clockable, Connectable {
     this._latchedFlagCarry = false;
     this._latchedFlagNegative = false;
     this._latchedFlagOverflow = false;
+    this._ulaFlags = { ...NO_FLAGS };
   }
 
   /**
-   * Refreshes the latched Z/C/N flags right after whichever operation just
+   * Refreshes the latched Z/C/N/V flags right after whichever operation just
    * produced fresh ones — the ULA after EXECUTE (arithmetic/logic ops), or
    * the GPR after a load commits in WRITEREG1/WRITEREG2 (LDA/LDAI). Each
    * branch only reads the source that just fired, so a flag left over on the
@@ -1063,14 +1075,23 @@ export class CPU implements Clockable, Connectable {
    * hold their last value between EXECUTEs; the GPR's write bus is whatever
    * was last written) never bleeds into the freshly latched value — which is
    * what makes this equivalent to an OR between the ULA's flag and the
-   * GPR's, without either one going stale.
+   * GPR's, without either one going stale. The ULA's own flags follow the
+   * first branch only.
    */
   private latchFlagsIfProduced(): void {
     if (this._previousState === CpuState.EXECUTE) {
-      this._latchedFlagZero = Boolean(this.in_flagZero.get());
-      this._latchedFlagCarry = Boolean(this.in_flagCarry.get());
-      this._latchedFlagNegative = Boolean(this.in_flagNegative.get());
-      this._latchedFlagOverflow = Boolean(this.in_flagOverflow.get());
+      const bus = this.in_flags.get();
+      const bit = (b: number) => ((bus >> b) & 1) === 1;
+      this._ulaFlags = {
+        zero: bit(FLAG_BITS.zero),
+        carry: bit(FLAG_BITS.carry),
+        negative: bit(FLAG_BITS.negative),
+        overflow: bit(FLAG_BITS.overflow),
+      };
+      this._latchedFlagZero = this._ulaFlags.zero;
+      this._latchedFlagCarry = this._ulaFlags.carry;
+      this._latchedFlagNegative = this._ulaFlags.negative;
+      this._latchedFlagOverflow = this._ulaFlags.overflow;
     } else if (
       this._previousState === CpuState.WRITEREG1 ||
       this._previousState === CpuState.WRITEREG2

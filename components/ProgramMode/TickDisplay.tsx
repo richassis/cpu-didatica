@@ -15,9 +15,9 @@ import { usePlaybackStore } from "@/lib/playbackStore";
  * Drawn as inline SVG rather than with a display webfont: the repo has no font
  * files, and a seven-segment shape is seven polygons.
  *
- * On colour: the lit segments use the same green as an executing component
- * while the simulation runs — the counter is part of that state — and turn
- * red once the CPU halts.
+ * On colour: the counter takes the control-wire green — segments, border and
+ * a faint fill — while the simulation runs, so it stands out as part of that
+ * state, and turns red once the CPU halts.
  */
 
 /** Segment presence per digit, in order: a b c d e f g. */
@@ -88,8 +88,11 @@ export default function TickDisplay() {
 
   return (
     <div
-      className="flex items-center gap-2 rounded-lg border border-line px-2 py-1"
-      style={{ background: "var(--surface)" }}
+      className="flex items-center gap-2 rounded-lg border px-2 py-1"
+      style={{
+        borderColor: lit,
+        background: `color-mix(in srgb, ${lit} 10%, var(--surface))`,
+      }}
     >
       <div className="flex items-center gap-0.5">
         {digits.map((char, i) => (

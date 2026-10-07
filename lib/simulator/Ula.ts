@@ -1,6 +1,6 @@
 import type { Clockable } from "./Clockable";
 import { type Connectable, type PortMap, InputPort, OutputPort } from "./Port";
-import { UlaOperation } from "./ISA";
+import { UlaOperation, FLAG_BITS } from "./ISA";
 
 
 /**
@@ -41,6 +41,8 @@ export class Ula implements Clockable, Connectable {
   readonly out_negative: OutputPort<number>;
   /** Output: overflow flag (signed overflow) */
   readonly out_overflow: OutputPort<number>;
+  /** Output: the four flags as one bus, Z C N V (see `FLAG_BITS`) */
+  readonly out_flags: OutputPort<number>;
 
   constructor(id: string, name: string, bitWidth = 16) {
     this.id = id;
@@ -82,6 +84,10 @@ export class Ula implements Clockable, Connectable {
       "overflow", "number", 1, 0,
       "Overflow flag (signed result out of range)"
     );
+    this.out_flags = new OutputPort<number>(
+      "flags", "number", 4, 0,
+      "Flags bus: Z C N V"
+    );
   }
 
   // ── Connectable interface ────────────────────────────────────
@@ -96,6 +102,7 @@ export class Ula implements Clockable, Connectable {
       carry: this.out_carry,
       negative: this.out_negative,
       overflow: this.out_overflow,
+      flags: this.out_flags,
     };
   }
 
@@ -211,6 +218,12 @@ export class Ula implements Clockable, Connectable {
     this.out_zero.set(zero);
     this.out_negative.set(negative);
     this.out_overflow.set(overflow);
+    this.out_flags.set(
+      (zero << FLAG_BITS.zero) |
+      (carry << FLAG_BITS.carry) |
+      (negative << FLAG_BITS.negative) |
+      (overflow << FLAG_BITS.overflow)
+    );
 
     return result;
   }
@@ -233,6 +246,7 @@ export class Ula implements Clockable, Connectable {
     this.out_carry.set(0);
     this.out_negative.set(0);
     this.out_overflow.set(0);
+    this.out_flags.set(0);
   }
 
   // ── Clockable callback ───────────────────────────────────────

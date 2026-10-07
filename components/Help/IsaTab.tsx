@@ -162,9 +162,9 @@ export default function IsaTab() {
           </table>
         </div>
         <p className="mt-2 text-caption leading-snug text-fg-faint">
-          Ticks: quantos ciclos de clock a instrução leva, contando BUSCA e DECODIFICA. As flags
-          Z (zero), C (vai-um), N (negativo) e V (overflow) são capturadas na ULA; LDA e LDAI
-          atualizam só Z e N.
+          Ticks: quantos ciclos de clock a instrução leva, contando BUSCA e DECODIFICA. As
+          operações da ULA atualizam as flags Z (zero), C (vai-um), N (negativo) e V (overflow) da
+          ULA e da UC; LDA e LDAI atualizam só Z e N da UC.
           Os desvios leem a última flag capturada.
         </p>
       </section>

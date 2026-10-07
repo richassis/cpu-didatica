@@ -1,6 +1,5 @@
 "use client";
 
-import { RotateCcw, Pause, Play } from "lucide-react";
 import { Props } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayStore, formatNum, type NumericBase } from "@/lib/displayStore";
@@ -63,8 +62,6 @@ export default function CpuComponent({ component, zoom }: Props) {
 
   const revision = useSimulatorStore((s) => s.revision);
   const cpu = useSimulatorStore((s) => s.getCpu(id));
-  const pauseCpu = useSimulatorStore((s) => s.pauseCpu);
-  const resetCpu = useSimulatorStore((s) => s.resetCpu);
   const base = useDisplayStore((s) => s.numericBase);
   void revision;
 
@@ -72,7 +69,6 @@ export default function CpuComponent({ component, zoom }: Props) {
   const currentState = cpu ? (cpu.previousState as CpuState) : CpuState.RESET;
   const opcode = cpu ? Number(cpu.in_opcode.value) : 0;
   const halted = cpu ? cpu.halted : false;
-  const paused = cpu ? cpu.paused : false;
   const signals = cpu ? readSignals(cpu) : {};
   // A dot lights when the executed state writes that signal — even to 0, and
   // even when the value doesn't change. The value printed under it tells which.
@@ -88,46 +84,14 @@ export default function CpuComponent({ component, zoom }: Props) {
       dense
       state={halted ? "error" : undefined}
       actions={
-        <>
-          {paused && (
-            <span className="shrink-0 rounded-md border border-st-warn px-1.5 py-0.5 font-mono text-cv-xs text-st-warn">
-              PAUSED
-            </span>
-          )}
-          <FlagSquares
-            flags={[
-              { label: "Z", on: !!cpu && cpu.latchedFlagZero, title: "Zero flag" },
-              { label: "C", on: !!cpu && cpu.latchedFlagCarry, title: "Carry flag" },
-              { label: "N", on: !!cpu && cpu.latchedFlagNegative, title: "Negative flag" },
-              { label: "V", on: !!cpu && cpu.latchedFlagOverflow, title: "Overflow flag" },
-            ]}
-          />
-          <button
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              resetCpu(id);
-            }}
-            className="shrink-0 rounded p-0.5 text-fg-faint transition-colors hover:text-fg"
-            title="Reset CPU"
-          >
-            <RotateCcw size={12} strokeWidth={1.5} />
-          </button>
-          <button
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              pauseCpu(id, !paused);
-            }}
-            disabled={halted}
-            className={`shrink-0 rounded p-0.5 transition-colors ${
-              paused ? "text-st-warn" : "text-fg-faint hover:text-fg"
-            } disabled:opacity-40`}
-            title={paused ? "Resume CPU" : "Pause CPU"}
-          >
-            {paused ? <Play size={12} strokeWidth={1.5} /> : <Pause size={12} strokeWidth={1.5} />}
-          </button>
-        </>
+        <FlagSquares
+          flags={[
+            { label: "Z", on: !!cpu && cpu.latchedFlagZero, title: "Zero flag" },
+            { label: "C", on: !!cpu && cpu.latchedFlagCarry, title: "Carry flag" },
+            { label: "N", on: !!cpu && cpu.latchedFlagNegative, title: "Negative flag" },
+            { label: "V", on: !!cpu && cpu.latchedFlagOverflow, title: "Overflow flag" },
+          ]}
+        />
       }
     >
       <div className="min-h-0 flex-1 px-2 pt-1">

@@ -12,7 +12,6 @@ import { EDITOR_ENABLED } from "@/lib/editorFlag";
 import PortsOverlay from "@/components/PortsOverlay";
 import {
   Silhouette,
-  ClockNotch,
   MemorySpine,
   type SilhouetteKind,
 } from "@/components/widgets/silhouettes";
@@ -36,8 +35,6 @@ interface NodeShellProps {
    * rules — a silhouette has to survive all the way down to 25%.
    */
   frame?: ReactNode;
-  /** Sequential component: gets the clock notch. */
-  sequential?: boolean;
   /** Memory: gets the spine on the left border. */
   spine?: boolean;
   /** Control unit: dashed outline. Reserved for exactly one component type. */
@@ -83,7 +80,6 @@ export default function NodeShell({
   state,
   silhouette,
   frame,
-  sequential = false,
   spine = false,
   control = false,
   value,
@@ -157,7 +153,6 @@ export default function NodeShell({
         {silhouette && silhouette !== "custom" && <Silhouette kind={silhouette} />}
         {frame}
         {spine && <MemorySpine />}
-        {sequential && <ClockNotch />}
 
         {/* Title only — no type icon. The name already says what the block is,
             and the silhouette carries the rest. */}

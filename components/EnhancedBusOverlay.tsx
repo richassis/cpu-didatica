@@ -5,7 +5,7 @@ import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayMaskStore } from "@/lib/displayMaskStore";
 import { useExecutionStore } from "@/lib/executionStore";
 import { usePlaybackStore, BOOST_RATE } from "@/lib/playbackStore";
-import { useDisplayStore, formatPortValue, isInstantSpeed, animationSpeedPxPerMs, TEXT_SIZE_SCALE } from "@/lib/displayStore";
+import { useDisplayStore, formatPortValue, isInstantSpeed, ANIMATION_REFERENCE_PX, TEXT_SIZE_SCALE } from "@/lib/displayStore";
 import { buildSchedule, wireProgress } from "@/lib/animationSchedule";
 import { findInstructionRegisterIds, isUnsignedPort } from "@/lib/portKinds";
 import { useWireCreationStore } from "@/lib/wireCreationStore";
@@ -501,9 +501,9 @@ export default function EnhancedBusOverlay({
     const sortedNonCpuGroups = Array.from(nonCpuOrderGroups.entries())
       .sort((a, b) => a[0] - b[0]);
 
-    // Every dot crosses its wire at the same speed, so a long wire takes longer
-    // than a short one. Steps still run in order; a step lasts as long as its
-    // longest wire, and each wire lands on its own within it.
+    // A long wire takes longer than a short one, but its dot moves faster, so
+    // the times stay close (`LENGTH_EXPONENT`). Steps still run in order; a step
+    // lasts as long as its longest wire, and each wire lands on its own within it.
     const lengthOf = (id: string) => wireDataByIdRef.current.get(id)?.length ?? 0;
     const schedule = buildSchedule({
       cpuWires: animCpuIds.map((id) => ({ id, length: lengthOf(id) })),
@@ -511,7 +511,8 @@ export default function EnhancedBusOverlay({
         order,
         wires: ids.map((id) => ({ id, length: lengthOf(id) })),
       })),
-      speedPxPerMs: animationSpeedPxPerMs(animationDurationMs),
+      durationMs: animationDurationMs,
+      referencePx: ANIMATION_REFERENCE_PX,
       minStepMs: MIN_STEP_MS,
     });
     const totalDuration = schedule.total;

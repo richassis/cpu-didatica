@@ -133,6 +133,7 @@ function toCpuInternalState(index: number): CpuInternalStateSnapshot {
       latchedFlagCarry: false,
       latchedFlagNegative: false,
       latchedFlagOverflow: false,
+      ulaFlags: { zero: false, carry: false, negative: false, overflow: false },
       drivenSignals: [],
     };
   }
@@ -147,6 +148,7 @@ function toCpuInternalState(index: number): CpuInternalStateSnapshot {
     latchedFlagCarry: cpu.latchedFlagCarry,
     latchedFlagNegative: cpu.latchedFlagNegative,
     latchedFlagOverflow: cpu.latchedFlagOverflow,
+    ulaFlags: { ...cpu.ulaFlags },
     drivenSignals: cpu.getDrivenControlSignalPorts(),
   };
 }

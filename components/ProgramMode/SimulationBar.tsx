@@ -13,19 +13,10 @@ import {
   SkipForward,
   X,
 } from "lucide-react";
-import { Opcode, opcodeToMnemonic } from "@/lib/simulator";
 import { useExecutionStore } from "@/lib/executionStore";
 import { usePlaybackStore } from "@/lib/playbackStore";
 import { useProgramDataStore, mountStatus } from "@/lib/programDataStore";
 import TickDisplay from "@/components/ProgramMode/TickDisplay";
-
-function formatOpcode(opcode: number): string {
-  try {
-    return opcodeToMnemonic(opcode as Opcode);
-  } catch {
-    return `0x${opcode.toString(16).toUpperCase().padStart(2, "0")}`;
-  }
-}
 
 /**
  * The single simulation control bar, along the bottom.
@@ -95,11 +86,6 @@ export default function SimulationBar() {
     pause();
     action();
   };
-
-  const opcodeLabel = useMemo(() => {
-    const snapshot = frames[currentIndex]?.postTick;
-    return snapshot ? formatOpcode(snapshot.opcode) : "--";
-  }, [frames, currentIndex]);
 
   const progress = totalTicks > 0 ? (currentIndex / totalTicks) * 100 : 0;
 
@@ -239,9 +225,6 @@ export default function SimulationBar() {
 
                   <span className="num ml-2 font-mono text-xs text-fg-muted">/ {totalTicks}</span>
 
-                  <span className="rounded-md border border-line px-2 py-1 font-mono text-small text-fg-muted">
-                    {opcodeLabel}
-                  </span>
                 </>
               )}
             </div>

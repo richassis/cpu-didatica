@@ -67,7 +67,6 @@ export default function MemoryComponent({ component, zoom }: Props) {
     <NodeShell
       component={component}
       zoom={zoom}
-      sequential
       spine
       dense
       // Survives to mid zoom, where the address list does not.

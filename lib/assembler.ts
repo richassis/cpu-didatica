@@ -95,17 +95,18 @@ function parseRegister(token: string): number | null {
   return m ? parseInt(m[1], 10) : null;
 }
 
-/** Parse a numeric literal: `0xNN` hex or plain (optionally negative) decimal → number, or null. */
+/** Parse a numeric literal: `0xNN` hex, `0b0101` binary or plain (optionally negative) decimal → number, or null. */
 function parseNumber(token: string): number | null {
   if (/^0[xX][0-9a-fA-F]+$/.test(token)) return parseInt(token, 16);
+  if (/^0[bB][01]+$/.test(token)) return parseInt(token.slice(2), 2);
   if (/^-?\d+$/.test(token)) return parseInt(token, 10);
   return null;
 }
 
 /**
  * Parse a data value for DB declarations.
- * Accepts: Intel hex `00h`/`FFh`, our format `0xFF`, or plain (optionally
- * negative) decimal `5` / `-5`.
+ * Accepts: Intel hex `00h`/`FFh`, our format `0xFF`, binary `0b0101`, or
+ * plain (optionally negative) decimal `5` / `-5`.
  */
 function parseDataValue(token: string): number | null {
   const intelHex = token.match(/^([0-9A-Fa-f]+)[hH]$/);

@@ -46,7 +46,6 @@ export default function GprComponent({ component, zoom }: Props) {
     <NodeShell
       component={component}
       zoom={zoom}
-      sequential
       value={`R${focusAddr} ${formatNum(focusValue, base, bitWidth)}`}
       compactValue
     >

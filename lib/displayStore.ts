@@ -37,16 +37,11 @@ export const ANIMATION_INSTANT_MS = 50;
 
 /**
  * The slider's value is a time — how long a dot takes to cross a wire of this
- * length — and the speed follows from it. The wires themselves vary from about
- * a hundred pixels to well over a thousand; timing them by a fixed duration
- * made the long ones race, so every wire now gets the same speed instead.
+ * length. The wires themselves vary from about a hundred pixels to well over a
+ * thousand; every other wire's time is scaled from this one, growing with the
+ * square root of its length (`LENGTH_EXPONENT` in `animationSchedule.ts`).
  */
 export const ANIMATION_REFERENCE_PX = 400;
-
-/** Dot speed, in canvas pixels per millisecond, for a stored duration. */
-export function animationSpeedPxPerMs(durationMs: number): number {
-  return ANIMATION_REFERENCE_PX / Math.max(1, durationMs);
-}
 
 export function isInstantSpeed(durationMs: number): boolean {
   return durationMs <= ANIMATION_INSTANT_MS;

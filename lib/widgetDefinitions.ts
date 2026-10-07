@@ -113,6 +113,8 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
         "carry":    { side: "bottom", offset: 40,  hidden: true },
         "negative": { side: "bottom", offset: 60,  hidden: true },
         "overflow": { side: "bottom", offset: 80,  hidden: true },
+        // The four flags as one bus up to the control unit.
+        "flags":    { side: "top", offset: 85 },
       },
     },
   },
@@ -254,17 +256,18 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     defaultWidth: 901,  // 44 grid cells — 10 bottom ports at 64px pitch, room for the FSM columns
     defaultHeight: 336, // 21 grid cells — FETCH/DECODE stacked above the branch fan
     description: "Control unit (UC) — FSM state and control signals",
-    // CPU: input ports (opcode/flags) on left, all control signal outputs on
-    // the bottom, aligned under the FSM graph they drive.
+    // CPU: opcode in at the bottom-left, the flags bus in on the right, all
+    // control signal outputs on the bottom, aligned under the FSM graph they
+    // drive. GPR flags stay hidden on the left.
     portConfig: {
       defaultInputSide: "left",
       defaultOutputSide: "right",
       ports: {
-        // Flag inputs are displayed as squares inside the widget, not as port dots
-        "in_flagZero":     { side: "left", hidden: true },
-        "in_flagCarry":    { side: "left", hidden: true },
-        "in_flagNegative": { side: "left", hidden: true },
-        "in_flagOverflow": { side: "left", hidden: true },
+        // Opcode from the decoder, at the bottom-left corner — the decoder
+        // sits below, so the wire goes straight up instead of around the UC.
+        "in_opcode": { side: "bottom", offset: 2 },
+        // The ULA's 4-bit flags bus (Z C N V), coming in from the right.
+        "in_flags": { side: "right" },
         // GPR-sourced Z/N, fed by the write-data comparator on the GPR
         // (LDA/LDAI) — OR'd with the ULA-sourced flags above when latching.
         "in_flagZeroGpr":     { side: "left", hidden: true },
