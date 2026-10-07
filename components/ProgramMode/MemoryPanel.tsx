@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { ChevronLeft } from "lucide-react";
 import { useMemoryPanelStore } from "@/lib/memoryPanelStore";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useExecutingAddr } from "@/lib/useExecutingAddr";
 import { useLayoutStore, type ComponentInstance } from "@/lib/store";
+import { useProgramDataStore, mountStatus } from "@/lib/programDataStore";
 import { decodeMnemonic } from "@/lib/disassemble";
 import MemoryTable from "@/components/MemoryTable";
 
@@ -65,6 +66,24 @@ function MemoryColumn({
 
   const read = useCallback((addr: number) => obj?.peek(addr) ?? 0, [obj]);
 
+  // Data memory: name each address after its `.data` variable — but only from
+  // a clean, current mount, so an edited-but-not-remounted source can never
+  // put names on cells it didn't lay out.
+  const assemblySource = useProgramDataStore((s) => s.assemblySource);
+  const mountedSource = useProgramDataStore((s) => s.mountedSource);
+  const assembled = useProgramDataStore((s) => s.assembled);
+  const assemblyErrors = useProgramDataStore((s) => s.assemblyErrors);
+  const mounted =
+    mountStatus({ mountedSource, assemblySource, assembled, assemblyErrors }) === "ok";
+  const names = useMemo(() => {
+    const map = new Map<number, string>();
+    if (!instruction && mounted) {
+      for (const sym of assembled?.dataSymbols ?? []) map.set(sym.addr, sym.name);
+    }
+    return map;
+  }, [instruction, mounted, assembled]);
+  const name = useCallback((addr: number) => names.get(addr), [names]);
+
   const wordCount = obj?.wordCount ?? 256;
   const bitWidth = obj?.bitWidth ?? 16;
   const addrBits = Math.max(1, Math.ceil(Math.log2(wordCount)));
@@ -75,7 +94,6 @@ function MemoryColumn({
     <section className="flex min-h-0 min-w-0 flex-1 flex-col border-r border-line last:border-r-0">
       <div className="flex shrink-0 items-baseline justify-between border-b border-line px-3 py-2">
         <h2 className="t-panel truncate text-fg">{component.label}</h2>
-        <span className="t-section shrink-0">somente leitura</span>
       </div>
       <MemoryTable
         wordCount={wordCount}
@@ -84,9 +102,10 @@ function MemoryColumn({
         currentAddr={currentAddr}
         read={read}
         decode={instruction ? decodeMnemonic : undefined}
+        name={instruction ? undefined : name}
         scrollBlock="nearest"
         compact
-        headers={{ addr: "End", word: "Palavra", decode: "Opcode" }}
+        headers={{ addr: "End", word: "Palavra", decode: "Opcode", name: "Nome" }}
       />
     </section>
   );

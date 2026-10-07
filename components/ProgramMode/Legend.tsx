@@ -1,6 +1,6 @@
 "use client";
 
-import { Silhouette, ClockNotch, MemorySpine, GLYPHS } from "@/components/widgets/silhouettes";
+import { Silhouette, ClockNotch, MemorySpine } from "@/components/widgets/silhouettes";
 
 /**
  * How to read the canvas.
@@ -50,9 +50,6 @@ function StateSample({ color, label, note }: { color: string; label: string; not
 }
 
 export default function Legend() {
-  const Register = GLYPHS.Register;
-  const Memory = GLYPHS.MemoryComponent;
-
   return (
     <div className="w-[380px]">
       <div className="grid grid-cols-2 gap-x-4 gap-y-3">
@@ -62,18 +59,12 @@ export default function Legend() {
                 <ShapeSample label="Registrador" note="guarda um único valor">
                   <span className="node--boxed absolute inset-0 rounded-[6px]" />
                   <ClockNotch />
-                  <span className="absolute left-0 top-0 flex h-4 w-4 items-center justify-center text-fg-faint">
-                    <Register size={10} strokeWidth={1.5} />
-                  </span>
                 </ShapeSample>
 
                 <ShapeSample label="Memória" note="lombada na borda esquerda">
                   <span className="node--boxed absolute inset-0 rounded-[6px]" />
                   <MemorySpine />
                   <ClockNotch />
-                  <span className="absolute right-0.5 top-0.5 text-fg-faint">
-                    <Memory size={10} strokeWidth={1.5} />
-                  </span>
                 </ShapeSample>
 
                 <ShapeSample label="ULA" note="trapézio com entalhe">

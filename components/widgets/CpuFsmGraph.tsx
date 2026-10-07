@@ -55,7 +55,7 @@ const BRANCHES: Branch[] = [
   },
   {
     key: "JUMP",
-    opcodes: [Opcode.JZ, Opcode.JC, Opcode.JN, Opcode.JMP],
+    opcodes: [Opcode.JZ, Opcode.JN, Opcode.JMP],
     states: OPCODE_SEQUENCES[Opcode.JZ]!,
     col: 4,
   },

@@ -1,5 +1,6 @@
 "use client";
 
+import { ExternalLink } from "lucide-react";
 import { CREDITS } from "@/lib/helpContent";
 
 export default function CreditsTab() {
@@ -29,6 +30,21 @@ export default function CreditsTab() {
         <dt className="text-fg-faint">Aluno</dt>
         <dd className="text-fg">{CREDITS.student}</dd>
       </dl>
+
+      <div className="mx-auto my-6 h-px w-16 bg-line" />
+
+      <p className="text-ui leading-relaxed text-fg-muted">
+        O código é aberto. Quer colaborar? Sugestões, issues e pull requests são bem-vindos.
+      </p>
+      <a
+        href={CREDITS.repository}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mt-3 inline-flex h-8 items-center gap-1.5 rounded-lg border border-line px-3 text-small text-fg-muted transition-colors hover:border-line-strong hover:text-fg"
+      >
+        Projeto no GitHub
+        <ExternalLink size={13} strokeWidth={1.5} />
+      </a>
     </div>
   );
 }

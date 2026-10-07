@@ -18,6 +18,7 @@ export default function MemoryTable({
   currentAddr,
   read,
   decode,
+  name,
   scrollBlock = "center",
   compact = false,
   headers,
@@ -30,15 +31,18 @@ export default function MemoryTable({
   read: (addr: number) => number;
   /** Optional second column — instruction memory renders mnemonics. */
   decode?: (word: number) => string;
+  /** Optional last column — data memory renders the `.data` variable at each address. */
+  name?: (addr: number) => string | undefined;
   scrollBlock?: ScrollLogicalPosition;
   /** Tighter columns, for the narrow side-by-side memory panel. */
   compact?: boolean;
   /** Column captions above the rows. */
-  headers?: { addr: string; word: string; decode?: string };
+  headers?: { addr: string; word: string; decode?: string; name?: string };
 }) {
   const gap = compact ? "gap-1.5" : "gap-3";
   const addrW = compact ? "w-10" : "w-16";
   const decodeW = compact ? "w-14" : "w-16";
+  const nameW = compact ? "w-16" : "w-20";
   const base = useDisplayStore((s) => s.numericBase);
   // A table with a decoded column is instruction memory: its words are
   // encodings, never signed data.
@@ -66,6 +70,7 @@ export default function MemoryTable({
           <span className={`${addrW} shrink-0`}>{headers.addr}</span>
           <span className="flex-1 text-right">{headers.word}</span>
           {decode && <span className={`${decodeW} shrink-0 text-right`}>{headers.decode}</span>}
+          {name && <span className={`${nameW} shrink-0 truncate`}>{headers.name}</span>}
         </div>
       )}
       <div className={`min-h-0 flex-1 overflow-y-auto ${compact ? "px-1" : "px-2"} py-2`}>
@@ -107,6 +112,16 @@ export default function MemoryTable({
                 }`}
               >
                 {decode(value)}
+              </span>
+            )}
+            {name && (
+              <span
+                className={`${nameW} shrink-0 truncate font-mono text-small ${
+                  isCurrent ? "text-fg" : "text-fg-faint"
+                }`}
+                title={name(addr)}
+              >
+                {name(addr)}
               </span>
             )}
           </div>

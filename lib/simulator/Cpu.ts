@@ -54,7 +54,6 @@ export const OPCODE_SEQUENCES: Readonly<Partial<Record<Opcode, CpuState[]>>> = {
   [Opcode.OR]:   [CpuState.READREG2, CpuState.EXECUTE,  CpuState.WRITEREG3],
   [Opcode.NOT]:  [CpuState.READREG2, CpuState.EXECUTE,  CpuState.WRITEREG3],
   [Opcode.JZ]:   [CpuState.WRITEPC],
-  [Opcode.JC]:   [CpuState.WRITEPC],
   [Opcode.JN]:   [CpuState.WRITEPC],
   [Opcode.JMP]:  [CpuState.WRITEPC],
   // HLT and unknown opcodes handled specially in doDecode()
@@ -1004,7 +1003,6 @@ export class CPU implements Clockable, Connectable {
         const taken =
           opcode === Opcode.JMP ||
           (opcode === Opcode.JZ && this._latchedFlagZero) ||
-          (opcode === Opcode.JC && this._latchedFlagCarry) ||
           (opcode === Opcode.JN && this._latchedFlagNegative);
 
         if (taken) {

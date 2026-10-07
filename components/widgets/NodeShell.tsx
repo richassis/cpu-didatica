@@ -14,7 +14,6 @@ import {
   Silhouette,
   ClockNotch,
   MemorySpine,
-  GLYPHS,
   type SilhouetteKind,
 } from "@/components/widgets/silhouettes";
 
@@ -132,8 +131,6 @@ export default function NodeShell({
     touchAction: editing ? "none" : undefined,
   };
 
-  const Glyph = GLYPHS[type];
-
   return (
     <>
       <div
@@ -162,19 +159,9 @@ export default function NodeShell({
         {spine && <MemorySpine />}
         {sequential && <ClockNotch />}
 
-        {/* Badge notched into the top-left corner. It replaces the full-width
-            coloured header bar every node used to carry — that bar spent a
-            large block of saturated colour on identity alone. */}
-        {Glyph && (
-          <div
-            className="node-badge absolute left-0 top-0 z-10 flex h-5 w-5 items-center justify-center rounded-br-md border-b border-r"
-            aria-hidden
-          >
-            <Glyph size={12} strokeWidth={1.5} />
-          </div>
-        )}
-
-        <div className="relative z-10 flex shrink-0 items-center gap-1 pl-6 pr-1 pt-0.5">
+        {/* Title only — no type icon. The name already says what the block is,
+            and the silhouette carries the rest. */}
+        <div className="relative z-10 flex shrink-0 items-center gap-1 pl-2 pr-1 pt-0.5">
           <span className="node-title t-node min-w-0 flex-1 truncate leading-none">{label}</span>
           {actions}
           {editing && (

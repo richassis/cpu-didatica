@@ -2,13 +2,51 @@
 
 import { useMemo, useState } from "react";
 import { Opcode, INSTRUCTION_SET, OPCODE_SEQUENCES } from "@/lib/simulator";
-import { OPCODE_BITS } from "@/lib/simulator/ISA";
+import { OPCODE_BITS, OPCODE_SHIFT } from "@/lib/simulator/ISA";
 import { assemble } from "@/lib/assembler";
 import { INSTRUCTION_HELP } from "@/lib/helpContent";
-import BitFields, { formatFields, wordFields } from "@/components/Help/BitFields";
+import BitFields, { wordFields, type WordField } from "@/components/Help/BitFields";
+
+type Mnemonic = keyof typeof Opcode;
 
 /** Every instruction, ordered by opcode. */
 const INSTRUCTIONS = Object.values(INSTRUCTION_SET).sort((a, b) => a.opcode - b.opcode);
+
+/**
+ * The instruction formats as they are actually used — one drawing per group
+ * of instructions that read the 16 bits the same way, rather than two generic
+ * layouts the student has to specialise in their head.
+ */
+const FORMAT_GROUPS: { title: string; mnemonics: Mnemonic[]; registerMeaning?: string }[] = [
+  { title: "LDA e STA", mnemonics: ["LDA", "STA"], registerMeaning: "destino (LDA) · fonte (STA)" },
+  { title: "LDAI", mnemonics: ["LDAI"] },
+  { title: "Desvios — JZ, JN e JMP", mnemonics: ["JZ", "JN", "JMP"] },
+  { title: "HLT", mnemonics: ["HLT"] },
+  { title: "ULA — ADD, SUB, AND e OR", mnemonics: ["ADD", "SUB", "AND", "OR"] },
+  { title: "NOT", mnemonics: ["NOT"] },
+];
+
+/** The field layout one group uses, labelled for that group. */
+function groupFields(group: (typeof FORMAT_GROUPS)[number]): WordField[] {
+  const opcode = INSTRUCTION_SET[group.mnemonics[0]].opcode;
+  return wordFields(opcode << OPCODE_SHIFT).fields.map((f): WordField => {
+    if (f.kind === "opcode") return { ...f, meaning: undefined };
+    if (f.meaning?.startsWith("não usado")) return { ...f, label: "—", kind: "pad" };
+    if (f.kind === "register" && group.registerMeaning) return { ...f, meaning: group.registerMeaning };
+    if (f.kind === "operand") return { ...f, label: f.meaning === "valor imediato N" ? "N" : "M" };
+    return f;
+  });
+}
+
+/** Each instruction's example, assembled — the help text is static, so once. */
+const EXAMPLE_WORDS: Partial<Record<Mnemonic, number>> = Object.fromEntries(
+  INSTRUCTIONS.flatMap((d) => {
+    const result = assemble(INSTRUCTION_HELP[d.mnemonic].example);
+    return result && result.errors.length === 0 && result.words.length === 1
+      ? [[d.mnemonic, result.words[0]]]
+      : [];
+  })
+);
 
 /** FETCH and DECODE, plus whatever the opcode's own sequence adds. */
 function tickCount(opcode: Opcode): number {
@@ -17,6 +55,8 @@ function tickCount(opcode: Opcode): number {
 
 const hex = (n: number, digits = 4) => `0x${n.toString(16).toUpperCase().padStart(digits, "0")}`;
 const bin = (n: number, digits: number) => n.toString(2).padStart(digits, "0");
+/** 16 bits in groups of four, the way they line up with the hex digits. */
+const binGroups = (n: number) => bin(n, 16).replace(/(.{4})(?=.)/g, "$1 ");
 
 /** A word typed in hex or binary, or an instruction typed in assembly. */
 function parseEncoderInput(text: string): { word?: number; error?: string } {
@@ -45,19 +85,19 @@ export default function IsaTab() {
         <h3 className="t-node mb-1 text-fg">Uma instrução tem 16 bits</h3>
         <p className="mb-4 text-ui leading-relaxed text-fg-muted">
           Os 5 primeiros bits são sempre o <b className="text-fg">opcode</b>, que diz qual instrução é.
-          O resto depende do formato: as instruções da ULA indicam três registradores; as demais
-          indicam um registrador e um operando de 8 bits (um endereço ou um valor).
+          O resto depende do formato de cada instrução: um registrador e um endereço{" "}
+          <b className="text-fg">M</b>, um registrador e um valor <b className="text-fg">N</b>, só um
+          endereço, três registradores da ULA — ou nada, no HLT. Campos marcados com{" "}
+          <span className="font-mono text-fg">—</span> não são usados.
         </p>
 
         <div className="space-y-5">
-          <div>
-            <div className="t-section mb-1.5">Formato padrão — LDA, LDAI, STA e desvios</div>
-            <BitFields fields={formatFields("standard")} />
-          </div>
-          <div>
-            <div className="t-section mb-1.5">Formato da ULA — ADD, SUB, AND, OR e NOT</div>
-            <BitFields fields={formatFields("ula")} />
-          </div>
+          {FORMAT_GROUPS.map((group) => (
+            <div key={group.title}>
+              <div className="t-section mb-1.5">{group.title}</div>
+              <BitFields fields={groupFields(group)} />
+            </div>
+          ))}
         </div>
       </section>
 
@@ -76,6 +116,7 @@ export default function IsaTab() {
               <tr className="border-b border-line bg-raised text-fg-muted">
                 <th className="px-2.5 py-1.5 font-normal">Opcode</th>
                 <th className="px-2.5 py-1.5 font-normal">Sintaxe</th>
+                <th className="px-2.5 py-1.5 font-normal">Palavra do exemplo</th>
                 <th className="px-2.5 py-1.5 font-normal">Efeito</th>
                 <th className="px-2.5 py-1.5 font-normal">Formato</th>
                 <th className="px-2.5 py-1.5 font-normal">Flags</th>
@@ -98,7 +139,18 @@ export default function IsaTab() {
                       <span className="text-st-data">{bin(d.opcode, OPCODE_BITS)}</span>{" "}
                       <span className="text-fg-faint">{hex(d.opcode, 2)}</span>
                     </td>
-                    <td className="px-2.5 py-1.5 font-mono text-fg">{help.syntax}</td>
+                    <td className="px-2.5 py-1.5 font-mono">
+                      <div className="text-fg">{help.syntax}</div>
+                      <div className="text-caption text-fg-faint">{help.example}</div>
+                    </td>
+                    <td className="whitespace-nowrap px-2.5 py-1.5 font-mono">
+                      {EXAMPLE_WORDS[d.mnemonic] !== undefined && (
+                        <>
+                          <div className="text-fg-muted">{hex(EXAMPLE_WORDS[d.mnemonic]!)}</div>
+                          <div className="text-caption text-fg-faint">{binGroups(EXAMPLE_WORDS[d.mnemonic]!)}</div>
+                        </>
+                      )}
+                    </td>
                     <td className="px-2.5 py-1.5 font-mono text-fg-muted">{help.effect}</td>
                     <td className="px-2.5 py-1.5 text-fg-muted">{d.format === "ula" ? "ULA" : "padrão"}</td>
                     <td className="px-2.5 py-1.5 font-mono text-fg-muted">{help.flags}</td>
@@ -111,7 +163,8 @@ export default function IsaTab() {
         </div>
         <p className="mt-2 text-caption leading-snug text-fg-faint">
           Ticks: quantos ciclos de clock a instrução leva, contando BUSCA e DECODIFICA. As flags
-          Z (zero), C (vai-um) e N (negativo) são capturadas na ULA; LDA e LDAI atualizam só Z e N.
+          Z (zero), C (vai-um), N (negativo) e V (overflow) são capturadas na ULA; LDA e LDAI
+          atualizam só Z e N.
           Os desvios leem a última flag capturada.
         </p>
       </section>

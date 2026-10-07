@@ -2,18 +2,17 @@
 
 import { Props } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
-import { useDisplayStore, formatNum } from "@/lib/displayStore";
 import { UlaOperation } from "@/lib/simulator/ISA";
 import NodeShell from "@/components/widgets/NodeShell";
 import FlagSquares from "@/components/widgets/FlagSquares";
 
-function opSymbol(op: number): string {
+function opName(op: number): string {
   switch (op) {
-    case UlaOperation.ADD: return "+";
-    case UlaOperation.SUB: return "−";
-    case UlaOperation.AND: return "&";
-    case UlaOperation.OR:  return "|";
-    case UlaOperation.NOT: return "~";
+    case UlaOperation.ADD: return "ADD";
+    case UlaOperation.SUB: return "SUB";
+    case UlaOperation.AND: return "AND";
+    case UlaOperation.OR:  return "OR";
+    case UlaOperation.NOT: return "NOT";
     default: return "?";
   }
 }
@@ -23,8 +22,9 @@ function opSymbol(op: number): string {
  * the canonical form in architecture diagrams — but as a 1px outline with an
  * interior glow, never as a solid block of colour.
  *
- * Anatomy reads as an equation: two stacked operands, the operation between
- * them, the result under a hairline, flags along the bottom.
+ * Inside, only the operation it is set to and the flags. The operands and the
+ * result are already on the wires and in A, B and R — writing the sum out
+ * again here only cluttered it.
  */
 export default function UlaComponent({ component, zoom }: Props) {
   const revision = useSimulatorStore((s) => s.revision);
@@ -36,30 +36,14 @@ export default function UlaComponent({ component, zoom }: Props) {
   const cpu = useSimulatorStore((s) => s.getPrimaryCpu());
   void revision;
 
-  const base = useDisplayStore((s) => s.numericBase);
   const op = ula?.operation ?? UlaOperation.ADD;
-  const bw = ula?.bitWidth ?? 16;
 
   return (
     <NodeShell component={component} zoom={zoom} silhouette="alu">
-      <div className="flex flex-1 flex-col items-center justify-center gap-0.5 px-4">
-        <span className="t-value-sm text-fg-muted">
-          {formatNum(ula?.in_a?.value ?? 0, base, bw)}
-        </span>
+      <div className="flex flex-1 flex-col items-center justify-center gap-2 px-4">
+        <span className="node-value t-value">{opName(op)}</span>
 
-        <span className="font-mono text-cv-lg leading-none text-fg">{opSymbol(op)}</span>
-
-        {op !== UlaOperation.NOT && (
-          <span className="t-value-sm text-fg-muted">
-            {formatNum(ula?.in_b?.value ?? 0, base, bw)}
-          </span>
-        )}
-
-        <div className="mt-1 w-full border-t border-line pt-1 text-center">
-          <span className="node-value t-value">{formatNum(ula?.result ?? 0, base, bw)}</span>
-        </div>
-
-        <div className="mt-1">
+        <div>
           <FlagSquares
             flags={[
               { label: "Z", on: cpu?.latchedFlagZero ?? false, title: "Zero" },

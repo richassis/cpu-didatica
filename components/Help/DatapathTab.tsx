@@ -173,7 +173,7 @@ export default function DatapathTab() {
         </div>
         <p className="mt-2 text-caption leading-snug text-fg-faint">
           · o estado não mexe no sinal, que mantém o valor de antes. * só se o desvio é tomado: JMP
-          sempre; JZ, JC e JN quando a flag correspondente está ligada. No estado RESET todos os
+          sempre; JZ e JN quando a flag correspondente está ligada. No estado RESET todos os
           sinais voltam ao valor inicial.
         </p>
       </section>

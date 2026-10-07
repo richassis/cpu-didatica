@@ -30,8 +30,8 @@ function formatOpcode(opcode: number): string {
 /**
  * The single simulation control bar, along the bottom.
  *
- * Everything you do to run a program is here, left to right: Montar, Simular,
- * the player, and the tick counter. Settings, legend, zoom and file actions
+ * Everything you do to run a program is here: Montar and Simular on the left,
+ * the player centred, the tick counter on the right. Settings, legend, zoom and file actions
  * are in the top bar.
  *
  * Montar produces the listing and Simular refuses to run anything that is not
@@ -127,119 +127,126 @@ export default function SimulationBar() {
     <div className="fixed bottom-0 left-0 right-0 z-50 px-4 pb-3">
       <div className="mx-auto w-full max-w-[1400px]">
         <div data-tour="bar" className="rounded-2xl border border-line bg-surface px-4 py-3">
-          <div className="flex items-center gap-2">
-            <button
-              data-tour="montar"
-              onClick={() => mountProgram()}
-              disabled={isLocked}
-              title="Montar (compilar) o código-fonte"
-              className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-                status === "ok"
-                  ? "border-line text-fg-muted hover:border-line-strong hover:text-fg"
-                  : "border-st-active bg-st-active/10 text-fg"
-              }`}
-            >
-              <Hammer size={14} strokeWidth={1.5} className={status === "ok" ? "" : "text-st-active"} />
-              Montar
-              {status === "stale" && (
-                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-st-warn" aria-hidden />
-              )}
-            </button>
-
-            <button
-              data-tour="simular"
-              onClick={() => runProgram()}
-              disabled={!canRun}
-              title={runTitle}
-              className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-                status === "ok"
-                  ? "border-st-active bg-st-active/10 text-fg"
-                  : "border-line text-fg-muted hover:border-line-strong hover:text-fg"
-              }`}
-            >
-              {isRunning ? (
-                <LoaderCircle size={14} strokeWidth={1.5} className="animate-spin text-st-active" />
-              ) : (
-                <Play size={14} strokeWidth={1.5} className={status === "ok" ? "text-st-active" : ""} />
-              )}
-              {isRunning ? "Simulando…" : "Simular"}
-            </button>
-
-            <span className="mx-1 h-5 w-px shrink-0 bg-line" />
-
-            {isTimelineActive ? (
-              <>
-                <TransportButton
-                  onClick={manual(goToStart)}
-                  disabled={!canGoBack}
-                  title="Ir para o início"
-                >
-                  <SkipBack size={14} strokeWidth={1.5} />
-                </TransportButton>
-                <TransportButton
-                  onClick={manual(stepBackward)}
-                  disabled={!canGoBack}
-                  title="Voltar um tick"
-                >
-                  <ChevronLeft size={16} strokeWidth={1.5} />
-                </TransportButton>
-
-                {/* Play walks the timeline tick by tick with the animations
-                    intact; the skip button beside it is the instant jump. Two
-                    buttons rather than one hidden mode. */}
-                <button
-                  onClick={togglePlay}
-                  title={isPlaying ? "Pausar" : "Percorrer todos os ticks"}
-                  aria-label={isPlaying ? "Pausar" : "Reproduzir"}
-                  className="flex h-8 items-center gap-1.5 rounded-lg border border-line-strong px-3 text-xs text-fg transition-colors hover:border-st-active"
-                >
-                  {isPlaying ? (
-                    <Pause size={14} strokeWidth={1.5} className="text-st-active" />
-                  ) : (
-                    <Play size={14} strokeWidth={1.5} className="text-st-active" />
-                  )}
-                  {isPlaying ? "Pausar" : "Reproduzir"}
-                </button>
-
-                <TransportButton
-                  onClick={manual(stepForward)}
-                  disabled={!canGoForward}
-                  title="Avançar um tick"
-                >
-                  <ChevronRight size={16} strokeWidth={1.5} />
-                </TransportButton>
-                <BoostButton />
-                <TransportButton
-                  onClick={manual(goToEnd)}
-                  disabled={!canGoForward}
-                  title="Ir para o fim, sem animar"
-                >
-                  <SkipForward size={14} strokeWidth={1.5} />
-                </TransportButton>
-
-                <span className="num ml-2 font-mono text-xs text-fg-muted">/ {totalTicks}</span>
-
-                <span className="rounded-md border border-line px-2 py-1 font-mono text-small text-fg-muted">
-                  {opcodeLabel}
-                </span>
-              </>
-            ) : (
-              <span
-                className={`min-w-0 truncate font-mono text-small ${
-                  status === "errors" ? "text-st-error" : "text-fg-faint"
+          {/* Three areas: build on the left, the player centred, the counter on
+              the right. The outer columns share the leftover width equally,
+              so the player stays centred whatever either side holds. */}
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+            <div className="flex min-w-0 items-center gap-2">
+              <button
+                data-tour="montar"
+                onClick={() => mountProgram()}
+                disabled={isLocked}
+                title="Montar (compilar) o código-fonte"
+                className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                  status === "ok"
+                    ? "border-line text-fg-muted hover:border-line-strong hover:text-fg"
+                    : "border-st-active bg-st-active/10 text-fg"
                 }`}
               >
-                {status === "errors"
-                  ? `${assemblyErrors.length} ${assemblyErrors.length === 1 ? "erro" : "erros"} de montagem`
-                  : status === "ok" && assembled
-                    ? `${assembled.listing.length} instruções — simule para percorrer tick a tick`
-                    : status === "stale"
-                      ? "código alterado — monte de novo"
-                      : "monte o programa para simular"}
-              </span>
-            )}
+                <Hammer size={14} strokeWidth={1.5} className={status === "ok" ? "" : "text-st-active"} />
+                Montar
+                {status === "stale" && (
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-st-warn" aria-hidden />
+                )}
+              </button>
 
-            <div className="ml-auto flex items-center gap-2">
+              <button
+                data-tour="simular"
+                onClick={() => runProgram()}
+                disabled={!canRun}
+                title={runTitle}
+                className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                  status === "ok"
+                    ? "border-st-active bg-st-active/10 text-fg"
+                    : "border-line text-fg-muted hover:border-line-strong hover:text-fg"
+                }`}
+              >
+                {isRunning ? (
+                  <LoaderCircle size={14} strokeWidth={1.5} className="animate-spin text-st-active" />
+                ) : (
+                  <Play size={14} strokeWidth={1.5} className={status === "ok" ? "text-st-active" : ""} />
+                )}
+                {isRunning ? "Simulando…" : "Simular"}
+              </button>
+
+              {!isTimelineActive && (
+                <span
+                  className={`min-w-0 truncate font-mono text-small ${
+                    status === "errors" ? "text-st-error" : "text-fg-faint"
+                  }`}
+                >
+                  {status === "errors"
+                    ? `${assemblyErrors.length} ${assemblyErrors.length === 1 ? "erro" : "erros"} de montagem`
+                    : status === "ok" && assembled
+                      ? `${assembled.listing.length} instruções — simule para percorrer tick a tick`
+                      : status === "stale"
+                        ? "código alterado — monte de novo"
+                        : "monte o programa para simular"}
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              {isTimelineActive && (
+                <>
+                  <TransportButton
+                    onClick={manual(goToStart)}
+                    disabled={!canGoBack}
+                    title="Ir para o início"
+                  >
+                    <SkipBack size={14} strokeWidth={1.5} />
+                  </TransportButton>
+                  <TransportButton
+                    onClick={manual(stepBackward)}
+                    disabled={!canGoBack}
+                    title="Voltar um tick"
+                  >
+                    <ChevronLeft size={16} strokeWidth={1.5} />
+                  </TransportButton>
+
+                  {/* Play walks the timeline tick by tick with the animations
+                      intact; the skip button beside it is the instant jump. Two
+                      buttons rather than one hidden mode. */}
+                  <button
+                    onClick={togglePlay}
+                    title={isPlaying ? "Pausar" : "Percorrer todos os ticks"}
+                    aria-label={isPlaying ? "Pausar" : "Reproduzir"}
+                    className="flex h-8 items-center gap-1.5 rounded-lg border border-line-strong px-3 text-xs text-fg transition-colors hover:border-st-active"
+                  >
+                    {isPlaying ? (
+                      <Pause size={14} strokeWidth={1.5} className="text-st-active" />
+                    ) : (
+                      <Play size={14} strokeWidth={1.5} className="text-st-active" />
+                    )}
+                    {isPlaying ? "Pausar" : "Reproduzir"}
+                  </button>
+
+                  <TransportButton
+                    onClick={manual(stepForward)}
+                    disabled={!canGoForward}
+                    title="Avançar um tick"
+                  >
+                    <ChevronRight size={16} strokeWidth={1.5} />
+                  </TransportButton>
+                  <BoostButton />
+                  <TransportButton
+                    onClick={manual(goToEnd)}
+                    disabled={!canGoForward}
+                    title="Ir para o fim, sem animar"
+                  >
+                    <SkipForward size={14} strokeWidth={1.5} />
+                  </TransportButton>
+
+                  <span className="num ml-2 font-mono text-xs text-fg-muted">/ {totalTicks}</span>
+
+                  <span className="rounded-md border border-line px-2 py-1 font-mono text-small text-fg-muted">
+                    {opcodeLabel}
+                  </span>
+                </>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2">
               <TickDisplay />
               {isTimelineActive && (
                 <button

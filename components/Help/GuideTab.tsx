@@ -115,7 +115,7 @@ export default function GuideTab({ onClose }: { onClose: () => void }) {
             <li>
               Um <b className="text-fg">label</b> (<span className="font-mono text-fg">LOOP:</span>) dá nome a
               um endereço e serve de destino de <span className="font-mono text-fg">JMP</span>,{" "}
-              <span className="font-mono text-fg">JZ</span>, <span className="font-mono text-fg">JC</span> e{" "}
+              <span className="font-mono text-fg">JZ</span> e{" "}
               <span className="font-mono text-fg">JN</span>.
             </li>
             <li>

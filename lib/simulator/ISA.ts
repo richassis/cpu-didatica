@@ -53,8 +53,9 @@ export const ULA_DST_MASK    = ((1 << GPR_ADDR_BITS) - 1) << ULA_DST_SHIFT;   //
 
 /**
  * Numeric opcodes occupying bits [15:11].
- * Values 0–12 are assigned sequentially; the remaining 19 encodings are
- * reserved for future extensions.
+ * The ISA defines 12 instructions. 0b01010 is unassigned (it once held JC,
+ * which the ISA does not define); the gap is kept so JN/JMP/HLT keep their
+ * encodings. Every other unassigned encoding is reserved.
  */
 export enum Opcode {
   LDA  = 0b00001, // Load register from memory address
@@ -66,7 +67,6 @@ export enum Opcode {
   OR   = 0b00111, // GPR[dst] = GPR[dst] | mem[addr]
   NOT  = 0b01000, // GPR[dst] = ~GPR[dst]
   JZ   = 0b01001, // Jump if zero flag
-  JC   = 0b01010, // Jump if carry flag
   JN   = 0b01011, // Jump if negative flag
   JMP  = 0b01100, // Unconditional jump
   HLT  = 0b01101, // Halt execution
@@ -120,7 +120,6 @@ export const INSTRUCTION_SET: Readonly<Record<keyof typeof Opcode, InstructionDe
   OR   : { mnemonic: "OR",   opcode: Opcode.OR,   format: "ula",      usesSrcB: true,                     description: "DST = SRC_A | SRC_B"                    },
   NOT  : { mnemonic: "NOT",  opcode: Opcode.NOT,  format: "ula",      usesSrcB: false,                    description: "DST = ~SRC_A"                           },
   JZ   : { mnemonic: "JZ",   opcode: Opcode.JZ,   format: "standard", usesGPR: false, usesOperand: true,  description: "Jump to address if zero flag is set"     },
-  JC   : { mnemonic: "JC",   opcode: Opcode.JC,   format: "standard", usesGPR: false, usesOperand: true,  description: "Jump to address if carry flag is set"    },
   JN   : { mnemonic: "JN",   opcode: Opcode.JN,   format: "standard", usesGPR: false, usesOperand: true,  description: "Jump to address if negative flag is set" },
   JMP  : { mnemonic: "JMP",  opcode: Opcode.JMP,  format: "standard", usesGPR: false, usesOperand: true,  description: "Unconditional jump to address"           },
   HLT  : { mnemonic: "HLT",  opcode: Opcode.HLT,  format: "standard", usesGPR: false, usesOperand: false, description: "Halt the CPU"                           },

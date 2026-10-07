@@ -258,11 +258,6 @@ body {
   border-dasharray: 4 3;
 }
 
-.node-badge {
-  color: var(--node-ink);
-  border-color: var(--node-line);
-}
-
 .node-title {
   color: var(--text-muted);
 }
@@ -307,7 +302,6 @@ body {
    Set once on the scaled canvas. Without it the datapath is unreadable noise
    the moment the student zooms out to see the whole thing.
    ──────────────────────────────────────────────────────────────────────── */
-[data-lod="low"] .node-badge,
 [data-lod="low"] .node-value,
 [data-lod="low"] .node-anatomy {
   display: none;

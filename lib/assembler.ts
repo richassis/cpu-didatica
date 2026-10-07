@@ -13,7 +13,7 @@
  *   AND  Rsrc_a, Rsrc_b, Rdst — ULA: dst = a & b
  *   OR   Rsrc_a, Rsrc_b, Rdst — ULA: dst = a | b
  *   NOT  Rsrc_a, Rdst         — ULA: dst = ~a
- *   JZ/JC/JN/JMP  addr_or_label
+ *   JZ/JN/JMP  addr_or_label
  *   HLT
  *
  * Labels:
@@ -385,9 +385,8 @@ function pass2(
         break;
       }
 
-      // ── Jumps: JZ/JC/JN/JMP  addr_or_label ───────────────────────────────
+      // ── Jumps: JZ/JN/JMP  addr_or_label ──────────────────────────────────
       case "JZ":
-      case "JC":
       case "JN":
       case "JMP": {
         if (operands.length !== 1) {
@@ -397,7 +396,7 @@ function pass2(
         const target = resolve(operands[0]);
         if (target === null) break;
         if (!checkRange(target, 8, "Endereço de jump", lineNum, errors)) break;
-        word = Encoder.assemble(mnemonic as "JZ" | "JC" | "JN" | "JMP", { operand: target });
+        word = Encoder.assemble(mnemonic as "JZ" | "JN" | "JMP", { operand: target });
         break;
       }
 

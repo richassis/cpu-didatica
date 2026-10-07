@@ -15,10 +15,9 @@ import { usePlaybackStore } from "@/lib/playbackStore";
  * Drawn as inline SVG rather than with a display webfont: the repo has no font
  * files, and a seven-segment shape is seven polygons.
  *
- * On colour: the lit segments are plain foreground, not the accent. A block
- * this large filled with a saturated hue would eat most of the screen's colour
- * budget, and colour here has to keep meaning "state" — which is why the one
- * coloured case is a halted CPU.
+ * On colour: the lit segments use the same green as an executing component
+ * while the simulation runs — the counter is part of that state — and turn
+ * red once the CPU halts.
  */
 
 /** Segment presence per digit, in order: a b c d e f g. */
@@ -84,7 +83,7 @@ export default function TickDisplay() {
   if (!isTimelineActive) return null;
 
   const halted = getPrimaryCpu()?.halted ?? false;
-  const lit = halted ? "var(--st-error)" : "var(--text)";
+  const lit = halted ? "var(--st-error)" : "var(--st-active)";
   const digits = String(Math.min(currentIndex, 9999)).padStart(4, "0").split("");
 
   return (
