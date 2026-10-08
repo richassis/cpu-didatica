@@ -78,6 +78,9 @@ function pathLength(path: Point[]): number {
 /** A step made only of very short wires still lasts this long, so it can be seen. */
 const MIN_STEP_MS = 80;
 
+/** The control unit's inputs that carry flags into it. */
+const CPU_FLAG_INPUTS = new Set(["in_flags", "in_flagZeroGpr", "in_flagNegativeGpr"]);
+
 function normalizeNodes(nodes: Array<{ x: number; y: number }>): Point[] {
   const snapped = nodes.map((node) => ({
     x: snapToGrid(node.x, GRID_SIZE),
@@ -221,7 +224,7 @@ export default function EnhancedBusOverlay({
         allPorts,
         resolvePortConfig(widgetDef?.portConfig, component.meta),
       );
-      const pos = calculatePortPosition(component, placement.side, placement.offset);
+      const pos = calculatePortPosition(component, placement.side, placement.offset, placement.inset);
 
       return { pos, side: placement.side };
     };
@@ -686,7 +689,17 @@ export default function EnhancedBusOverlay({
           // The wire has delivered — keep a resting dot at its target.
           setSettledDots((prev) => new Set(prev).add(timing.id));
 
-          const targetId = wireDataByIdRef.current.get(timing.id)?.wire.targetComponentId;
+          const landedWire = wireDataByIdRef.current.get(timing.id)?.wire;
+          // The UC's flags change when the flags reach it, not at the start
+          // of the tick.
+          if (landedWire && CPU_FLAG_INPUTS.has(landedWire.targetPortName)) {
+            const cpuId = useSimulatorStore.getState().getPrimaryCpu()?.id;
+            if (landedWire.targetComponentId === cpuId) {
+              useDisplayMaskStore.getState().revealControlFlags();
+            }
+          }
+
+          const targetId = landedWire?.targetComponentId;
           if (!targetId || !pending) continue;
           const remaining = (pending.get(targetId) ?? 1) - 1;
           pending.set(targetId, remaining);

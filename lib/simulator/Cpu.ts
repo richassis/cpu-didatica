@@ -637,6 +637,29 @@ export class CPU implements Clockable, Connectable {
   }
 
   /**
+   * Restore only the ULA's own flags. The timeline replays a tick with the FSM
+   * already on its post-tick state but the flags still on their old values,
+   * and moves each flag set forward only when the data that produces it
+   * arrives — see `displayMaskStore`.
+   */
+  restoreUlaFlags(flags: Readonly<UlaFlags> | undefined): void {
+    this._ulaFlags = { ...(flags ?? NO_FLAGS) };
+  }
+
+  /** Restore only the control unit's flags — same reasoning as `restoreUlaFlags`. */
+  restoreLatchedFlags(
+    snapshot: Pick<
+      CpuInternalStateSnapshot,
+      "latchedFlagZero" | "latchedFlagCarry" | "latchedFlagNegative" | "latchedFlagOverflow"
+    >,
+  ): void {
+    this._latchedFlagZero = snapshot.latchedFlagZero ?? false;
+    this._latchedFlagCarry = snapshot.latchedFlagCarry ?? false;
+    this._latchedFlagNegative = snapshot.latchedFlagNegative ?? false;
+    this._latchedFlagOverflow = snapshot.latchedFlagOverflow ?? false;
+  }
+
+  /**
    * Set a signal only if it has changed from its previous value.
    *
    * Compares against the port's own current value — not a separately

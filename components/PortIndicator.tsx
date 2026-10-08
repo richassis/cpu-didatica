@@ -17,6 +17,8 @@ interface Props {
   componentId: string;
   position: PortSide;
   offset?: number;
+  /** How far inside the box the port sits, % of the perpendicular dimension (see `PortConfig.inset`). */
+  inset?: number;
   /** Port side for routing (same as position) */
   portSide: PortSide;
   /** Whether this port is a valid drop target during wire creation */
@@ -79,6 +81,7 @@ export default function PortIndicator({
   componentId, 
   position,
   offset = 50,
+  inset = 0,
   portSide,
   isDropTarget = false,
   isHoveredTarget = false,
@@ -189,13 +192,15 @@ export default function PortIndicator({
   }, [isCreating, onPortHoverEnd]);
 
   // Position the port based on side. Half the 6px dot, so it straddles the
-  // node's border rather than floating beside it.
+  // node's border rather than floating beside it — or, with an inset, the
+  // node's outline inside its box.
+  const edge = inset ? `calc(${inset}% - 3px)` : -3;
   const positionStyles: React.CSSProperties = {
     position: "absolute",
-    ...(position === "left" && { left: -3, top: `${offset}%`, transform: "translateY(-50%)" }),
-    ...(position === "right" && { right: -3, top: `${offset}%`, transform: "translateY(-50%)" }),
-    ...(position === "top" && { top: -3, left: `${offset}%`, transform: "translateX(-50%)" }),
-    ...(position === "bottom" && { bottom: -3, left: `${offset}%`, transform: "translateX(-50%)" }),
+    ...(position === "left" && { left: edge, top: `${offset}%`, transform: "translateY(-50%)" }),
+    ...(position === "right" && { right: edge, top: `${offset}%`, transform: "translateY(-50%)" }),
+    ...(position === "top" && { top: edge, left: `${offset}%`, transform: "translateX(-50%)" }),
+    ...(position === "bottom" && { bottom: edge, left: `${offset}%`, transform: "translateX(-50%)" }),
   };
 
   const isInput = direction === "input";
@@ -218,6 +223,7 @@ export default function PortIndicator({
       data-port-direction={direction}
       data-port-side={portSide}
       data-port-offset={offset}
+      data-port-inset={inset}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}

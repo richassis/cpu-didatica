@@ -16,7 +16,8 @@ import { create } from "zustand";
 import type { TickSnapshot, SubstepGroup } from "./executionStore";
 import { applySnapshot } from "./executionStore";
 import { useSimulatorStore } from "./simulatorStore";
-import { Gpr, Memory, InstructionMemory } from "./simulator";
+import { Gpr, Memory, InstructionMemory, Ula } from "./simulator";
+import { CpuState } from "./simulator/CpuState";
 
 interface DisplayMaskState {
   /** Whether progressive reveal is active (only during timeline animation). */
@@ -109,6 +110,20 @@ interface DisplayMaskState {
    * component whose several outputs all settle in the evaluate phase.
    */
   revealOutputPorts: (componentId: string) => void;
+
+  /**
+   * Move the ULA's own flags (shown inside the ULA) to their post-tick value.
+   * Called when the ULA computes — its operands have landed or it starts
+   * sending its result — never at the start of the tick.
+   */
+  revealUlaFlags: () => void;
+
+  /**
+   * Move the control unit's flags (shown in the UC) to their post-tick value.
+   * Called when the flags reach the UC: the ULA's flags wire lands on it, or —
+   * for LDA/LDAI — the loaded value lands in the GPR that produces them.
+   */
+  revealControlFlags: () => void;
 
   /**
    * Force-reveal all remaining components.
@@ -213,10 +228,15 @@ export const useDisplayMaskStore = create<DisplayMaskState>()((set, get) => ({
     // Restore CPU internal state from TARGET so FSM labels are correct, and
     // immediately reveal the CPU's post-tick output ports — control signals are
     // not animated, they just take their new values at the start of the state.
+    // The flags are the exception: they are produced by the data, so they stay
+    // on their pre-tick values until that data arrives (`revealUlaFlags`,
+    // `revealControlFlags`).
     const revealed = new Set<string>();
     const cpu = useSimulatorStore.getState().getPrimaryCpu();
     if (cpu) {
       cpu.restoreInternalState(targetSnapshot.cpuInternalState);
+      cpu.restoreUlaFlags(baseSnapshot.cpuInternalState.ulaFlags);
+      cpu.restoreLatchedFlags(baseSnapshot.cpuInternalState);
       if (applyComponentTargetState(cpu.id, targetSnapshot)) {
         revealed.add(cpu.id);
       }
@@ -259,11 +279,23 @@ export const useDisplayMaskStore = create<DisplayMaskState>()((set, get) => ({
     const newRevealed = new Set(revealedComponents);
     let changed = false;
 
+    // LDA/LDAI set the UC's Z/N from the value written into the GPR, so they
+    // change once that value lands there — the same rule `latchFlagsIfProduced`
+    // follows in the CPU.
+    const { previousState } = targetSnapshot.cpuInternalState;
+    const loadsFlags =
+      previousState === CpuState.WRITEREG1 || previousState === CpuState.WRITEREG2;
+    const objects = useSimulatorStore.getState().objects;
+
     for (const componentId of componentIds) {
       if (applyComponentTargetState(componentId, targetSnapshot)) {
         newRevealed.add(componentId);
         changed = true;
       }
+      const obj = objects.get(componentId);
+      // The ULA computes as soon as its operands have landed.
+      if (obj instanceof Ula) get().revealUlaFlags();
+      if (obj instanceof Gpr && loadsFlags) get().revealControlFlags();
     }
 
     if (!changed) return;
@@ -341,6 +373,26 @@ export const useDisplayMaskStore = create<DisplayMaskState>()((set, get) => ({
       if (port.setWithoutPropagate) port.setWithoutPropagate(value);
       else port.set?.(value);
     }
+    // A ULA sending its result has computed, flags included.
+    if (obj instanceof Ula) get().revealUlaFlags();
+    useSimulatorStore.setState((s) => ({ revision: s.revision + 1 }));
+  },
+
+  revealUlaFlags: () => {
+    const { targetSnapshot, isActive } = get();
+    if (!isActive || !targetSnapshot) return;
+    const cpu = useSimulatorStore.getState().getPrimaryCpu();
+    if (!cpu) return;
+    cpu.restoreUlaFlags(targetSnapshot.cpuInternalState.ulaFlags);
+    useSimulatorStore.setState((s) => ({ revision: s.revision + 1 }));
+  },
+
+  revealControlFlags: () => {
+    const { targetSnapshot, isActive } = get();
+    if (!isActive || !targetSnapshot) return;
+    const cpu = useSimulatorStore.getState().getPrimaryCpu();
+    if (!cpu) return;
+    cpu.restoreLatchedFlags(targetSnapshot.cpuInternalState);
     useSimulatorStore.setState((s) => ({ revision: s.revision + 1 }));
   },
 

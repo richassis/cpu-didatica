@@ -3,6 +3,7 @@
 // export type { WidgetDefinition } from "@/lib/widgetDefinition";
 
 import type { ComponentPortConfig } from "@/lib/portPositioning";
+import { aluTopEdgeInset } from "@/lib/aluShape";
 
 /** Shared type — imported by both widget files and widgetDefinitions.ts */
 export interface WidgetDefinition {
@@ -113,14 +114,15 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
       ports: {
         "a": { side: "left", offset: 14 },        // Data input → left
         "b": { side: "left", offset: 86.5 },        // Data input → left
-        "operation": { side: "top", offset: 50 }, // Control signal → top
+        // The top ports sit on the slanted edge, not on the box's border.
+        "operation": { side: "top", offset: 50, inset: aluTopEdgeInset(50) }, // Control signal → top
         "result": { side: "right", offset: 52 },  // Data output → right
         "zero":     { side: "bottom", offset: 20,  hidden: true },
         "carry":    { side: "bottom", offset: 40,  hidden: true },
         "negative": { side: "bottom", offset: 60,  hidden: true },
         "overflow": { side: "bottom", offset: 80,  hidden: true },
         // The four flags as one bus up to the control unit.
-        "flags":    { side: "top", offset: 85 },
+        "flags":    { side: "top", offset: 85, inset: aluTopEdgeInset(85) },
       },
     },
   },

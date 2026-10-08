@@ -145,6 +145,7 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
       const direction = portEl.dataset.portDirection as "input" | "output" | undefined;
       const side = portEl.dataset.portSide as PortSide | undefined;
       const offset = Number(portEl.dataset.portOffset ?? "50");
+      const inset = Number(portEl.dataset.portInset ?? "0");
 
       if (!componentId || !portName || !direction || !side) return null;
       if (direction === sourceDirection) return null;
@@ -153,7 +154,12 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
       const component = components.find((c) => c.id === componentId);
       if (!component) return null;
 
-      const position = calculatePortPosition(component, side, Number.isFinite(offset) ? offset : 50);
+      const position = calculatePortPosition(
+        component,
+        side,
+        Number.isFinite(offset) ? offset : 50,
+        Number.isFinite(inset) ? inset : 0,
+      );
 
       return {
         componentId,
