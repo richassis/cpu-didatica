@@ -24,7 +24,6 @@ import { useProjectStore } from "@/lib/projectStore";
 import { useAuthoring } from "@/lib/modeStore";
 import { CanvasEditingProvider } from "@/components/CanvasEditingContext";
 import { EDITOR_ENABLED } from "@/lib/editorFlag";
-import { useExecutionStore } from "@/lib/executionStore";
 import { useCanvasViewStore } from "@/lib/canvasViewStore";
 import { GRID_SIZE, snapToGrid } from "@/lib/wireRouting";
 import { calculatePortPosition, type PortSide } from "@/lib/portPositioning";
@@ -61,8 +60,6 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
   const authoring = useAuthoring();
   const isEditMode = authoring && !isReadOnly;
 
-  const executionTick = useExecutionStore((s) => s.currentIndex);
-
   // Clock state
   const tickClock = useSimulatorStore((s) => s.tickClock);
   const resetClock = useSimulatorStore((s) => s.resetClock);
@@ -74,9 +71,6 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
   const cpu = getPrimaryCpu();
   const totalTicks = cpu?.totalTicks ?? 0;
   const isHalted = cpu?.halted ?? false;
-  const displayedTick = isReadOnly ? executionTick : totalTicks;
-
-  // Display settings
 
   // Wire creation state (new drag-based API)
   const isCreatingWire = useWireCreationStore((s) => s.phase === "dragging");
@@ -282,10 +276,8 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
     useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } })
   );
 
+  // Only fires in edit mode: the DndContext gets no sensors otherwise.
   const handleDragEnd = (event: DragEndEvent) => {
-    // Block component movement in simulation mode and read-only mode.
-    if (!isEditMode || isReadOnly) return;
-    
     const { active, delta } = event;
     if (delta.x !== 0 || delta.y !== 0) {
       const dx = delta.x / zoom;
@@ -309,9 +301,6 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
   };
 
   const handleClear = () => {
-    // Block clear in simulation mode
-    if (!isEditMode) return;
-    
     if (confirmClear) {
       clearComponents();
       setConfirmClear(false);
@@ -324,8 +313,9 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
   /**
    * Zoom and centre so the whole datapath fits the viewport.
    *
-   * The canvas cannot be panned or wheel-zoomed any more, so this is the only
-   * thing that positions the view: it runs on mount, whenever the set of
+   * There is no wheel zoom or drag-to-pan, and the program-mode canvas does
+   * not scroll, so in program mode this is the only thing that positions the
+   * view (edit mode can still scroll). It runs on mount, whenever the set of
    * components changes (project switch) and on resize.
    */
   const fitToScreen = useCallback(() => {
@@ -483,7 +473,7 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
             // full anatomy — memory address lists, the CPU's FSM graph and
             // signal strip — rather than the "dense" mid-zoom fallback, which
             // exists for pulling back further, not for the first screen.
-            data-lod={zoom < 0.4 ? "low" : zoom < 0.6 ? "mid" : "full"}
+            data-lod={zoom < 0.6 ? "mid" : "full"}
             style={{
               width: CANVAS_WIDTH,
               height: CANVAS_HEIGHT,
@@ -506,23 +496,12 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
       </DndContext>
       </CanvasEditingProvider>
 
-      {/* ── FAB actions menu (bottom-right) ───────────────── */}
-      {/* ── Corner controls ────────────────────────────────
-          The zoom cluster is a *viewing* control, not an authoring one, so it
-          renders in both modes. It used to sit inside the authoring guard,
-          which left program mode — the mode built for reading the datapath —
-          with no way to zoom or refit at all. Everything above it is authoring
-          and stays behind the guard.
-          In read-only (program) mode this corner swaps with TickDisplay's:
-          the tick counter is the instrument that matters while a program runs,
-          so it takes the bottom-right spot, and zoom — used far less there —
-          moves to top-right instead of fighting it for the same corner. */}
+      {/* ── Corner controls (bottom-right) ─────────────────
+          Edit mode only. The read-only canvas in program mode gets its zoom
+          buttons from the top bar, through useCanvasViewStore. */}
+      {isEditMode && (
       <div
-        className={
-          isReadOnly
-            ? "fixed right-4 top-4 z-40 flex flex-col items-end gap-2"
-            : "fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2"
-        }
+        className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2"
         onMouseDown={(e) => e.stopPropagation()} // prevent outside-click handler
       >
         {/* Action items — slide up when open. Every item is neutral: these are
@@ -534,15 +513,13 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
             duplicated switches in SimulationSettings, and the one that was
             *only* here — the master "show wires" — was unreachable for
             students. All four now live in the settings panel. */}
-        {!isReadOnly && fabOpen && (
+        {fabOpen && (
           <div className="mb-1 flex flex-col items-end gap-2">
-            {isEditMode && (
-              <FabItem
-                label="Add component"
-                icon={<Plus size={16} strokeWidth={1.5} />}
-                onClick={() => { setShowAddModal(true); setFabOpen(false); }}
-              />
-            )}
+            <FabItem
+              label="Add component"
+              icon={<Plus size={16} strokeWidth={1.5} />}
+              onClick={() => { setShowAddModal(true); setFabOpen(false); }}
+            />
 
             <FabItem
               label="Display settings"
@@ -550,7 +527,7 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
               onClick={() => { setShowDisplaySettings(true); setFabOpen(false); }}
             />
 
-            {isEditMode && components.length > 0 && (
+            {components.length > 0 && (
               <FabItem
                 label={confirmClear ? `Confirm clear (${components.length})` : "Clear canvas"}
                 icon={<Trash2 size={16} strokeWidth={1.5} />}
@@ -563,7 +540,7 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
 
         {/* Display Settings Panel — the same component program mode mounts, so
             there is one definition of what a simulation setting is. */}
-        {!isReadOnly && showDisplaySettings && (
+        {showDisplaySettings && (
           <div
             className="mb-2 rounded-2xl border border-line bg-surface p-4"
             onMouseDown={(e) => e.stopPropagation()}
@@ -575,7 +552,6 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
         {/* Zoom controls — the only way to zoom. Wheel zoom and drag-to-pan are
             gone on purpose: they used to fire by accident all the time. The
             percentage doubles as "fit to screen". */}
-        {!isReadOnly && (
         <div
           className="flex items-center gap-1 overflow-hidden rounded-full border border-line bg-surface px-1"
           onMouseDown={(e) => e.stopPropagation()}
@@ -601,52 +577,45 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
             aria-label="Aumentar zoom"
           ><Plus size={14} strokeWidth={1.5} /></button>
         </div>
-        )}
 
         {/* Main FAB button */}
-        {!isReadOnly && (
-          <button
-            onClick={() => { setFabOpen((v) => !v); setConfirmClear(false); setShowDisplaySettings(false); }}
-            className={`flex h-12 w-12 items-center justify-center rounded-full border border-line-strong bg-surface text-fg transition-transform ${
-              fabOpen ? "rotate-45" : ""
-            }`}
-            aria-label="Actions"
-          >
-            <Plus size={20} strokeWidth={1.5} />
-          </button>
-        )}
+        <button
+          onClick={() => { setFabOpen((v) => !v); setConfirmClear(false); setShowDisplaySettings(false); }}
+          className={`flex h-12 w-12 items-center justify-center rounded-full border border-line-strong bg-surface text-fg transition-transform ${
+            fabOpen ? "rotate-45" : ""
+          }`}
+          aria-label="Actions"
+        >
+          <Plus size={20} strokeWidth={1.5} />
+        </button>
       </div>
+      )}
 
       {/* ── Clock toolbar (bottom-left) ─────────────────────
           Edit mode only. In program mode the tick is read from the
           seven-segment display, and this used to sit under the simulation bar
           showing the same number a second time. */}
-      {!isReadOnly && (
+      {isEditMode && (
       <div
         className="fixed bottom-6 left-6 z-40 flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1.5"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <span className="num min-w-[4rem] text-center font-mono text-xs text-fg-muted">T{displayedTick}</span>
-
-        {(
-          <>
-            <button
-              onClick={tickClock}
-              disabled={isHalted}
-              className="rounded-full border border-line-strong px-2.5 py-1 text-xs text-fg transition-colors hover:border-st-active disabled:cursor-not-allowed disabled:opacity-50"
-              title="Advance clock by one tick"
-            >Tick</button>
-            <button
-              onClick={handleReset}
-              className="flex h-7 w-7 items-center justify-center rounded-full text-fg-muted transition-colors hover:text-fg"
-              title="Reset clock"
-            ><RotateCcw size={14} strokeWidth={1.5} /></button>
-            {isHalted && (
-              <span className="flex items-center gap-1.5 rounded-full border border-st-error px-2 py-0.5 text-xs text-st-error">
-                Halted
-              </span>
-            )}
-          </>
+        <span className="num min-w-[4rem] text-center font-mono text-xs text-fg-muted">T{totalTicks}</span>
+        <button
+          onClick={tickClock}
+          disabled={isHalted}
+          className="rounded-full border border-line-strong px-2.5 py-1 text-xs text-fg transition-colors hover:border-st-active disabled:cursor-not-allowed disabled:opacity-50"
+          title="Advance clock by one tick"
+        >Tick</button>
+        <button
+          onClick={handleReset}
+          className="flex h-7 w-7 items-center justify-center rounded-full text-fg-muted transition-colors hover:text-fg"
+          title="Reset clock"
+        ><RotateCcw size={14} strokeWidth={1.5} /></button>
+        {isHalted && (
+          <span className="flex items-center gap-1.5 rounded-full border border-st-error px-2 py-0.5 text-xs text-st-error">
+            Halted
+          </span>
         )}
       </div>
       )}
@@ -660,13 +629,11 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
 
 // ── FAB menu item ─────────────────────────────────────────────
 function FabItem({
-  label, icon, onClick, on = false, destructive = false,
+  label, icon, onClick, destructive = false,
 }: {
   label: string;
   icon: React.ReactNode;
   onClick: () => void;
-  /** Toggle that is currently on — marked by the accent on the icon only. */
-  on?: boolean;
   destructive?: boolean;
 }) {
   return (
@@ -678,7 +645,7 @@ function FabItem({
           : "border-line bg-surface text-fg-muted hover:border-line-strong hover:text-fg"
       }`}
     >
-      <span className={on ? "text-st-active" : undefined}>{icon}</span>
+      <span>{icon}</span>
       {label}
     </button>
   );

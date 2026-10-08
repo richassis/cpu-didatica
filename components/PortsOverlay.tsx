@@ -41,8 +41,8 @@ export default function PortsOverlay({ componentId }: Props) {
   const hoveredTargetPort = useWireCreationStore((s) => s.hoveredTargetPort);
 
   const showWiresAndPorts = useDisplayStore((s) => s.showWiresAndPorts);
-  // Port drag-to-connect is authoring, so it follows the canvas rather than the
-  // mode: the program-mode viewer mounts a read-only canvas even in edit mode.
+  // Port drag-to-connect is authoring, so it asks the canvas it sits in (see
+  // CanvasEditingContext) rather than reading the mode store directly.
   const isEditableCanvas = useCanvasEditing();
 
   const isCreating = phase === "dragging";

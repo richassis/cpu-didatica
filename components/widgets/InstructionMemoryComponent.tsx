@@ -24,7 +24,7 @@ function fmtAddr(addr: number, addrBits: number) {
  * scrollable address list — because they are the same class of thing.
  *
  * The list shows the raw stored word, not its mnemonic: the mnemonic already
- * lives in the source and in the Montagem panel, and a memory that displayed
+ * lives in the source and in the Ling. Máquina panel, and a memory that displayed
  * decoded meaning instead of stored bits would misrepresent what memory
  * actually holds. The mnemonic survives as a secondary column in the full
  * listing (`MemoryViewer`'s `decode` prop) and in the compact headline.

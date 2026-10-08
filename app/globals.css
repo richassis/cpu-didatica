@@ -6,8 +6,8 @@
    Two rules govern this file:
 
    1. Colour codes STATE, never identity. A component's identity comes from its
-      silhouette, its corner glyph and its internal anatomy — see
-      `components/widgets/silhouettes.tsx`. Only five saturated colours exist,
+      silhouette and its internal anatomy — see
+      `components/widgets/silhouettes.tsx`. Only four saturated colours exist,
       and each means something is happening right now.
    2. Depth comes from surface difference and from a state glow, never from a
       drop shadow. There is no elevation shadow anywhere in the app.
@@ -35,31 +35,21 @@
   --text-muted: #9BA2A6;
   --text-faint: #6B7278;
 
-  /* State — four, plus one used at most once per screen. Adding a sixth means
-     removing one of these. */
+  /* State — four. Adding a fifth means removing one of these. */
   --st-active: #3DFF9E;   /* component executing this tick */
   --st-data:   #2D7FF9;   /* bus/register carrying a valid value */
-  --st-error:  #FF4757;   /* unexpected HLT, overflow, bad address */
+  --st-error:  #FF4757;   /* the UC once the CPU halts (HLT) */
   --st-warn:   #FFA92B;   /* flag set, state worth watching */
-  --st-cursor: #FF3D9A;   /* current tick, breakpoint. Max one on screen. */
 
   /* Opacity ceiling of the state glow. Tokenised because the same value blows
      out on a white ground — see the light profile. */
   --glow-alpha: 22%;
 
-  /* Legacy aliases, still read by the canvas and the wire overlay. */
-  --canvas-bg: var(--canvas);
-  --canvas-grid: var(--grid-dot);
-  --widget-surface: var(--surface);
-  --widget-surface-alt: var(--surface-raised);
-  --wire-value-bg: var(--canvas);
-  --wire-value-fg: var(--text);
+  /* Wire flow colours, read by the wire overlay. Control-signal wires flow
+     green, data wires flow blue — the two carry different kinds of
+     information and should not read alike in motion. */
   --wire-data: var(--st-data);
-  --wire-data-end: var(--st-data);
-  /* Control-signal wires flow green, data wires flow blue — the two carry
-     different kinds of information and should not read alike in motion. */
   --wire-control: var(--st-active);
-  --wire-control-end: var(--st-active);
 }
 
 [data-theme="light"] {
@@ -80,7 +70,6 @@
   --st-data:   #1B5FD9;
   --st-error:  #D62839;
   --st-warn:   #B26A00;
-  --st-cursor: #C81E6E;
 
   --glow-alpha: 10%;
 
@@ -108,13 +97,11 @@
   --text-caption: 0.75rem;    /* 12px — captions, table heads */
   --text-small: 0.8125rem;    /* 13px — secondary text, table cells */
   --text-ui: 0.875rem;        /* 14px — primary UI and listings */
-  --text-lead: 1rem;          /* 16px */
   /* Inside the canvas, drawn in canvas units and shrunk by the zoom — so
      larger, to land near the chrome sizes at the default fitted zoom. */
   --text-cv-xs: calc(0.75rem * var(--fs-cv) / var(--fs));    /* 12px */
   --text-cv-sm: calc(0.875rem * var(--fs-cv) / var(--fs));   /* 14px */
   --text-cv-md: calc(1rem * var(--fs-cv) / var(--fs));       /* 16px */
-  --text-cv-lg: calc(1.125rem * var(--fs-cv) / var(--fs));   /* 18px */
 
   --font-sans: var(--font-urbanist);
   --font-mono: var(--font-jetbrains-mono);
@@ -135,7 +122,6 @@
   --color-st-data:   var(--st-data);
   --color-st-error:  var(--st-error);
   --color-st-warn:   var(--st-warn);
-  --color-st-cursor: var(--st-cursor);
 }
 
 * {
@@ -183,25 +169,12 @@ body {
 .t-node    { font-family: var(--font-sans); font-size: 0.875rem; font-weight: 500; }
 .t-section { font-family: var(--font-sans); font-size: 0.8125rem; font-weight: 500; color: var(--text-muted); }
 .t-body    { font-family: var(--font-sans); font-size: 0.9375rem; font-weight: 400; }
-.t-metric  { font-family: var(--font-sans); font-size: 32px; font-weight: 300; }
 
 .t-value {
   font-family: var(--font-mono);
   font-size: 1.0625rem;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
-}
-.t-value-sm {
-  font-family: var(--font-mono);
-  font-size: 0.9375rem;
-  font-weight: 400;
-  font-variant-numeric: tabular-nums;
-}
-.t-code {
-  font-family: var(--font-mono);
-  font-size: 0.9063rem;
-  font-weight: 400;
-  line-height: 1.6;
 }
 
 /* ──────────────────────────────────────────────────────────────────────────
@@ -217,20 +190,17 @@ body {
    ────────────────────────────────────────────────────────────────────────── */
 .node {
   --node-line: var(--border);
-  --node-ink: var(--text-muted);
   --node-glow: transparent;
   transition: opacity 0.2s ease;
 }
 
 .node[data-state="active"] {
   --node-line: var(--st-active);
-  --node-ink: var(--st-active);
   --node-glow: color-mix(in srgb, var(--st-active) var(--glow-alpha), transparent);
 }
 
 .node[data-state="error"] {
   --node-line: var(--st-error);
-  --node-ink: var(--st-error);
   --node-glow: color-mix(in srgb, var(--st-error) var(--glow-alpha), transparent);
 }
 
@@ -241,7 +211,7 @@ body {
 }
 
 /* Rectangular nodes draw their own outline. Nodes with a silhouette
-   (ALU, MUX, decoder, adder) draw it in SVG instead and skip this. */
+   (ALU, MUX, adder, incrementer) draw it in SVG instead and skip this. */
 .node--boxed {
   border-radius: 10px;
   border: 1px solid var(--node-line);
@@ -255,7 +225,6 @@ body {
    reserved for exactly this one component. */
 .node--control {
   border-style: dashed;
-  border-dasharray: 4 3;
 }
 
 .node-title {
@@ -299,18 +268,15 @@ body {
 }
 
 /* ── Level of detail ──────────────────────────────────────────────────────
-   Set once on the scaled canvas. Without it the datapath is unreadable noise
-   the moment the student zooms out to see the whole thing.
+   Set once on the scaled canvas (`mid` below 60% zoom, `full` above). Without
+   it the datapath is unreadable noise the moment the student zooms out to see
+   the whole thing.
    ──────────────────────────────────────────────────────────────────────── */
-[data-lod="low"] .node-value,
-[data-lod="low"] .node-anatomy {
-  display: none;
-}
 
 /* Anatomy that exists specifically to be readable before the student zooms in
    — address lists, the control unit's FSM graph and signal strip — survives
    the `mid` band with a denser rendering instead of disappearing with the
-   rest of the anatomy. It still goes with everything else at `low`. */
+   rest of the anatomy. */
 [data-lod="mid"] .node-anatomy:not(.node-anatomy--dense) {
   display: none;
 }
@@ -342,6 +308,16 @@ body {
   cursor: pointer;
 }
 
+/* The opening screen rises into place, piece by piece. */
+@keyframes splash-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: none; }
+}
+.splash-rise {
+  animation: splash-rise 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation-delay: var(--d, 0s);
+}
+
 /* ──────────────────────────────────────────────────────────────────────────
    Reduced motion
 
@@ -355,16 +331,6 @@ body {
    starts at instant speed when this query matches (see displayStore), which a
    saved preference then overrides.
    ────────────────────────────────────────────────────────────────────────── */
-/* The opening screen rises into place, piece by piece. */
-@keyframes splash-rise {
-  from { opacity: 0; transform: translateY(14px); }
-  to   { opacity: 1; transform: none; }
-}
-.splash-rise {
-  animation: splash-rise 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both;
-  animation-delay: var(--d, 0s);
-}
-
 @media (prefers-reduced-motion: reduce) {
   /* Everything is simply there: no rise, and no dots crossing the wires. */
   .splash-rise { animation: none; }
@@ -388,20 +354,4 @@ body {
 
 .scrollbar-hide::-webkit-scrollbar {
   display: none;  /* Chrome, Safari and Opera */
-}
-
-/* Wire pulse animation for data passing */
-@keyframes wirePulse {
-  0% {
-    opacity: 0.9;
-    stroke-width: 6;
-  }
-  50% {
-    opacity: 0.7;
-    stroke-width: 8;
-  }
-  100% {
-    opacity: 0;
-    stroke-width: 4;
-  }
 }

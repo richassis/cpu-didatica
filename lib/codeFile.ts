@@ -17,8 +17,6 @@
 export const CODE_FILE_EXTENSIONS = [".asm", ".txt"] as const;
 export type CodeFileExtension = (typeof CODE_FILE_EXTENSIONS)[number];
 
-export const CODE_FILE_DEFAULT_EXTENSION: CodeFileExtension = ".asm";
-
 export const CODE_FILE_MIME = "text/plain;charset=utf-8";
 
 /**

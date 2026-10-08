@@ -18,10 +18,13 @@ const WIDTH_BEFORE_RUN = "60%";
 /** Share once the timeline is active — the datapath is the point now. */
 const WIDTH_DURING_RUN = "max(26%, 28rem)";
 
-/** Width of a panel collapsed to its rail, and of the Montagem panel expanded. */
+/** Width of a panel collapsed to its rail. */
 const RAIL_W = 36;
-/** In rem, so the Ling. Máquina panel grows with the text size. */
+/** Width of the Ling. Máquina panel expanded — in rem, so it grows with the text size. */
 const MONTAGEM_W_REM = 13.5;
+
+/** Width the code region takes while the memories are open — two columns. */
+const MEMORY_PANEL_W = 480;
 
 /**
  * ProgramModeLayout — Full-screen layout for Program Mode.
@@ -47,9 +50,6 @@ const MONTAGEM_W_REM = 13.5;
  * Montar/Simular live in the bottom bar, so they stay reachable whatever
  * the region is showing — either code panel collapsed, or the memories open.
  */
-/** Width the code region takes while the memories are open — two columns. */
-const MEMORY_PANEL_W = 480;
-
 export default function ProgramModeLayout() {
   const isTimelineActive = useExecutionStore((s) => s.isTimelineActive);
   const inspectedMemoryId = useMemoryPanelStore((s) => s.inspectedMemoryId);
@@ -122,7 +122,7 @@ export default function ProgramModeLayout() {
 
   return (
     /* The bar is always mounted, so the padding that clears it is unconditional
-       too — settings and the legend have to be reachable before the first Run. */
+       too — Montar and Simular have to be reachable before the first Run. */
     <div className="relative flex-1 min-h-0 pb-24" ref={containerRef}>
       <div className="flex h-full min-h-0">
         {/* Left: code region — editor + bytecode (resizable, and it shrinks once

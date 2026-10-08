@@ -21,7 +21,7 @@ function fmtAddr(addr: number, addrBits: number) {
  * Anatomy is an address list: faint addresses on the left, values on the
  * right, a cursor on the addressed word and a count of what is scrolled off
  * each end. The spine on the left border is what tells it apart from a
- * register at 25% zoom, where none of this survives.
+ * register at a glance, before any of this is read.
  */
 export default function MemoryComponent({ component, zoom }: Props) {
   const { id } = component;

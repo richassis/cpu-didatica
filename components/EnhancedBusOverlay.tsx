@@ -118,12 +118,8 @@ export default function EnhancedBusOverlay({
   const base = useDisplayStore((s) => s.numericBase);
   const showCpuSignalWires = useDisplayStore((s) => s.showCpuSignalWires);
   const showDataSignalWires = useDisplayStore((s) => s.showDataSignalWires);
-  const showWireDots = useDisplayStore((s) => s.showWireDots);
   // The canvas follows the text size at 40% of the rate (`--fs-cv` in globals.css).
   const textScale = 1 + (TEXT_SIZE_SCALE[useDisplayStore((s) => s.textSize)] - 1) * 0.4;
-  const animationEnabled = useDisplayStore((s) => s.animationEnabled);
-  const animateCpuSignals = useDisplayStore((s) => s.animateCpuSignals);
-  const animateDataSignals = useDisplayStore((s) => s.animateDataSignals);
   const animationDurationMs = useDisplayStore((s) => s.animationDurationMs);
 
   const removeSimulatorWire = useSimulatorStore((s) => s.removeWire);
@@ -159,7 +155,6 @@ export default function EnhancedBusOverlay({
   const animationRef = useRef<number | null>(null);
   const wireDataByIdRef = useRef<Map<string, WireRenderData>>(new Map());
   const lastAnimatedCycleRef = useRef<number | null>(null);
-  /** Substep order values already revealed in the current animation pass. */
   /** Substep orders whose start-of-substep reveals have already run. */
   const startedGroupsRef = useRef<Set<number>>(new Set());
 
@@ -177,9 +172,6 @@ export default function EnhancedBusOverlay({
   const settingsRef = useRef({
     showCpuSignalWires,
     showDataSignalWires,
-    animationEnabled,
-    animateCpuSignals,
-    animateDataSignals,
     animationDurationMs,
   });
   // Declared before the animation effect so it refreshes first: effects run in
@@ -189,9 +181,6 @@ export default function EnhancedBusOverlay({
     settingsRef.current = {
       showCpuSignalWires,
       showDataSignalWires,
-      animationEnabled,
-      animateCpuSignals,
-      animateDataSignals,
       animationDurationMs,
     };
   });
@@ -372,9 +361,6 @@ export default function EnhancedBusOverlay({
     const {
       showCpuSignalWires,
       showDataSignalWires,
-      animationEnabled,
-      animateCpuSignals,
-      animateDataSignals,
       animationDurationMs,
     } = settingsRef.current;
 
@@ -383,10 +369,9 @@ export default function EnhancedBusOverlay({
       animationRef.current = null;
     }
 
-    // Animation off, or the speed slider pushed all the way to instant: snap
-    // straight to the post-tick state, no flow/dots. The two are separate
-    // controls but the same behaviour, so they share one exit.
-    if (!animationEnabled || isInstantSpeed(animationDurationMs)) {
+    // Instant speed (only reachable through the reduced-motion default): snap
+    // straight to the post-tick state, no flow/dots.
+    if (isInstantSpeed(animationDurationMs)) {
       setAnimatingWires(new Set());
       setAnimationProgress(new Map());
       useDisplayMaskStore.getState().revealAll();
@@ -466,23 +451,18 @@ export default function EnhancedBusOverlay({
     });
     const allNonCpuIds = visibleWireIds.filter((id) => !wireDataByIdRef.current.get(id)?.isCpuControlSignal);
 
-    // Apply per-category animation toggles.
-    // Unchanged CPU wires are always static; changed ones obey animateCpuSignals.
-    const animCpuIds = animateCpuSignals ? changedCpuIds : [];
-    // Data wires obey animateDataSignals; if disabled, data reveals happen instantly.
-    const animNonCpuIds = animateDataSignals ? allNonCpuIds : [];
-
-    if (animCpuIds.length === 0 && animNonCpuIds.length === 0) {
+    // Only changed CPU wires animate; every visible data wire does.
+    if (changedCpuIds.length === 0 && allNonCpuIds.length === 0) {
       useDisplayMaskStore.getState().revealAll();
-      // Nothing to animate this tick (a HALT, or every category switched off) —
-      // still a completed pass as far as playback is concerned.
+      // Nothing to animate this tick (no CPU signal changed and no data wire
+      // takes part) — still a completed pass as far as playback is concerned.
       usePlaybackStore.getState().notifyTickAnimationComplete();
       return;
     }
 
     // Build substep groups only from the wires we're actually animating.
     const nonCpuOrderGroups = new Map<number, string[]>();
-    for (const id of animNonCpuIds) {
+    for (const id of allNonCpuIds) {
       const wireData = wireDataByIdRef.current.get(id);
       if (!wireData) continue;
 
@@ -509,7 +489,7 @@ export default function EnhancedBusOverlay({
     // lasts as long as its longest wire, and each wire lands on its own within it.
     const lengthOf = (id: string) => wireDataByIdRef.current.get(id)?.length ?? 0;
     const schedule = buildSchedule({
-      cpuWires: animCpuIds.map((id) => ({ id, length: lengthOf(id) })),
+      cpuWires: changedCpuIds.map((id) => ({ id, length: lengthOf(id) })),
       dataGroups: sortedNonCpuGroups.map(([order, ids]) => ({
         order,
         wires: ids.map((id) => ({ id, length: lengthOf(id) })),
@@ -533,14 +513,8 @@ export default function EnhancedBusOverlay({
       pendingByGroup.set(group.order, pending);
     }
 
-    // If data animation is disabled, reveal all data components immediately so
-    // they show post-tick values; CPU signal animation (if any) runs on top.
-    if (!animateDataSignals) {
-      useDisplayMaskStore.getState().revealAll();
-    }
-
     // Both changed CPU wires and data wires get animated dots.
-    const animatingIds = [...animCpuIds, ...animNonCpuIds];
+    const animatingIds = [...changedCpuIds, ...allNonCpuIds];
 
     const kickoff = window.setTimeout(() => {
       setAnimatingWires(new Set(animatingIds));
@@ -930,9 +904,8 @@ export default function EnhancedBusOverlay({
    * is not carrying anything right now.
    */
   const valueMarkers = visibleWires.flatMap((wireData) => {
-    // Dots can be disabled globally; CPU wires only show dots when they're in
-    // the current animation set (i.e. their value changed).
-    if (!showWireDots) return [];
+    // CPU wires only show dots when they're in the current animation set (i.e.
+    // their value changed).
     if (wireData.isCpuControlSignal && !animatingWires.has(wireData.wire.id)) return [];
 
     const liveProgress = animationProgress.get(wireData.wire.id);
@@ -955,9 +928,6 @@ export default function EnhancedBusOverlay({
       value: progress >= 1 ? (wireData.restingValue ?? wireData.value) : wireData.value,
       color: wireData.isCpuControlSignal ? "var(--wire-control)" : "var(--wire-data)",
       isResting: progress >= 1,
-      // Resting markers sit on top of the destination widget, so push the badge
-      // further away and to the side the wire arrived from.
-      lift: progress >= 1 ? 26 : 20,
     }];
   });
 

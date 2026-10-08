@@ -75,13 +75,6 @@ export class Mux implements Clockable, Connectable {
 
   get sel(): number { return this.in_sel.value; }
 
-  get result(): number { return this.out_result.value; }
-
-  resultHex(): string {
-    const digits = Math.ceil(this.bitWidth / 4);
-    return this.out_result.value.toString(16).padStart(digits, "0").toUpperCase();
-  }
-
   // ── Core ─────────────────────────────────────────────────────
 
   /**
@@ -114,10 +107,6 @@ export class Mux implements Clockable, Connectable {
   }
 
   // ── Helpers ──────────────────────────────────────────────────
-
-  private get max(): number {
-    return (1 << this.bitWidth) - 1;
-  }
 
   private clamp(v: number, selMax: number): number {
     return Math.max(0, Math.min(selMax, Math.floor(v)));

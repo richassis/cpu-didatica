@@ -58,14 +58,14 @@ export const ULA_DST_MASK    = ((1 << GPR_ADDR_BITS) - 1) << ULA_DST_SHIFT;   //
  * encodings. Every other unassigned encoding is reserved.
  */
 export enum Opcode {
-  LDA  = 0b00001, // Load register from memory address
-  LDAI = 0b00010, // Load register with immediate value
-  STA  = 0b00011, // Store register to memory address
-  ADD  = 0b00100, // GPR[dst] = GPR[dst] + mem[addr]
-  SUB  = 0b00101, // GPR[dst] = GPR[dst] - mem[addr]
-  AND  = 0b00110, // GPR[dst] = GPR[dst] & mem[addr]
-  OR   = 0b00111, // GPR[dst] = GPR[dst] | mem[addr]
-  NOT  = 0b01000, // GPR[dst] = ~GPR[dst]
+  LDA  = 0b00001, // Rd ← mem[addr]
+  LDAI = 0b00010, // Rd ← sign-extended 8-bit immediate
+  STA  = 0b00011, // mem[addr] ← Rs
+  ADD  = 0b00100, // Rd ← Ra + Rb
+  SUB  = 0b00101, // Rd ← Ra - Rb
+  AND  = 0b00110, // Rd ← Ra & Rb
+  OR   = 0b00111, // Rd ← Ra | Rb
+  NOT  = 0b01000, // Rd ← ~Ra
   JZ   = 0b01001, // Jump if zero flag
   JN   = 0b01011, // Jump if negative flag
   JMP  = 0b01100, // Unconditional jump
@@ -112,7 +112,7 @@ export type InstructionDescriptor = StandardDescriptor | ULADescriptor;
 /** Full descriptor table, one entry per mnemonic. */
 export const INSTRUCTION_SET: Readonly<Record<keyof typeof Opcode, InstructionDescriptor>> = {
   LDA  : { mnemonic: "LDA",  opcode: Opcode.LDA,  format: "standard", usesGPR: true,  usesOperand: true,  description: "Load GPR from memory address"           },
-  LDAI : { mnemonic: "LDAI", opcode: Opcode.LDAI, format: "standard", usesGPR: true,  usesOperand: true,  description: "Load GPR with 8-bit immediate value"     },
+  LDAI : { mnemonic: "LDAI", opcode: Opcode.LDAI, format: "standard", usesGPR: true,  usesOperand: true,  description: "Load GPR with sign-extended 8-bit immediate" },
   STA  : { mnemonic: "STA",  opcode: Opcode.STA,  format: "standard", usesGPR: true,  usesOperand: true,  description: "Store GPR to memory address"             },
   ADD  : { mnemonic: "ADD",  opcode: Opcode.ADD,  format: "ula",      usesSrcB: true,                     description: "DST = SRC_A + SRC_B"                    },
   SUB  : { mnemonic: "SUB",  opcode: Opcode.SUB,  format: "ula",      usesSrcB: true,                     description: "DST = SRC_A - SRC_B"                    },
@@ -124,36 +124,6 @@ export const INSTRUCTION_SET: Readonly<Record<keyof typeof Opcode, InstructionDe
   JMP  : { mnemonic: "JMP",  opcode: Opcode.JMP,  format: "standard", usesGPR: false, usesOperand: true,  description: "Unconditional jump to address"           },
   HLT  : { mnemonic: "HLT",  opcode: Opcode.HLT,  format: "standard", usesGPR: false, usesOperand: false, description: "Halt the CPU"                           },
 };
-
-// ── Decoded instruction ───────────────────────────────────────────────────────
-
-/** Decoded standard-format instruction. */
-export interface DecodedStandardInstruction {
-  format  : "standard";
-  raw     : number;
-  opcode  : Opcode;
-  mnemonic: keyof typeof Opcode;
-  /** GPR address (bits [10:8]); only valid when descriptor.usesGPR === true */
-  gprAddr : number;
-  /** 8-bit operand (bits [7:0]); only valid when descriptor.usesOperand === true */
-  operand : number;
-}
-
-/** Decoded ULA-format instruction. */
-export interface DecodedULAInstruction {
-  format  : "ula";
-  raw     : number;
-  opcode  : Opcode;
-  mnemonic: keyof typeof Opcode;
-  /** First source GPR address (bits [10:8]) */
-  srcA    : number;
-  /** Second source GPR address (bits [7:5]); only valid when descriptor.usesSrcB === true */
-  srcB    : number;
-  /** Destination GPR address (bits [2:0]) */
-  dst     : number;
-}
-
-export type DecodedInstruction = DecodedStandardInstruction | DecodedULAInstruction;
 
 // ── ISA helpers ──────────────────────────────────────────────────────────────
 

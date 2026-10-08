@@ -6,11 +6,13 @@
 
 /**
  * FSM states for instruction execution.
- * RESET is the initial state that clears all control signals.
- * It is entered on initialization, after HALT, and after invalid instructions.
+ * RESET is never a state the FSM sits in: `CPU.reset()` uses it to put every
+ * control signal back at rest and then leaves the CPU in FETCH. It also
+ * serves as the "nothing executed yet" value of `previousState`. HALT and
+ * invalid opcodes stay in HALT until the next reset.
  */
 export enum CpuState {
-  RESET = -1,     // Reset state - clears all control signals, transitions to FETCH
+  RESET = -1,     // Control signals at rest; see above
   FETCH = 0,
   DECODE = 1,
   EXECUTE = 2,
@@ -45,8 +47,9 @@ export const CPU_STATE_LABELS: Record<CpuState, string> = {
 };
 
 /**
- * All available CPU states as an array for UI iteration.
- * Note: RESET is excluded as it's only for reset/initial state, not tick configuration.
+ * The states a component can be configured to animate on, for UI iteration.
+ * RESET and HALT are excluded: RESET is never executed as a tick, and HALT
+ * only stops the control unit — no other component does anything in it.
  */
 export const ALL_CPU_STATES: CpuState[] = [
   CpuState.FETCH,

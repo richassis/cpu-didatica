@@ -11,17 +11,17 @@ import type { CPU } from "@/lib/simulator/Cpu";
 import { CPU_SIDE_INPUT_OFFSET } from "@/lib/widgetDefinitions";
 
 /**
- * The 10 control-signal outputs, in the order the CPU class declares them —
+ * The 9 control-signal outputs, in the order the CPU class declares them —
  * this is also the order `getPortOffset` walks when it auto-places the bottom
- * ports (nothing here overrides `offset` in the widget definition), so a
- * signal's index in this array is its index among the bottom ports too. The
- * strip below reuses that same `(i + 1) / (n + 1)` formula so its dots land
- * under the real port dots without having to measure anything.
+ * ports, so a signal's index in this array is its index among the bottom ports
+ * too. The strip below reuses that same `(i + 1) / (n + 1)` formula so its dots
+ * land under the real port dots without having to measure anything. The one
+ * exception is `out_opULA`, whose widget definition pins `offset: 91` instead
+ * of the computed 90 — about 9px right of its strip dot.
  */
 const BOTTOM_SIGNAL_ORDER = [
   "muxPC", "wrPC", "wrIR", "rdMem", "wrMem",
-  "muxAReg", "muxDReg", "wrReg", "opULA", 
-  // "muxAMem",
+  "muxAReg", "muxDReg", "wrReg", "opULA",
 ] as const;
 
 const SIGNAL_BITS = Object.fromEntries(CONTROL_SIGNAL_DEFS.map((d) => [d.name, d.bitWidth]));
@@ -48,8 +48,7 @@ function formatSignal(value: number | boolean, bits: number, base: NumericBase):
  * The control unit.
  *
  * The only component with a dashed outline, and the only one entitled to it:
- * it is not part of the datapath, it commands it. It carries no clock notch —
- * the notch marks datapath storage.
+ * it is not part of the datapath, it commands it.
  *
  * A wide, short block rather than the old tall one: the FSM graph reads left
  * to right (FETCH → DECODE → the chosen branch), so the shape follows the

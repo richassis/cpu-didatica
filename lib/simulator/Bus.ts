@@ -3,10 +3,14 @@
  *
  * Responsibilities:
  *  • Register Connectable components
- *  • Create and destroy wires (with type/width validation)
+ *  • Create and destroy wires (with port direction and data-type validation)
  *  • Resolve wire descriptors to actual Port objects
  *  • Serialize/deserialize the wiring configuration
- *  • Detect cycles to prevent infinite propagation loops
+ *
+ * Cycles are not rejected: the datapath has legitimate loops (PC → PC+1 →
+ * MUX_PC → PC). They can't run away, because a port only pushes its value to
+ * the inputs wired to it, and the CPU caps re-evaluation per tick
+ * (`MAX_EVALUATE_PASSES`).
  */
 
 import {
@@ -14,7 +18,6 @@ import {
   InputPort,
   OutputPort,
   assertPortsCompatible,
-  Port,
 } from "./Port";
 import { Wire, WireDescriptor } from "./Wire";
 
@@ -29,20 +32,12 @@ export class Bus {
 
   // ── Component registration ─────────────────────────────────────────────────
 
-  /**
-   * Register a Connectable component so its ports can be wired.
-   * Also sets `port.componentId` on all ports for back-reference.
-   */
+  /** Register a Connectable component so its ports can be wired. */
   registerComponent(component: Connectable): void {
     if (this._components.has(component.id)) {
       throw new Error(`Component "${component.id}" is already registered`);
     }
     this._components.set(component.id, component);
-
-    // Set componentId on all ports
-    for (const port of Object.values(component.getPorts())) {
-      port.componentId = component.id;
-    }
   }
 
   /**
@@ -66,16 +61,6 @@ export class Bus {
     return this._components.get(id);
   }
 
-  /** Check if a component is registered. */
-  hasComponent(id: string): boolean {
-    return this._components.has(id);
-  }
-
-  /** List all registered component IDs. */
-  get componentIds(): string[] {
-    return Array.from(this._components.keys());
-  }
-
   // ── Wire management ────────────────────────────────────────────────────────
 
   /**
@@ -84,9 +69,8 @@ export class Bus {
    * Validates:
    *  • Both components exist
    *  • Ports exist and have correct directions
-   *  • Type and bit-width compatibility
+   *  • Data-type compatibility (bit widths are not compared)
    *  • No existing wire to the same input (inputs have single source)
-   *  • No cycles in the wiring graph
    *
    * @returns The created Wire instance.
    */
@@ -138,7 +122,7 @@ export class Bus {
       );
     }
 
-    // Type and bit-width compatibility
+    // Data-type compatibility
     assertPortsCompatible(
       sourcePort as OutputPort<unknown>,
       targetPort as InputPort<unknown>
@@ -151,13 +135,6 @@ export class Bus {
         `Input port "${targetPortName}" on component "${targetComponentId}" is already connected`
       );
     }
-
-    // Check for cycles
-    // if (this._wouldCreateCycle(sourceComponentId, targetComponentId)) {
-    //   throw new Error(
-    //     `Wiring "${sourceComponentId}.${sourcePortName}" → "${targetComponentId}.${targetPortName}" would create a cycle`
-    //   );
-    // }
 
     // Create the wire
     const wire = new Wire({
@@ -208,11 +185,6 @@ export class Bus {
     return true;
   }
 
-  /** Get a wire by ID. */
-  getWire(id: string): Wire | undefined {
-    return this._wires.get(id);
-  }
-
   /** List all wires. */
   get wires(): Wire[] {
     return Array.from(this._wires.values());
@@ -226,54 +198,6 @@ export class Bus {
   /** List all wire descriptors (for serialization). */
   get wireDescriptors(): WireDescriptor[] {
     return this.wires.map(w => w.toDescriptor());
-  }
-
-  // ── Cycle detection ────────────────────────────────────────────────────────
-
-  /**
-   * Check if adding a wire from `sourceId` to `targetId` would create a cycle.
-   * Uses DFS on the existing wiring graph.
-   */
-  private _wouldCreateCycle(sourceId: string, targetId: string): boolean {
-    // If source === target, it's a self-loop
-    if (sourceId === targetId) return true;
-
-    // Build adjacency list: component A → [components that A outputs to]
-    const adj = new Map<string, Set<string>>();
-    for (const wire of this._wires.values()) {
-      if (!adj.has(wire.sourceComponentId)) {
-        adj.set(wire.sourceComponentId, new Set());
-      }
-      adj.get(wire.sourceComponentId)!.add(wire.targetComponentId);
-    }
-
-    // Add the proposed edge temporarily
-    if (!adj.has(sourceId)) {
-      adj.set(sourceId, new Set());
-    }
-    adj.get(sourceId)!.add(targetId);
-
-    // DFS from sourceId to see if we can reach sourceId again
-    const visited = new Set<string>();
-    const stack = [targetId];
-
-    while (stack.length > 0) {
-      const current = stack.pop()!;
-      if (current === sourceId) {
-        return true; // Cycle detected
-      }
-      if (visited.has(current)) continue;
-      visited.add(current);
-
-      const neighbors = adj.get(current);
-      if (neighbors) {
-        for (const neighbor of neighbors) {
-          stack.push(neighbor);
-        }
-      }
-    }
-
-    return false;
   }
 
   // ── Serialization ──────────────────────────────────────────────────────────
@@ -317,42 +241,5 @@ export class Bus {
         }
       }
     }
-  }
-
-  /**
-   * Remove all wires (but keep components registered).
-   */
-  clearWires(): void {
-    for (const wireId of Array.from(this._wires.keys())) {
-      this.removeWire(wireId);
-    }
-  }
-
-  /**
-   * Reset the bus entirely (remove all wires and components).
-   */
-  reset(): void {
-    this.clearWires();
-    this._components.clear();
-  }
-
-  // ── Debugging ──────────────────────────────────────────────────────────────
-
-  /**
-   * List all ports on a component (for UI introspection).
-   */
-  listPorts(componentId: string): Port<unknown>[] {
-    const component = this._components.get(componentId);
-    if (!component) return [];
-    return Object.values(component.getPorts());
-  }
-
-  /**
-   * List all wires connected to a component (as source or target).
-   */
-  getWiresForComponent(componentId: string): Wire[] {
-    return this.wires.filter(
-      w => w.sourceComponentId === componentId || w.targetComponentId === componentId
-    );
   }
 }

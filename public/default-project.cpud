@@ -336,7 +336,8 @@
       "x": 1520,
       "y": 816,
       "meta": {
-        "bitWidth": 16
+        "bitWidth": 16,
+        "hasWriteEnable": false
       },
       "tickSteps": [
         2
@@ -1219,5 +1220,5 @@
       }
     }
   ],
-  "version": 5
+  "version": 7
 }

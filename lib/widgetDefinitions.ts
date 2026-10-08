@@ -1,11 +1,7 @@
-// import type { WidgetDefinition } from "@/lib/widgetDefinitions";
-
-// export type { WidgetDefinition } from "@/lib/widgetDefinition";
-
 import type { ComponentPortConfig } from "@/lib/portPositioning";
 import { aluTopEdgeInset } from "@/lib/aluShape";
 
-/** Shared type — imported by both widget files and widgetDefinitions.ts */
+/** Static description of a widget type: picker text, default size, port layout. */
 export interface WidgetDefinition {
   /** Unique string key matching ComponentInstance.type */
   type: string;
@@ -31,14 +27,13 @@ export interface WidgetDefinition {
 export const CPU_SIDE_INPUT_OFFSET = (256 / 336) * 100;
 
 /**
- * Central registry of all widget definitions.
- * Each widget also exports its own `definition` for co-location,
- * but THIS array is the single source for the Add Component modal.
+ * Central registry of all widget definitions — the single source for the Add
+ * Component modal and for each type's port layout.
  * Add a new entry here when creating a new widget type.
- * 
- * Note: All dimensions are aligned to GRID_SIZE (16px) for proper grid snapping.
+ *
+ * Dimensions are multiples of GRID_SIZE (16px) so blocks snap to the grid,
+ * except where noted.
  */
-
 export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
   {
     type: "GprComponent",
@@ -72,7 +67,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     namePrefix: "DMEM",
     defaultWidth: 160,  // 10 grid cells
     defaultHeight: 288, // 18 grid cells — tall enough for the address list to read as a list
-    description: "Unified memory — addr/data/rdMem/wrMem ports, 256×16b default",
+    description: "Data memory (separate from instruction memory) — addr/data/rdMem/wrMem ports, 256×16b default",
     // Memory: addresses on left, data output on right, control signals on top
     portConfig: {
       defaultInputSide: "left",
@@ -109,7 +104,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     defaultWidth: 128,  // 8 grid cells
     defaultHeight: 176, // 11 grid cells
     description: "Arithmetic Logic Unit",
-    // ULA: data operands from left, result on right, operation control on top, flags on right
+    // ULA: data operands from left, result on right, operation control and the flags bus on top
     portConfig: {
       ports: {
         "a": { side: "left", offset: 14 },        // Data input → left
@@ -234,7 +229,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     // A thin vertical bar: plumbing between the IR and the datapath, not a
     // teaching block. Instruction word in on the left, fields out on the right.
     defaultWidth: 64,   // 4 grid cells
-    defaultHeight: 220, // 12 grid cells
+    defaultHeight: 220, // not a grid multiple (13.75 cells); sized to the fields it lists
     description: "Instruction decoder — shows opcode, fields, and format",
     // Decoder with standard left/right layout
     portConfig: {
@@ -261,7 +256,7 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
     // the block is called on screen.
     label: "Control unit (UC)",
     namePrefix: "UC",
-    defaultWidth: 901,  // 44 grid cells — 10 bottom ports at 64px pitch, room for the FSM columns
+    defaultWidth: 901,  // not a grid multiple — room for the FSM columns; the 9 signal ports spread along the bottom at ~90px pitch
     defaultHeight: 336, // 21 grid cells — FETCH/DECODE stacked above the branch fan
     description: "Control unit (UC) — FSM state and control signals",
     // CPU: opcode in on the left, the flags bus in on the right, both at the
@@ -293,7 +288,6 @@ export const WIDGET_DEFINITIONS: WidgetDefinition[] = [
         "out_muxPC": { side: "bottom" },
         "out_rdMem": { side: "bottom" },
         "out_wrMem": { side: "bottom" },
-        "out_muxAMem": { side: "bottom" },
         "out_opULA": { side: "bottom", offset: 91},
       },
     },

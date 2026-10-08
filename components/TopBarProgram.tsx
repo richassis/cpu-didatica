@@ -21,8 +21,8 @@ import ThemeToggle from "./ThemeToggle";
  *
  * Left: what is open. Right, in two groups: the file and display controls
  * (Abrir/Salvar, Ajustes, Claro/Escuro), then the view controls (zoom, Ajuda).
- * Montar and Simular live in the bottom bar with the player. Ajustes and Ajuda
- * open a panel just under this bar.
+ * Montar and Simular live in the bottom bar with the player. Ajustes opens a
+ * panel just under this bar; Ajuda opens the help modal (HelpDialog).
  *
  * The "Edit mode" entry point exists only in developer builds. Students never
  * see it, and `enterEditMode` refuses anyway.
@@ -40,6 +40,8 @@ export default function TopBarProgram() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [saveOpen, setSaveOpen] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
+  // Ajustes is the only panel under this bar; Ajuda is a modal with its own
+  // open state in useHelpStore.
   const [panel, setPanel] = useState<"settings" | null>(null);
   const helpOpen = useHelpStore((s) => s.open);
   const showHelp = useHelpStore((s) => s.show);
@@ -50,7 +52,7 @@ export default function TopBarProgram() {
   const zoomOut = useCanvasViewStore((s) => s.zoomOut);
   const fit = useCanvasViewStore((s) => s.fit);
 
-  // Escape closes whichever panel is open.
+  // Escape closes the settings panel. HelpDialog handles its own Escape.
   useEffect(() => {
     if (!panel) return;
     const onKey = (e: KeyboardEvent) => {

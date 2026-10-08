@@ -2,12 +2,6 @@ import type { Clockable } from "./Clockable";
 import { type Connectable, type PortMap, InputPort, OutputPort } from "./Port";
 import { UlaOperation, FLAG_BITS } from "./ISA";
 
-
-/**
- * Supported ALU operations.
- * Extend this union as new operations are added.
- */
-
 /**
  * Data model for the Arithmetic Logic Unit (ULA / ALU).
  *
@@ -132,32 +126,6 @@ export class Ula implements Clockable, Connectable {
     this.in_b.set(this.clamp(v));
   }
 
-  get result(): number {
-    return this.out_result.value;
-  }
-
-  get zero(): boolean {
-    return this.out_zero.value !== 0;
-  }
-
-  get carry(): boolean {
-    return this.out_carry.value !== 0;
-  }
-
-  get negative(): boolean {
-    return this.out_negative.value !== 0;
-  }
-
-  get overflow(): boolean {
-    return this.out_overflow.value !== 0;
-  }
-
-  /** Return the result as a zero-padded hex string. */
-  resultHex(): string {
-    const digits = Math.ceil(this.bitWidth / 4);
-    return this.out_result.value.toString(16).padStart(digits, "0").toUpperCase();
-  }
-
   // ── Core ─────────────────────────────────────────────────────
 
   /**
@@ -228,14 +196,6 @@ export class Ula implements Clockable, Connectable {
     return result;
   }
 
-  /** Convenience: set operands + operation, execute, return result. */
-  compute(op: UlaOperation, a: number, b: number = 0): number {
-    this.a = a;
-    this.b = b;
-    this.operation = op;
-    return this.evaluate();
-  }
-
   /** Reset to default state. Flags start cleared — nothing has been computed. */
   reset(): void {
     this.a = 0;
@@ -251,10 +211,7 @@ export class Ula implements Clockable, Connectable {
 
   // ── Clockable callback ───────────────────────────────────────
 
-  /**
-   * Called by the global clock on each tick.
-   * Executes the ULA operation with current inputs.
-   */
+  /** Executes the ULA operation with current inputs. */
   onTick(): void {
     this.evaluate();
   }

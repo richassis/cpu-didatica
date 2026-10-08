@@ -78,7 +78,7 @@ export default function TourOverlay() {
 
   const advance = useCallback(() => {
     const next = nextApplicable(stepIndex);
-    if (next === -1) endTour(true);
+    if (next === -1) endTour();
     else goToStep(next);
   }, [stepIndex, goToStep, endTour]);
 
@@ -156,7 +156,7 @@ export default function TourOverlay() {
       if (e.key === "Escape") {
         e.preventDefault();
         e.stopPropagation();
-        endTour(false);
+        endTour();
       } else if (e.key === "ArrowRight" || e.key === "Enter") {
         // A step that waits for a click is not skipped by accident.
         if (TOUR_STEPS[stepIndex]?.action) return;
@@ -242,7 +242,7 @@ export default function TourOverlay() {
 
         <div className="mt-4 flex items-center justify-between gap-2">
           <button
-            onClick={() => endTour(false)}
+            onClick={() => endTour()}
             className="text-small text-fg-faint transition-colors hover:text-fg"
           >
             Pular tutorial

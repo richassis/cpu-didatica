@@ -13,7 +13,6 @@ export { Incrementer } from "./Incrementer";
 export { Mux } from "./Mux";
 export { Memory } from "./Memory";
 export { InstructionMemory } from "./InstructionMemory";
-export { Clock } from "./Clock";
 export {
   type Clockable,
   isClockable,
@@ -27,9 +26,6 @@ export {
   type InstructionDescriptor,
   type StandardDescriptor,
   type ULADescriptor,
-  type DecodedInstruction,
-  type DecodedStandardInstruction,
-  type DecodedULAInstruction,
   opcodeToMnemonic,
   getDescriptor,
   UlaOperation,
@@ -40,11 +36,7 @@ export { Decoder } from "./Decoder";
 export { CPU, OPCODE_SEQUENCES, CONTROL_SIGNAL_DEFS, type ControlSignalDef } from "./Cpu";
 // CpuState exported from its own module to avoid circular dependencies
 export { CpuState, CPU_STATE_LABELS, ALL_CPU_STATES } from "./CpuState";
-export {
-  DEFAULT_TICK_STEPS,
-  type StepTickable,
-  createStepTickableMixin,
-} from "./CpuSteps";
+export { DEFAULT_TICK_STEPS } from "./CpuSteps";
 
 // ── Reactive signal bus ────────────────────────────────────────
 export {

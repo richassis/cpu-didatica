@@ -2,19 +2,19 @@
  * Clockable.ts
  *
  * Defines the interface that any simulator component must implement
- * to participate in the global clock.
- *
- * Step/FSM/pipeline management is the CPU's responsibility, not the clock's.
+ * to be ticked by the CPU.
  */
 
 /**
  * Interface for simulator components that react to clock ticks.
  *
- * The simulator supports phased execution:
+ * The CPU ticks its registered components in two phases:
  * - evaluate(): combinational phase
  * - commit(): sequential phase
  *
- * `onTick()` is kept for backwards compatibility and manual ticking.
+ * `onTick()` is a single-call tick outside that loop: the editor's "Tick Now"
+ * and the no-CPU fallback call it, and the CPU falls back to it for a
+ * component that implements neither phase.
  */
 export interface Clockable {
   onTick(): void;

@@ -4,8 +4,8 @@
  * Pass 1: scan all lines, collect label→address mappings, record pending instructions.
  * Pass 2: resolve label references, validate operand ranges, encode to 16-bit words.
  *
- * Instruction syntax (from TEST_PROGRAM_SOURCE):
- *   LDAI Rdst, imm           — load immediate
+ * Instruction syntax:
+ *   LDAI Rdst, imm           — load immediate (-128..255; negatives are two's complement)
  *   LDA  Rdst, addr          — load from data memory
  *   STA  Rsrc, addr          — store to data memory
  *   ADD  Rsrc_a, Rsrc_b, Rdst — ULA: dst = a + b
@@ -16,17 +16,27 @@
  *   JZ/JN/JMP  addr_or_label
  *   HLT
  *
+ * Operands are separated by commas and/or whitespace. Each one is a register
+ * (`R0`..`R7`), a number (`0x1F` hex, `0b0101` binary, decimal, optionally
+ * negative) or a label. Operands are only range-checked: the R/number split
+ * above is the intended spelling, not something the assembler enforces.
+ *
  * Labels:
  *   LOOP:            — code label → resolves to instruction address
  *   LOOP: LDAI ...   — code label on same line as instruction
  *
  * Data section (optional):
  *   .data
- *   VAR1:            — assigns data memory address 0
- *   VAR2:            — assigns data memory address 1
- *   .text / .code    — returns to code section
+ *   VAR1:            — assigns data memory address 0, initial value 0
+ *   VAR2: DB 05h     — assigns data memory address 1, initial value 5
+ *   .text / .code    — returns to code section (`.enddata`/`.endcode` too)
  *
- * Mnemonics, registers, and label names are case-insensitive.
+ * In `.data` the colon after the name and the `DB` keyword are both optional.
+ * Initial values accept everything an operand number does, plus Intel-style
+ * hex (`05h`, `FFh`), and are stored as 16-bit words. Code and data labels
+ * share one namespace.
+ *
+ * Mnemonics, registers, directives and label names are case-insensitive.
  * Comments start with `;` and extend to end of line.
  */
 
@@ -67,10 +77,6 @@ export interface AssembleResult {
   listing: AssembledLine[];
   /** Instruction address → source line, sparse (index only where an instruction was assembled). */
   lineForAddress: number[];
-  /** Source line → instruction address. */
-  addressForLine: Map<number, number>;
-  /** Code label name → instruction address. */
-  codeLabels: Record<string, number>;
   /** .data section entries in declaration order. */
   dataSymbols: DataSymbol[];
 }
@@ -117,8 +123,7 @@ function parseDataValue(token: string): number | null {
 /**
  * Parse a generic operand token that may be:
  *   - A register literal  →  number (0–7)
- *   - A hex literal       →  number
- *   - A decimal literal   →  number
+ *   - A numeric literal   →  number (see `parseNumber`)
  *   - A label reference   →  string (UPPERCASED, to be resolved in pass 2)
  */
 function parseOperandToken(token: string): Operand {
@@ -139,7 +144,6 @@ interface Pass1Result {
   pending: PendingInstruction[];
   errors: AssemblyError[];
   dataWords: number[];
-  codeLabels: Record<string, number>;
   dataSymbols: DataSymbol[];
 }
 
@@ -148,7 +152,6 @@ function pass1(lines: string[]): Pass1Result {
   const pending: PendingInstruction[] = [];
   const errors: AssemblyError[] = [];
   const dataWords: number[] = [];
-  const codeLabels: Record<string, number> = {};
   const dataSymbols: DataSymbol[] = [];
 
   let codeAddr = 0;
@@ -215,7 +218,6 @@ function pass1(lines: string[]): Pass1Result {
         errors.push({ line: lineNum, message: `Label duplicado: "${name}"` });
       } else {
         labels.set(name, codeAddr);
-        codeLabels[name] = codeAddr;
       }
       rest = labelMatch[2].trim();
       if (!rest) continue; // label-only line, no instruction
@@ -239,7 +241,7 @@ function pass1(lines: string[]): Pass1Result {
     codeAddr++;
   }
 
-  return { labels, pending, errors, dataWords, codeLabels, dataSymbols };
+  return { labels, pending, errors, dataWords, dataSymbols };
 }
 
 // ── Pass 2 ───────────────────────────────────────────────────────────────────
@@ -410,9 +412,7 @@ function pass2(
         word = Encoder.assemble("HLT");
         break;
       }
-
-      default:
-        errors.push({ line: lineNum, message: `Mnemônico desconhecido: "${mnemonic}"` });
+      // No default: pass 1 already rejected mnemonics outside INSTRUCTION_SET.
     }
 
     if (word !== null) {
@@ -428,12 +428,12 @@ function pass2(
 // ── Public entry point ────────────────────────────────────────────────────────
 
 /**
- * Assemble the given source string into an array of 16-bit instruction words.
+ * Assemble the given source string into instruction words, initial data and
+ * the listing the UI shows.
  *
- * @returns `null` if source is empty/whitespace-only.
- *          Otherwise returns `{ words, errors }`.
- *          When `errors` is empty the assembly succeeded.
- *          When `errors` is non-empty the words array may be partially filled.
+ * @returns `null` if source is empty/whitespace-only, otherwise an
+ *          `AssembleResult`. When `errors` is empty the assembly succeeded;
+ *          when it is non-empty the other fields may be partially filled.
  */
 export function assemble(source: string): AssembleResult | null {
   if (!source.trim()) return null;
@@ -444,10 +444,8 @@ export function assemble(source: string): AssembleResult | null {
   const p2 = pass2(p1.pending, p1.labels);
 
   const lineForAddress: number[] = [];
-  const addressForLine = new Map<number, number>();
   for (const entry of p2.listing) {
     lineForAddress[entry.addr] = entry.line;
-    addressForLine.set(entry.line, entry.addr);
   }
 
   return {
@@ -456,8 +454,6 @@ export function assemble(source: string): AssembleResult | null {
     errors: [...p1.errors, ...p2.errors],
     listing: p2.listing,
     lineForAddress,
-    addressForLine,
-    codeLabels: p1.codeLabels,
     dataSymbols: p1.dataSymbols,
   };
 }

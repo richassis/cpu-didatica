@@ -22,8 +22,8 @@ import TickDisplay from "@/components/ProgramMode/TickDisplay";
  * The single simulation control bar, along the bottom.
  *
  * Everything you do to run a program is here: Montar and Simular on the left,
- * the player centred, the tick counter on the right. Settings, legend, zoom and file actions
- * are in the top bar.
+ * the player centred, the tick counter on the right. Settings, zoom, help and
+ * file actions are in the top bar.
  *
  * Montar produces the listing and Simular refuses to run anything that is not
  * a clean, up-to-date mount (`mountStatus`) — two separate steps, which is the

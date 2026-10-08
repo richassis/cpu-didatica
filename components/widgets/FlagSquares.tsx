@@ -5,10 +5,10 @@
  *
  * Outlined rather than filled: a set flag is a state worth watching, not an
  * alarm, and a filled swatch would spend a block of saturated colour on
- * something that repeats three times per component.
+ * something that repeats four times per component (Z, C, N, V).
  */
 export interface FlagSpec {
-  /** Single-letter label, e.g. "Z", "C", "N". */
+  /** Single-letter label, e.g. "Z", "C", "N", "V". */
   label: string;
   /** Whether the flag is currently set. */
   on: boolean;

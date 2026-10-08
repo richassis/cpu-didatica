@@ -6,19 +6,12 @@ import { useSimulatorStore } from "@/lib/simulatorStore";
 import type { CPU, CpuInternalStateSnapshot } from "@/lib/simulator/Cpu";
 import { useDisplayMaskStore } from "@/lib/displayMaskStore";
 
-const DEFAULT_MAX_TICKS = 1000 as const;
+/** Safety cap for batch execution. */
+const MAX_TICKS = 1000;
 
 export interface TickSnapshot {
-  /** Index of the tick (0 = initial state before first tick). */
-  index: number;
   /** Full state of all simulator objects. */
   state: Map<string, ComponentState>;
-  /** CPU state at this tick for timeline display. */
-  cpuState: CpuState;
-  /** Opcode being executed at this tick. */
-  opcode: number;
-  /** Whether CPU was halted at this tick. */
-  halted: boolean;
   /** CPU internal fields not captured by serializeObjects(). */
   cpuInternalState: CpuInternalStateSnapshot;
   /**
@@ -45,11 +38,9 @@ export interface SubstepGroup {
  * wire animation plays.
  */
 export interface TickFrame {
-  /** Index of this tick (0 = initial, 1 = after first tick, etc.). */
-  index: number;
   /**
    * State BEFORE this tick's evaluate+commit runs.
-   * For index 0 this is the initial reset state; for index N>0 it equals
+   * For frame 0 this is the initial reset state; for frame N>0 it equals
    * postTick of frame N-1.
    */
   preTick: TickSnapshot;
@@ -82,15 +73,8 @@ export interface ExecutionState extends ExecutionDerivedState {
   frames: TickFrame[];
   /** Index currently displayed. */
   currentIndex: number;
-  /** True when a program has been executed and snapshots are ready. */
-  isLoaded: boolean;
-  /**
-   * True when a program has been loaded and the timeline is active.
-   * (Renamed from isProgramMode to avoid confusion with the UI mode in modeStore.)
-   */
+  /** True when a program has been loaded and the timeline is active. */
   isTimelineActive: boolean;
-  /** Safety cap for batch execution. */
-  MAX_TICKS: 1000;
   /** Error message when execution stops due to max ticks. */
   executionError: string | null;
 
@@ -100,7 +84,7 @@ export interface ExecutionState extends ExecutionDerivedState {
   stepBackward: () => void;
   goToStart: () => void;
   goToEnd: () => void;
-  /** Exit the timeline and reset to initial state. (Renamed from exitProgramMode.) */
+  /** Exit the timeline and reset to initial state. */
   exitTimeline: () => void;
 }
 
@@ -383,15 +367,10 @@ function readPcRegister(pcRegisterId: string | null): number {
  */
 function captureSnapshot(index: number, instructionAddr: number): TickSnapshot {
   const sim = useSimulatorStore.getState();
-  const cpu = sim.getPrimaryCpu();
   const state = cloneStateMap(sim.serializeObjects());
 
   return {
-    index,
     state,
-    cpuState: cpu?.state ?? CpuState.FETCH,
-    opcode: Number(cpu?.in_opcode?.value ?? 0),
-    halted: cpu?.halted ?? false,
     cpuInternalState: toCpuInternalState(index),
     pc: instructionAddr,
   };
@@ -400,10 +379,8 @@ function captureSnapshot(index: number, instructionAddr: number): TickSnapshot {
 export const useExecutionStore = create<ExecutionState>()((set, get) => ({
   frames: [],
   currentIndex: 0,
-  isLoaded: false,
   isTimelineActive: false,
   executionError: null,
-  MAX_TICKS: DEFAULT_MAX_TICKS,
   totalTicks: 0,
   canGoForward: false,
   canGoBack: false,
@@ -438,7 +415,6 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
       // no substeps to reveal.
       const initialSnapshot = captureSnapshot(0, instructionAddr);
       frames.push({
-        index: 0,
         preTick: initialSnapshot,
         postTick: initialSnapshot,
         substepGroups: [],
@@ -446,7 +422,7 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
       });
 
       let tickCount = 0;
-      while (tickCount < get().MAX_TICKS) {
+      while (tickCount < MAX_TICKS) {
         const cpu = sim.getPrimaryCpu();
         if (cpu?.halted) break;
 
@@ -475,7 +451,6 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
         const substepGroups = buildSubstepGroups(sim.getPrimaryCpu(), executedState);
 
         frames.push({
-          index: tickCount,
           preTick: preSnapshot,
           postTick: postSnapshot,
           substepGroups,
@@ -492,8 +467,8 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
       }
 
       const halted = sim.getPrimaryCpu()?.halted ?? false;
-      if (!halted && tickCount >= get().MAX_TICKS) {
-        const message = `Execution stopped after ${get().MAX_TICKS} ticks (possible infinite loop).`;
+      if (!halted && tickCount >= MAX_TICKS) {
+        const message = `Execution stopped after ${MAX_TICKS} ticks (possible infinite loop).`;
         console.warn(message);
         set({ executionError: message });
       } else {
@@ -514,7 +489,6 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
     set({
       frames,
       currentIndex: 0,
-      isLoaded: frames.length > 0,
       isTimelineActive: true,
       ...toDerivedState(frames, 0),
     });
@@ -591,10 +565,8 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
     set({
       frames: [],
       currentIndex: 0,
-      isLoaded: false,
       isTimelineActive: false,
       executionError: null,
-      MAX_TICKS: DEFAULT_MAX_TICKS,
       totalTicks: 0,
       canGoForward: false,
       canGoBack: false,

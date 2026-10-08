@@ -1,10 +1,12 @@
 /**
  * helpContent.ts
  *
- * The prose of the Help window. Numbers — opcodes, field positions, signal
- * widths, state sequences — are read from `lib/simulator` where they are shown,
- * so they cannot drift from what the simulator does. Only the explanations are
- * written here.
+ * The prose of the Help window. Opcodes, field positions, signal widths and
+ * state sequences are read from `lib/simulator` where they are shown, so they
+ * cannot drift from what the simulator does. Some numbers are written by hand
+ * here, though — the flag lists, the mux and opULA values in `SIGNAL_HELP`, the
+ * memory and register-bank sizes in `COMPONENT_HELP` — and have to be updated
+ * along with the hardware.
  *
  * `INSTRUCTION_HELP` is a `Record` over every mnemonic: adding an instruction
  * to the ISA without documenting it here is a compile error.

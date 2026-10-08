@@ -32,7 +32,7 @@ interface NodeShellProps {
   silhouette?: SilhouetteKind | "custom";
   /**
    * Custom outline layer, drawn under everything and never hidden by the LOD
-   * rules — a silhouette has to survive all the way down to 25%.
+   * rules — a silhouette has to survive at every zoom.
    */
   frame?: ReactNode;
   /** Memory: gets the spine on the left border. */
@@ -53,20 +53,20 @@ interface NodeShellProps {
   compactValue?: boolean;
   /** Extra controls in the title row, left of the config button. */
   actions?: ReactNode;
-  /** Internal anatomy. Hidden below 100% zoom by the LOD rules. */
+  /** Internal anatomy. Hidden below 60% zoom by the LOD rules, unless `dense`. */
   children?: ReactNode;
   /**
    * Anatomy that stays visible at `mid` zoom instead of only `full` — for
    * content the LOD rules exist to reveal in the first place (address lists,
    * the FSM graph, the signal strip), rather than incidental detail that is
-   * fine to lose first. Still hidden at `low`.
+   * fine to lose first.
    */
   dense?: boolean;
 }
 
 /**
  * Everything every node on the canvas has in common: placement, dragging,
- * state, corner badge, title, ports and the config modal.
+ * state, title, ports and the config modal.
  *
  * Before this existed each of the twelve widgets carried its own copy of the
  * dnd-kit boilerplate and its own colour ternaries, which is how the canvas

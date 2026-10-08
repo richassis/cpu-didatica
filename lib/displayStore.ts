@@ -12,16 +12,13 @@ import { persist } from "zustand/middleware";
 export type TextSize = "small" | "medium" | "large";
 export const TEXT_SIZE_SCALE: Record<TextSize, number> = { small: 0.875, medium: 1, large: 1.15 };
 
-export type NumericBase = "hex" | "dec" | "decSigned" | "bin" | "oct";
+export type NumericBase = "hex" | "dec" | "decSigned" | "bin";
 
 /**
- * Animation speed, in milliseconds per substep.
- *
- * This used to be three named presets at 2000/4000/5000 ms. Since one tick costs
- * `(control signals changed ? D : 0) + D × substeps`, a three-substep FETCH ran
- * for about sixteen seconds at "normal" — fine for staring at a single tick,
- * impossible for watching a program run. The range is now continuous and starts
- * far lower.
+ * Animation speed `D`: how long a dot takes to cross a wire of
+ * `ANIMATION_REFERENCE_PX`. A tick lasts its control phase plus each substep,
+ * each as long as its longest wire, and a wire takes `D × (length / 400)^0.5`
+ * (see `animationSchedule.ts`).
  */
 export const ANIMATION_MIN_MS = 1200;
 export const ANIMATION_MAX_MS = 6000;
@@ -67,30 +64,9 @@ interface DisplayState {
   showDataSignalWires: boolean;
   setShowDataSignalWires: (show: boolean) => void;
 
-  /** Whether animated value dots are shown travelling along / resting at wires */
-  showWireDots: boolean;
-  setShowWireDots: (show: boolean) => void;
-
-  /** Whether wire flow animation plays at all (false = values snap instantly) */
-  animationEnabled: boolean;
-  setAnimationEnabled: (enabled: boolean) => void;
-
-  /** Whether CPU control signal wires that changed animate (flow dots) */
-  animateCpuSignals: boolean;
-  setAnimateCpuSignals: (animate: boolean) => void;
-
-  /** Whether data signal wires animate substep-by-substep */
-  animateDataSignals: boolean;
-  setAnimateDataSignals: (animate: boolean) => void;
-
-  /** Whether numeric port values are shown (port tooltips, hover readouts) */
-  showPortValues: boolean;
-  setShowPortValues: (show: boolean) => void;
-
   /**
-   * Milliseconds per animated substep. One duration, used for both the control
-   * phase and the data phase — which is what the overlay always did in
-   * practice; the separate `cpuAnimationDuration` was written but never read.
+   * The animation speed `D` (see `ANIMATION_MIN_MS`), one value for both the
+   * control phase and the data phase.
    */
   animationDurationMs: number;
   setAnimationDurationMs: (ms: number) => void;
@@ -123,21 +99,6 @@ export const useDisplayStore = create<DisplayState>()(
       showDataSignalWires: true,
       setShowDataSignalWires: (show) => set({ showDataSignalWires: show }),
 
-      showWireDots: true,
-      setShowWireDots: (show) => set({ showWireDots: show }),
-
-      animationEnabled: true,
-      setAnimationEnabled: (enabled) => set({ animationEnabled: enabled }),
-
-      animateCpuSignals: true,
-      setAnimateCpuSignals: (animate) => set({ animateCpuSignals: animate }),
-
-      animateDataSignals: true,
-      setAnimateDataSignals: (animate) => set({ animateDataSignals: animate }),
-
-      showPortValues: true,
-      setShowPortValues: (show) => set({ showPortValues: show }),
-
       textSize: "small",
       setTextSize: (size) => set({ textSize: size }),
 
@@ -151,13 +112,26 @@ export const useDisplayStore = create<DisplayState>()(
       name: "simulator-display",
       version: 10,
       migrate: (persistedState) => {
-        const state = persistedState as Partial<DisplayState>;
+        const state = { ...(persistedState as Partial<DisplayState>) };
 
-        // v7: a base the settings no longer offer (octal) would leave the
-        // student on a display with no button to leave it.
-        const offeredBases: NumericBase[] = ["hex", "dec", "decSigned", "bin"];
-        const numericBase =
-          state.numericBase && offeredBases.includes(state.numericBase) ? state.numericBase : "hex";
+        // v6 removed the wire-dot, animation and port-value switches (they are
+        // now always on), so their stored values are dropped.
+        for (const key of [
+          "showWireDots",
+          "animationEnabled",
+          "animateCpuSignals",
+          "animateDataSignals",
+          "showPortValues",
+        ]) {
+          delete (state as Record<string, unknown>)[key];
+        }
+
+        // v7: octal is no longer a base at all, so a stored "oct" (or anything
+        // else unknown) falls back to hex.
+        const offeredBases: readonly string[] = ["hex", "dec", "decSigned", "bin"];
+        const storedBase = state.numericBase as string | undefined;
+        const numericBase: NumericBase =
+          storedBase && offeredBases.includes(storedBase) ? (storedBase as NumericBase) : "hex";
 
         return {
           ...state,
@@ -169,13 +143,6 @@ export const useDisplayStore = create<DisplayState>()(
             if (stored === "small" || stored === "medium" || stored === "large") return stored;
             return stored === "xlarge" ? "large" : "medium";
           })(),
-          // v6 removed these switches from the settings panel, so a value a
-          // student switched off earlier can no longer be switched back on.
-          showWireDots: true,
-          animationEnabled: true,
-          animateCpuSignals: true,
-          animateDataSignals: true,
-          showPortValues: true,
           // v8 moved the whole speed scale toward the slow end. A stored value
           // from the old scale would land far too fast on the new one, so it
           // is replaced by the new default — except the "instant" a
@@ -207,7 +174,7 @@ export function formatPortValue(
 
 /**
  * Format a numeric value according to the selected numeric base.
- * `bitWidth` is used to zero-pad hex/bin/oct output.
+ * `bitWidth` is used to zero-pad hex/bin output.
  */
 export function formatNum(value: number, base: NumericBase, bitWidth = 16): string {
   const n = Math.floor(value) >>> 0; // treat as unsigned
@@ -218,10 +185,6 @@ export function formatNum(value: number, base: NumericBase, bitWidth = 16): stri
     }
     case "bin": {
       return "0b" + n.toString(2).padStart(bitWidth, "0");
-    }
-    case "oct": {
-      const digits = Math.ceil(bitWidth / 3);
-      return "0o" + n.toString(8).padStart(digits, "0");
     }
     case "decSigned": {
       // Two's-complement interpretation of the same bits `dec` shows unsigned.

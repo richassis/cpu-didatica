@@ -89,19 +89,12 @@ interface SimulatorState {
   getConstant: (id: string) => Constant | undefined;
   getGpr: (id: string) => Gpr | undefined;
   getUla: (id: string) => Ula | undefined;
-  getAdder: (id: string) => Adder | undefined;
   getIncrementer: (id: string) => Incrementer | undefined;
   getMux: (id: string) => Mux | undefined;
   getMemory: (id: string) => Memory | undefined;
   getInstructionMemory: (id: string) => InstructionMemory | undefined;
   getCpu: (id: string) => CPU | undefined;
   getDecoder: (id: string) => Decoder | undefined;
-
-  /** Toggle or set the paused state of a CPU instance. */
-  pauseCpu: (id: string, paused: boolean) => void;
-
-  /** Reset a specific CPU to RESET state. */
-  resetCpu: (id: string) => void;
 
   /**
    * Trigger a re-render for subscribers watching a specific id.
@@ -124,7 +117,7 @@ interface SimulatorState {
   /** Bump `animationCycle` to (re)start a single wire-animation pass. */
   bumpAnimationCycle: () => void;
 
-  /** True while a bulk execution loop is running (skip persistence churn). */
+  /** True while a bulk execution loop is running (skips the per-tick layout snapshot). */
   isBatchExecuting: boolean;
 
   // ── Clock / CPU-based ticking ──────────────────────────────────
@@ -228,15 +221,9 @@ interface SimulatorState {
 
   /**
    * Directly write a word into a Memory cell, bypassing tick logic.
-   * Immediately persists updated state.
+   * Immediately snapshots the updated values into the layout store.
    */
   pokeMemory: (id: string, addr: number, value: number) => void;
-
-  /**
-   * Directly write a word into an InstructionMemory cell, bypassing tick logic.
-   * Immediately persists updated state.
-   */
-  pokeInstructionMemory: (id: string, addr: number, value: number) => void;
 }
 
 export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
@@ -406,11 +393,6 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
     return obj instanceof Ula ? obj : undefined;
   },
 
-  getAdder: (id) => {
-    const obj = get().objects.get(id);
-    return obj instanceof Adder ? obj : undefined;
-  },
-
   getIncrementer: (id) => {
     const obj = get().objects.get(id);
     return obj instanceof Incrementer ? obj : undefined;
@@ -439,23 +421,6 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
   getDecoder: (id) => {
     const obj = get().objects.get(id);
     return obj instanceof Decoder ? obj : undefined;
-  },
-
-  pauseCpu: (id, paused) => {
-    const obj = get().objects.get(id);
-    if (obj instanceof CPU) {
-      obj.setPaused(paused);
-      set((s) => ({ revision: s.revision + 1 }));
-    }
-  },
-
-  resetCpu: (id) => {
-    const obj = get().objects.get(id);
-    if (obj instanceof CPU) {
-      obj.reset();
-      set((s) => ({ revision: s.revision + 1 }));
-      getLayoutStore().getState().saveState();
-    }
   },
 
   touch: () => {
@@ -515,7 +480,7 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
     // Bump revision so UI re-renders
     set((s) => ({ revision: s.revision + 1 }));
     if (!get().isBatchExecuting) {
-      // Persist updated port/register/memory values
+      // Snapshot updated port/register/memory values into the layout store
       getLayoutStore().getState().saveState();
     }
   },
@@ -532,7 +497,7 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
 
     set((s) => ({ revision: s.revision + 1 }));
     if (!get().isBatchExecuting) {
-      // Persist cleared values
+      // Snapshot the cleared values into the layout store
       getLayoutStore().getState().saveState();
     }
   },
@@ -596,7 +561,7 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
     const wire = bus.createWire(sourceId, sourcePort, targetId, targetPort, options);
     if (wire) {
       set((s) => ({ revision: s.revision + 1 }));
-      // Persist wire list alongside components in the layout store.
+      // Mirror the wire list alongside components in the layout store.
       getLayoutStore().getState().saveWires();
       getLayoutStore().getState().saveState();
       return wire.id;
@@ -608,7 +573,7 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
     const { bus } = get();
     bus.removeWire(wireId);
     set((s) => ({ revision: s.revision + 1 }));
-    // Keep persisted snapshot in sync.
+    // Keep the layout store's snapshot in sync.
     getLayoutStore().getState().saveWires();
     getLayoutStore().getState().saveState();
   },
@@ -689,15 +654,6 @@ export const useSimulatorStore = create<SimulatorState>()((set, get) => ({
   pokeMemory: (id, addr, value) => {
     const obj = get().objects.get(id);
     if (obj instanceof Memory) {
-      obj.poke(addr, value);
-      set((s) => ({ revision: s.revision + 1 }));
-      getLayoutStore().getState().saveState();
-    }
-  },
-
-  pokeInstructionMemory: (id, addr, value) => {
-    const obj = get().objects.get(id);
-    if (obj instanceof InstructionMemory) {
       obj.poke(addr, value);
       set((s) => ({ revision: s.revision + 1 }));
       getLayoutStore().getState().saveState();

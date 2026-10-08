@@ -14,18 +14,8 @@ const BASE_LABELS: Record<NumericBase, string> = {
   dec: "dec+",
   decSigned: "dec±",
   bin: "bin",
-  oct: "oct",
 };
 
-/**
- * Every simulation display setting, in one place.
- *
- * There used to be two panels: one on the edit-mode FAB and one floating in
- * program mode. They overlapped on speed and diverged everywhere else, and
- * because the FAB is hidden on a read-only canvas the numeric base — the one
- * setting a student is most likely to want mid-run — was unreachable during a
- * simulation. Both surfaces now mount this.
- */
 /** The button's own "A" is drawn at the size it selects (relative to the base). */
 const TEXT_SIZES: Array<{ id: TextSize; label: string; sample: string }> = [
   { id: "small", label: "Texto pequeno", sample: "0.75rem" },
@@ -46,6 +36,15 @@ function sliderToDuration(position: number): number {
   return ANIMATION_MAX_MS * Math.exp(-(position / SLIDER_STEPS) * SPEED_RATIO);
 }
 
+/**
+ * Every simulation display setting, in one place.
+ *
+ * There used to be two panels: one on the edit-mode FAB and one floating in
+ * program mode. They overlapped on speed and diverged everywhere else, and
+ * because the FAB is hidden on a read-only canvas the numeric base — the one
+ * setting a student is most likely to want mid-run — was unreachable during a
+ * simulation. Both surfaces now mount this.
+ */
 export default function SimulationSettings() {
   const numericBase = useDisplayStore((s) => s.numericBase);
   const setNumericBase = useDisplayStore((s) => s.setNumericBase);
@@ -64,7 +63,6 @@ export default function SimulationSettings() {
     <div className="w-72">
       <Section title="Valores" first />
       <div className="mb-1 flex items-center gap-1">
-        {/* {(["hex", "dec", "decSigned", "bin", "oct"] as const).map((b) => ( */}
         {(["hex", "dec", "decSigned", "bin"] as const).map((b) => (
           <button
             key={b}

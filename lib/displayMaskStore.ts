@@ -9,7 +9,8 @@
  *  - revealComponents() called by EnhancedBusOverlay when a substep's wires finish;
  *                       reveals the components those wires TARGET (dataflow order)
  *  - revealAll()        called on animation end or fast-scrub to finalize everything
- *  - deactivate()       called when exiting timeline or edit mode
+ *  - deactivate()       called by the execution store when the timeline loads or
+ *                       exits, or a frame has nothing to animate
  */
 
 import { create } from "zustand";
@@ -22,9 +23,6 @@ import { CpuState } from "./simulator/CpuState";
 interface DisplayMaskState {
   /** Whether progressive reveal is active (only during timeline animation). */
   isActive: boolean;
-
-  /** The pre-tick snapshot (starting point — what widgets show initially). */
-  baseSnapshot: TickSnapshot | null;
 
   /** The post-tick snapshot (target — what widgets show after reveal). */
   targetSnapshot: TickSnapshot | null;
@@ -58,7 +56,8 @@ interface DisplayMaskState {
 
   /**
    * Initialize for a new tick animation.
-   * Applies the baseSnapshot to live simulator objects so widgets start showing old values.
+   * Applies `baseSnapshot` (the pre-tick state) to live simulator objects so
+   * widgets start showing old values.
    */
   init: (
     baseSnapshot: TickSnapshot,
@@ -131,7 +130,7 @@ interface DisplayMaskState {
    */
   revealAll: () => void;
 
-  /** Deactivate progressive reveal (exit timeline, edit mode, etc.) */
+  /** Deactivate progressive reveal (timeline loaded or exited, nothing to animate). */
   deactivate: () => void;
 
   /**
@@ -139,12 +138,6 @@ interface DisplayMaskState {
    * Widgets use this to decide styling (dimmed vs bright).
    */
   isRevealed: (componentId: string) => boolean;
-
-  /**
-   * Check if a component is active in the current tick
-   * (i.e., is in any substep group for this state).
-   */
-  isActiveInCurrentTick: (componentId: string) => boolean;
 }
 
 /**
@@ -213,7 +206,6 @@ function applyComponentTargetState(componentId: string, targetSnapshot: TickSnap
 
 export const useDisplayMaskStore = create<DisplayMaskState>()((set, get) => ({
   isActive: false,
-  baseSnapshot: null,
   targetSnapshot: null,
   revealedComponents: new Set(),
   substepGroups: [],
@@ -252,7 +244,6 @@ export const useDisplayMaskStore = create<DisplayMaskState>()((set, get) => ({
 
     set({
       isActive: true,
-      baseSnapshot,
       targetSnapshot,
       substepGroups,
       activatedComponents,
@@ -411,7 +402,6 @@ export const useDisplayMaskStore = create<DisplayMaskState>()((set, get) => ({
   deactivate: () => {
     set({
       isActive: false,
-      baseSnapshot: null,
       targetSnapshot: null,
       revealedComponents: new Set(),
       substepGroups: [],
@@ -424,10 +414,5 @@ export const useDisplayMaskStore = create<DisplayMaskState>()((set, get) => ({
     const { isActive, revealedComponents } = get();
     if (!isActive) return true;
     return revealedComponents.has(componentId);
-  },
-
-  isActiveInCurrentTick: (componentId) => {
-    const { substepGroups } = get();
-    return substepGroups.some((g) => g.componentIds.includes(componentId));
   },
 }));

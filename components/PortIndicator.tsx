@@ -42,37 +42,25 @@ interface Props {
 }
 
 /**
- * Determine if a port is a control signal based on component type and port name
+ * Determine if a port is a control signal based on component type and port name.
+ *
+ * Every CPU output is a control signal, so the name checks below only need to
+ * catch the receiving end on the other components: the mux select, the write
+ * enables of the GPR and registers, the memory read/write strobes and the ULA
+ * operation.
  */
 function isControlSignalPort(componentType: string, portName: string, direction: "input" | "output"): boolean {
-  // CPU outputs are all control signals
   if (componentType === "CpuComponent" && direction === "output") {
     return true;
   }
-  
-  // Mux/Multiplexer select signals are control
-  if (portName === "select" || portName === "sel" || portName.includes("select")) {
-    return true;
-  }
-  
-  // Write enables and read enables are control signals
-  if (portName.includes("writeEnable") || portName.includes("wrEnable") || 
-      portName.includes("rdMem") || portName.includes("wrMem") ||
-      portName.includes("wrReg") || portName.includes("wrPC") || portName.includes("wrIR")) {
-    return true;
-  }
-  
-  // Operation selectors are control signals
-  if (portName.includes("operation") || portName.includes("opULA")) {
-    return true;
-  }
-  
-  // Mux selectors are control signals
-  if (portName.includes("mux")) {
-    return true;
-  }
-  
-  return false;
+
+  return (
+    portName === "sel" ||
+    portName.includes("writeEnable") ||
+    portName.includes("rdMem") ||
+    portName.includes("wrMem") ||
+    portName.includes("operation")
+  );
 }
 
 export default function PortIndicator({ 
@@ -92,7 +80,6 @@ export default function PortIndicator({
   const [hover, setHover] = useState(false);
   const [tooltipAnchor, setTooltipAnchor] = useState<{ x: number; y: number } | null>(null);
   const base = useDisplayStore((s) => s.numericBase);
-  const showPortValues = useDisplayStore((s) => s.showPortValues);
   const dotRef = useRef<HTMLDivElement>(null);
   const objects = useSimulatorStore((s) => s.objects);
   const revision = useSimulatorStore((s) => s.revision);
@@ -239,7 +226,7 @@ export default function PortIndicator({
 
       {/* Tooltip portalled into #portal-root — a fixed div at (0,0) with z-index 999999
           rendered as the last child of <body>, guaranteed above every stacking context. */}
-      {hover && showPortValues && !isCreating && tooltipAnchor && typeof document !== "undefined" &&
+      {hover && !isCreating && tooltipAnchor && typeof document !== "undefined" &&
         (() => {
           const root = document.getElementById("portal-root");
           if (!root) return null;

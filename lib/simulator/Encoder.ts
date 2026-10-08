@@ -9,9 +9,6 @@
 import {
   Opcode,
   INSTRUCTION_SET,
-  ISA_WORD_SIZE,
-  ISA_WORD_MAX,
-  OPCODE_BITS,
   OPCODE_SHIFT,
   GPR_ADDR_SHIFT,
   OPERAND_SHIFT,
@@ -21,10 +18,6 @@ import {
 } from "./ISA";
 
 export class Encoder {
-  /** Number of bits in an instruction word. */
-  static readonly WORD_SIZE = ISA_WORD_SIZE;
-  static readonly WORD_MAX  = ISA_WORD_MAX;
-
   // ── Standard format ────────────────────────────────────────────────────────
 
   /**
@@ -84,49 +77,5 @@ export class Encoder {
       return Encoder.encodeULA(desc.opcode, fields.srcA ?? 0, fields.srcB ?? 0, fields.dst ?? 0);
     }
     return Encoder.encode(desc.opcode, fields.gprAddr ?? 0, fields.operand ?? 0);
-  }
-
-  // ── Formatting helpers ─────────────────────────────────────────────────────
-
-  /**
-   * Return a raw word as a zero-padded 4-digit hex string.
-   * @example Encoder.toHex(0x1242) → "0x1242"
-   */
-  static toHex(word: number): string {
-    const digits = Math.ceil(ISA_WORD_SIZE / 4);
-    return "0x" + (word & ISA_WORD_MAX).toString(16).padStart(digits, "0").toUpperCase();
-  }
-
-  /**
-   * Return a raw word as a zero-padded 16-bit binary string,
-   * optionally grouped by fields.
-   *
-   * Standard: `OOOOO GGG IIIIIIII`
-   * ULA:      `OOOOO AAA BBB -- DDD`
-   *
-   * @example
-   * Encoder.toBinary(0x1242)         → "0001001001000010"
-   * Encoder.toBinary(0x1242, true)   → "00010 010 01000010"
-   */
-  static toBinary(word: number, grouped = false): string {
-    const bits = (word & ISA_WORD_MAX).toString(2).padStart(ISA_WORD_SIZE, "0");
-    if (!grouped) return bits;
-
-    const opPart = bits.slice(0, OPCODE_BITS);
-    // Peek at the opcode to know which grouping to apply
-    const opcode = (word >>> OPCODE_SHIFT) & 0b11111;
-    const desc   = Object.values(INSTRUCTION_SET).find(d => d.opcode === opcode);
-
-    if (desc?.format === "ula") {
-      const srcAPart = bits.slice(5, 8);
-      const srcBPart = bits.slice(8, 11);
-      const padPart  = bits.slice(11, 13);
-      const dstPart  = bits.slice(13);
-      return `${opPart} ${srcAPart} ${srcBPart} ${padPart} ${dstPart}`;
-    }
-
-    const gprPart = bits.slice(5, 8);
-    const immPart = bits.slice(8);
-    return `${opPart} ${gprPart} ${immPart}`;
   }
 }

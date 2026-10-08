@@ -6,9 +6,10 @@ import { Silhouette, MemorySpine } from "@/components/widgets/silhouettes";
  * How to read the canvas.
  *
  * Two columns, and the point of the panel is the sentence between them: shape
- * and colour are independent channels. Nothing on this screen explained the
- * wire colours, the phase pills or the Z/C/N flags before, so a student had to
- * infer the whole vocabulary. Now it is written down.
+ * and colour are independent channels. Nothing on the canvas itself explains
+ * the shapes, the wire colours or the state colours (a flag Z/C/N/V lit, the
+ * UC halted), so a student had to infer the whole vocabulary. Now it is
+ * written down; the Ajuda's guide tab shows it.
  */
 
 /** A miniature of one component class, drawn with the real silhouette parts. */
@@ -102,7 +103,7 @@ export default function Legend() {
                   note="verde em movimento; sinal da UC"
                 />
                 <StateSample color="var(--st-warn)" label="Atenção" note="flag ativada" />
-                <StateSample color="var(--st-error)" label="Erro" note="halt, overflow, endereço inválido" />
+                <StateSample color="var(--st-error)" label="Erro" note="CPU parada pelo HLT" />
                 <StateSample
                   color="var(--border-strong)"
                   label="Ocioso"

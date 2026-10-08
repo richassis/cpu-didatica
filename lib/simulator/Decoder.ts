@@ -5,18 +5,19 @@
  * datapath. On each tick it reads the raw 16-bit instruction word loaded into
  * it, decodes all fields, and exposes them to the appropriate consumers:
  *
- *   ┌──────────────────────────────────────────────────────────────┐
- *   │                         DECODER                              │
- *   │                                                              │
- *   │  raw word ──▶  opcode  ──────────────────────────▶  CPU      │
- *   │                gprAddrA      ──────────────────▶  GPR mux   │
- *   │                gprAddrB      ──────────────────▶  GPR mux   │
- *   │                dst           ──────────────────▶  GPR mux   │
- *   │                operand       ──────────────────▶  MAR       │
- *   │                operandSigned ──────────────────▶  Imm mux   │
- *   └──────────────────────────────────────────────────────────────┘
+ *   ┌────────────────────────────────────────────────────────────────────┐
+ *   │                              DECODER                               │
+ *   │                                                                    │
+ *   │  raw word ──▶  opcode        ──▶  UC                               │
+ *   │                gprAddrA      ──▶  GPR read address A, muxAReg in 0 │
+ *   │                gprAddrB      ──▶  GPR read address B               │
+ *   │                dst           ──▶  muxAReg in 1                     │
+ *   │                operand       ──▶  MAR                              │
+ *   │                operandSigned ──▶  muxDReg in 0                     │
+ *   └────────────────────────────────────────────────────────────────────┘
+ *   (wiring of the default project)
  *
- * The CPU only ever reads `decoder.opcode`.
+ * The control unit only receives the opcode.
  * All other fields are consumed by the components that need them.
  */
 
@@ -41,7 +42,6 @@ import {
   ULA_SRC_B_SHIFT,
   ULA_DST_MASK,
   ULA_DST_SHIFT,
-  DecodedInstruction,
   opcodeToMnemonic,
 } from "./ISA";
 import { Connectable, type PortMap, InputPort, OutputPort } from "./Port";
@@ -79,11 +79,6 @@ export class Decoder implements Clockable, Connectable {
 
   /** Output: ULA destination [2:0]. */
   readonly out_dst: OutputPort<number>;
-
-  // ── Internal ───────────────────────────────────────────────────────────────
-
-  /** The last fully decoded instruction (updated every tick). */
-  private _decoded: DecodedInstruction | null = null;
 
   constructor(id: string, name = "DEC") {
     this.id   = id;
@@ -142,48 +137,14 @@ export class Decoder implements Clockable, Connectable {
 
   // ── Convenience accessors (read from ports) ────────────────────────────────
 
-  /** The raw instruction word (from input port). */
-  get instruction(): number {
-    return this.in_instruction.value;
-  }
-
-  /** Set instruction directly (for testing or manual use). */
-  set instruction(v: number) {
-    // Note: normally this comes from a wired connection, but allow direct set
-    this.in_instruction.set(v & ISA_WORD_MAX);
-  }
-
   /** The decoded opcode (from output port). */
   get opcode(): Opcode {
     return this.out_opcode.value as Opcode;
   }
 
-  /** GPR address field. */
-  get gprAddrA(): number {
-    return this.out_gprAddrA.value;
-  }
-
-  /** Operand/immediate field. */
-  get operand(): number {
-    return this.out_operand.value;
-  }
-
-  /** ULA source B / second GPR address. */
-  get gprAddrB(): number {
-    return this.out_gprAddrB.value;
-  }
-
-  /** ULA destination. */
-  get dst(): number {
-    return this.out_dst.value;
-  }
-
   // ── Clockable ──────────────────────────────────────────────────────────────
 
-  /**
-   * Called by the global clock on every tick.
-   * Decodes the instruction from the input port and updates all output ports.
-   */
+  /** Decodes the instruction from the input port and updates all output ports. */
   onTick(): void {
     this.evaluate();
   }
@@ -193,23 +154,6 @@ export class Decoder implements Clockable, Connectable {
    */
   evaluate(): void {
     this._decode();
-  }
-
-  // ── Manual decode ──────────────────────────────────────────────────────────
-
-  /**
-   * Decode the current instruction immediately (without waiting for a tick).
-   * Useful when loading a new instruction word outside the clock cycle.
-   */
-  decodeNow(): void {
-    this._decode();
-  }
-
-  // ── Read-only view of the last decoded result ──────────────────────────────
-
-  /** The last decoded instruction, or `null` if no decode has run yet. */
-  get decoded(): DecodedInstruction | null {
-    return this._decoded;
   }
 
   // ── Private ────────────────────────────────────────────────────────────────
@@ -244,11 +188,6 @@ export class Decoder implements Clockable, Connectable {
       // Clear standard outputs
       this.out_operand.set(0);
       this.out_operandSigned.set(0);
-
-      this._decoded = {
-        format: "ula", raw, opcode, mnemonic,
-        srcA, srcB, dst,
-      };
     } else {
       const gprAddr = (raw & GPR_ADDR_MASK) >>> GPR_ADDR_SHIFT;
       const operand = (raw & OPERAND_MASK)  >>> OPERAND_SHIFT;
@@ -269,11 +208,6 @@ export class Decoder implements Clockable, Connectable {
       // Clear ULA outputs
       this.out_gprAddrB.set(0);
       this.out_dst.set(0);
-
-      this._decoded = {
-        format: "standard", raw, opcode, mnemonic,
-        gprAddr, operand,
-      };
     }
   }
 }

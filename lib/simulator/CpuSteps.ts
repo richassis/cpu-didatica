@@ -1,26 +1,25 @@
 /**
  * CpuSteps.ts
- * 
- * Centralized definitions for CPU execution steps/states.
- * Each component can be configured to tick on specific steps.
+ *
+ * Default animation steps per component type.
  */
 
-import { CpuState, ALL_CPU_STATES } from "./CpuState";
-
-// Re-export for convenience
-export { CpuState, CPU_STATE_LABELS, ALL_CPU_STATES } from "./CpuState";
+import { CpuState } from "./CpuState";
 
 /**
- * Default tick steps for each component type.
- * These define when a component should be ticked during CPU execution.
- * 
- * A component ticks when the CPU enters any of the listed states.
+ * Default tick steps for each component type, used when a component has no
+ * `tickSteps` of its own in the project file.
+ *
+ * These are animation metadata only: they say in which CPU states the
+ * timeline shows a component (and the wires leaving it) as active. They do
+ * not gate execution — every registered component evaluates and commits on
+ * every CPU tick (see `CPU.registerComponent`).
  */
 export const DEFAULT_TICK_STEPS: Record<string, CpuState[]> = {
-  // Registers tick on states where they might latch data
+  // Registers animate on the states where they latch or feed data
   Register: [
-    CpuState.FETCH,    // IR latches instruction
-    CpuState.DECODE,   // PC increments
+    CpuState.FETCH,    // IR latches the instruction, PC latches PC+1
+    CpuState.DECODE,   // IR feeds the decoder
     CpuState.WRITEPC,  // PC updated on jumps
   ],
 
@@ -30,7 +29,7 @@ export const DEFAULT_TICK_STEPS: Record<string, CpuState[]> = {
     CpuState.READREG2,
   ],
 
-  // GPR ticks on read and write operations
+  // GPR is active on read and write operations
   GprComponent: [
     CpuState.READREG1,
     CpuState.READREG2,
@@ -39,9 +38,8 @@ export const DEFAULT_TICK_STEPS: Record<string, CpuState[]> = {
     CpuState.WRITEREG3,
   ],
 
-  // Memory ticks on read and write operations
+  // Data memory is active on read and write operations
   MemoryComponent: [
-    // CpuState.FETCH,    // Instruction fetch
     CpuState.READMEM,  // Data read
     CpuState.WRITEMEM, // Data write
   ],
@@ -50,15 +48,14 @@ export const DEFAULT_TICK_STEPS: Record<string, CpuState[]> = {
     CpuState.FETCH,    // Instruction fetch
   ],
 
-  // ULA ticks during execute phase
+  // ULA is active during the execute phase
   UlaComponent: [
     CpuState.EXECUTE,
   ],
 
-  // Adder ticks on fetch (PC+1) and execute
+  // Standalone adder (not in the default datapath; PC+1 is the Incrementer)
   AdderComponent: [
     CpuState.FETCH,
-    // CpuState.EXECUTE,
   ],
 
   // The PC+1 incrementer is relevant during fetch
@@ -66,12 +63,12 @@ export const DEFAULT_TICK_STEPS: Record<string, CpuState[]> = {
     CpuState.FETCH,
   ],
 
-  // Constant sources are relevant in datapaths like PC+1 during fetch.
+  // Constant sources are relevant in datapaths like PC+1 during fetch
   ConstantComponent: [
     CpuState.FETCH,
   ],
 
-  // Mux is combinational, ticks whenever its inputs might change
+  // Mux is combinational, active whenever its inputs might change
   MuxComponent: [
     CpuState.FETCH,
     CpuState.DECODE,
@@ -86,52 +83,8 @@ export const DEFAULT_TICK_STEPS: Record<string, CpuState[]> = {
     CpuState.WRITEPC,
   ],
 
-  // Decoder ticks on decode phase
+  // Decoder is active in the decode phase
   DecoderComponent: [
     CpuState.DECODE,
   ],
-
-  // CPU always ticks (it controls everything)
-  CpuComponent: ALL_CPU_STATES,
 };
-
-/**
- * Interface for components that support step-based ticking.
- */
-export interface StepTickable {
-  /** The steps on which this component should tick. */
-  tickSteps: CpuState[];
-  
-  /** Set the tick steps for this component. */
-  setTickSteps(steps: CpuState[]): void;
-  
-  /** Check if this component should tick on the given state. */
-  shouldTickOnState(state: CpuState): boolean;
-}
-
-/**
- * Mixin implementation for StepTickable.
- * Components can use this as a base for implementing StepTickable.
- */
-export function createStepTickableMixin(defaultSteps: CpuState[]): {
-  tickSteps: CpuState[];
-  setTickSteps: (steps: CpuState[]) => void;
-  shouldTickOnState: (state: CpuState) => boolean;
-} {
-  let tickSteps = [...defaultSteps];
-  
-  return {
-    get tickSteps() {
-      return tickSteps;
-    },
-    set tickSteps(steps: CpuState[]) {
-      tickSteps = steps;
-    },
-    setTickSteps(steps: CpuState[]) {
-      tickSteps = steps;
-    },
-    shouldTickOnState(state: CpuState) {
-      return tickSteps.includes(state);
-    },
-  };
-}

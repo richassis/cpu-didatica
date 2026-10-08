@@ -16,13 +16,12 @@ import {
 import { ALU_PATH, ALU_VIEWBOX } from "@/lib/aluShape";
 
 /**
- * Component identity, in three redundant layers.
+ * Component identity, in two redundant layers.
  *
- * The redundancy is deliberate — each layer fails at a different zoom:
+ * The redundancy is deliberate — each layer works at a different zoom:
  *
- *   silhouette  legible at any zoom, down to 25%   — peripheral recognition
- *   glyph       legible at >= 50%                   — disambiguation
- *   anatomy     legible at >= 100%                  — detailed reading
+ *   silhouette  legible at any zoom             — peripheral recognition
+ *   anatomy     shown from 60% zoom (LOD rules) — detailed reading
  *
  * None of them is colour. That is the whole point: a node has to stay
  * identifiable in greyscale, so that colour is free to mean "this is what is
@@ -89,7 +88,7 @@ export function Silhouette({ kind }: { kind: SilhouetteKind }) {
 /**
  * The memory spine: three hairlines hugging the left border, reading as the
  * stacked edge of a block of storage. It is what separates a memory from a
- * register at 25% zoom, where neither the glyph nor the address list survives.
+ * register at a glance, before any of the anatomy is read.
  */
 export function MemorySpine() {
   return (
@@ -116,10 +115,9 @@ export function MemorySpine() {
 }
 
 /**
- * Corner-badge glyphs. Monochrome line icons only — they inherit --node-ink,
- * so they are muted at rest and take the state colour when the node fires.
- * No emoji: they carry their own colour and their own typeface, and would
- * break both rules at once.
+ * One glyph per component type, used by the AddComponentModal palette (nodes on
+ * the canvas no longer draw a corner badge). Monochrome line icons only — no
+ * emoji: they carry their own colour and their own typeface.
  */
 export const GLYPHS: Record<string, LucideIcon> = {
   Register: RectangleHorizontal,

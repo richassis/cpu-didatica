@@ -67,12 +67,9 @@ export default function ConfigModal({ component, onClose }: Props) {
   const isClockableObj = obj && isClockable(obj);
   const isCpu = component.type === "CpuComponent";
   const cpu = isCpu ? (obj as CPU | undefined) : undefined;
-  // There used to be an early return here swapping the whole modal for the
-  // InstructionBuilder. It compared against "InstructionMemory" while the
-  // registered type is "InstructionMemoryComponent", so it never fired. Rather
-  // than switch it on — which would make word count and bit width unreachable
-  // for instruction memory — it is gone: the builder is reached by clicking a
-  // row on the widget itself.
+  // Instruction memory gets the regular modal too, so word count and bit width
+  // stay editable; the InstructionBuilder is reached by clicking a row on the
+  // widget itself (edit mode only).
   
   // Animation step configuration (kept in tickSteps for backward compatibility)
   const currentTickSteps = useMemo(() => {

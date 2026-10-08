@@ -9,8 +9,9 @@ import { usePlaybackStore } from "@/lib/playbackStore";
  *
  * The tick was previously written twice — a 32px figure inside the timeline
  * card and a small `T{n}` in the canvas clock toolbar — and neither read as an
- * instrument. This is the single counter, now part of the simulation bar, sitting
- * beside the player it belongs to.
+ * instrument. This is the one current-tick readout, part of the simulation bar,
+ * sitting beside the player it belongs to. (The total, "de N", also appears as
+ * "/ N" at the end of the player's controls.)
  *
  * Drawn as inline SVG rather than with a display webfont: the repo has no font
  * files, and a seven-segment shape is seven polygons.

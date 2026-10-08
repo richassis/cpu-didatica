@@ -5,7 +5,7 @@ import { Opcode, OPCODE_SEQUENCES, CONTROL_SIGNAL_DEFS, INSTRUCTION_SET, CpuStat
 import { STATE_CONTROL_SIGNALS } from "@/lib/simulator/Cpu";
 import { COMPONENT_HELP, SIGNAL_HELP, STATE_HELP } from "@/lib/helpContent";
 
-/** The signals the control unit shows, in its own order (`muxAMem` is not wired). */
+/** The signals the control unit shows, in its own order. */
 const SIGNALS = ["muxPC", "wrPC", "wrIR", "rdMem", "wrMem", "muxAReg", "muxDReg", "wrReg", "opULA"] as const;
 
 /** The states, in the order a tick sequence meets them. */
@@ -252,7 +252,7 @@ function Schematic() {
         <Box x={218} y={160} w={50} h={46} label="MUX" sub="dado" />
         <Box x={480} y={148} w={40} h={26} label="A" />
         <Box x={480} y={192} w={40} h={26} label="B" />
-        <Box x={560} y={152} w={70} h={62} label="ULA" sub="Z C N" />
+        <Box x={560} y={152} w={70} h={62} label="ULA" sub="Z C N V" />
         <Box x={654} y={168} w={50} h={30} label="R" />
         <Wire points={[[464, 64], [464, 116], [385, 116], [385, 140]]} />
         <Wire points={[[440, 161], [480, 161]]} />

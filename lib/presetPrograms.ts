@@ -33,7 +33,8 @@ FIM:    HLT
 
 const FOR_CONTADOR = `\
 ; ── FOR — Contador ──────────────────────────────────────────────────────────
-; Simula um laço for(cnt=1; cnt<=5; cnt++) usando ADD, SUB e JZ.
+; Simula um laço do { cnt++; } while (cnt != END) usando ADD, SUB e JZ:
+; o contador sai de 1 e para em 5, então o corpo roda 4 vezes.
 ; Resultado esperado: R0=5, mem[CNT]=5
 
         .data
@@ -82,33 +83,6 @@ MAIOR:  STA   R3, NmaiorN2 ; N1 > N2
         JMP   FIM
 
 IGUAL:  STA   R3, NigualN2 ; N1 == N2
-
-FIM:    HLT
-`;
-
-// Hidden from the preset list for now; kept so it can come back.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const MULTIPLICACAO = `\
-; ── Multiplicação por Somas Sucessivas ──────────────────────────────────────
-; Calcula N1 × N2 somando N1 repetidamente N2 vezes.
-; Resultado esperado (N1=3, N2=4): mem[RE]=12
-
-        .data
-N1:     DB    3             ; primeiro fator (valor somado)
-N2:     DB    4             ; segundo fator (contador de repetições)
-RE:     DB    0             ; resultado
-
-        .code
-        LDA   R1, N1        ; R1 = N1
-        LDA   R2, N2        ; R2 = N2 (contador)
-        LDAI  R4, 0        ; R4 = acumulador = 0
-        LDAI  R3, 1        ; R3 = 1 (decremento)
-
-MULTIP: ADD   R4, R1, R4   ; acumulador += N1
-        STA   R4, RE        ; salva resultado parcial
-        SUB   R2, R3, R2   ; contador--
-        JZ    FIM           ; se zero, termina
-        JMP   MULTIP
 
 FIM:    HLT
 `;
@@ -171,7 +145,6 @@ export const PRESET_PROGRAMS: PresetProgram[] = [
   { id: "basico",   name: "Exemplo Básico",         source: BASICO },
   { id: "for",      name: "FOR — Contador",          source: FOR_CONTADOR },
   { id: "if-else",  name: "IF-THEN-ELSE",            source: IF_THEN_ELSE },
-  // { id: "mult",     name: "Multiplicação",            source: MULTIPLICACAO },
   { id: "desvios",  name: "Desvios",                 source: DESVIOS },
   { id: "logico",   name: "Instruções Lógicas",      source: LOGICO },
 ];

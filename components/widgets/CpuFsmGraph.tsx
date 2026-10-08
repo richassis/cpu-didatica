@@ -17,7 +17,7 @@ import { Opcode, opcodeToMnemonic } from "@/lib/simulator/ISA";
  * top-down (the longest, ULA, is 3 states). Every non-HLT branch drops to the
  * merge spine at the bottom, which loops back up the left rail into FETCH.
  *
- * The instruction badge (top-left) is the single readout that replaced a static
+ * The instruction badge (top-right) is the single readout that replaced a static
  * label over every branch. It stays off for the whole DECODE tick — the opcode
  * it reads isn't trustworthy until DECODE's wire animation resolves — and
  * appears the instant the branch's first state goes current.
