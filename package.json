@@ -2,6 +2,19 @@
   "name": "cpu-didatica",
   "version": "0.1.0",
   "private": true,
+  "description": "Simulador didático de CPU: escreva assembly e acompanhe, tick a tick, o caminho de dados que o executa.",
+  "license": "MIT",
+  "homepage": "https://cpu-didatica.vercel.app",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/richassis/cpu-didatica.git"
+  },
+  "bugs": {
+    "url": "https://github.com/richassis/cpu-didatica/issues"
+  },
+  "engines": {
+    "node": ">=20.9"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",

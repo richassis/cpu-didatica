@@ -1,0 +1,28 @@
+name: Sugestão
+description: Uma ideia de recurso, instrução, exemplo ou melhoria didática.
+title: "[Sugestão] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Que dificuldade isso resolve
+      description: O que fica difícil de ensinar, entender ou fazer hoje.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: A ideia
+      description: Como você imagina que funcionaria.
+    validations:
+      required: true
+  - type: dropdown
+    id: role
+    attributes:
+      label: Você usa o simulador como
+      options:
+        - Aluno(a)
+        - Professor(a) / monitor(a)
+        - Desenvolvedor(a) / colaborador(a)
+        - Outro

@@ -22,11 +22,29 @@ const mono = JetBrains_Mono({
   weight: ["400", "500"],
 });
 
+const DESCRIPTION =
+  "Simulador didático de CPU: escreva um programa em assembly e acompanhe, " +
+  "tick a tick, o caminho de dados que o executa.";
+
+// The card shown when the link is pasted into a chat or a social network. The
+// image itself is `app/opengraph-image.png`, picked up by Next's file
+// convention; `metadataBase` makes its URL absolute, which link previews need.
 export const metadata: Metadata = {
+  metadataBase: new URL("https://cpu-didatica.vercel.app"),
   title: "CPU Didática",
-  description:
-    "Simulador didático de CPU: escreva um programa em assembly e acompanhe, " +
-    "tick a tick, o caminho de dados que o executa.",
+  description: DESCRIPTION,
+  openGraph: {
+    type: "website",
+    locale: "pt_BR",
+    siteName: "CPU Didática",
+    title: "CPU Didática",
+    description: DESCRIPTION,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "CPU Didática",
+    description: DESCRIPTION,
+  },
 };
 
 export default function RootLayout({

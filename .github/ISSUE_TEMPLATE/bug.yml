@@ -1,0 +1,40 @@
+name: Problema
+description: Algo não funciona como deveria, ou a simulação mostra algo errado.
+title: "[Problema] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Obrigado por relatar! Quanto mais fácil for reproduzir, mais rápido sai a correção.
+  - type: textarea
+    id: what
+    attributes:
+      label: O que aconteceu
+      description: O que você fez, o que esperava e o que aconteceu de fato.
+      placeholder: |
+        Executei o programa abaixo e, no tick 10 (EXECUTE), a flag Z acendeu antes da ULA calcular.
+    validations:
+      required: true
+  - type: textarea
+    id: program
+    attributes:
+      label: Programa assembly
+      description: Se o problema aparece na execução, cole o programa (ou anexe o .asm).
+      render: asm
+  - type: input
+    id: tick
+    attributes:
+      label: Tick ou estado
+      description: Em qual tick ou estado da UC o problema aparece, se for o caso.
+      placeholder: "tick 10, EXECUTE"
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: Print ou GIF
+      description: Arraste a imagem para cá. Ajuda muito em problemas visuais.
+  - type: input
+    id: browser
+    attributes:
+      label: Navegador e sistema
+      placeholder: "Chrome 140, Windows 11"
