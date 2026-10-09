@@ -2,20 +2,9 @@
 
 import { Props } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
-import { UlaOperation } from "@/lib/simulator/ISA";
+import { UlaOperation, ulaOpName } from "@/lib/simulator/ISA";
 import NodeShell from "@/components/widgets/NodeShell";
 import FlagSquares from "@/components/widgets/FlagSquares";
-
-function opName(op: number): string {
-  switch (op) {
-    case UlaOperation.ADD: return "ADD";
-    case UlaOperation.SUB: return "SUB";
-    case UlaOperation.AND: return "AND";
-    case UlaOperation.OR:  return "OR";
-    case UlaOperation.NOT: return "NOT";
-    default: return "?";
-  }
-}
 
 /**
  * The ALU keeps its trapezoid — it is the signature shape of the screen and
@@ -41,7 +30,7 @@ export default function UlaComponent({ component, zoom }: Props) {
   return (
     <NodeShell component={component} zoom={zoom} silhouette="alu">
       <div className="flex flex-1 flex-col items-center justify-center gap-2 px-4">
-        <span className="node-value t-value">{opName(op)}</span>
+        <span className="node-value t-value">{ulaOpName(op)}</span>
 
         <div>
           <FlagSquares

@@ -1,12 +1,9 @@
 "use client";
 
 import { Fragment } from "react";
-import { Opcode, OPCODE_SEQUENCES, CONTROL_SIGNAL_DEFS, INSTRUCTION_SET, CpuState, CPU_STATE_LABELS } from "@/lib/simulator";
+import { Opcode, OPCODE_SEQUENCES, CONTROL_SIGNAL_DEFS, INSTRUCTIONS_BY_OPCODE, CpuState, CPU_STATE_LABELS, type ControlSignalName } from "@/lib/simulator";
 import { STATE_CONTROL_SIGNALS } from "@/lib/simulator/Cpu";
 import { COMPONENT_HELP, SIGNAL_HELP, STATE_HELP } from "@/lib/helpContent";
-
-/** The signals the control unit shows, in its own order. */
-const SIGNALS = ["muxPC", "wrPC", "wrIR", "rdMem", "wrMem", "muxAReg", "muxDReg", "wrReg", "opULA"] as const;
 
 /** The states, in the order a tick sequence meets them. */
 const STATES = [
@@ -23,8 +20,6 @@ const STATES = [
   CpuState.WRITEPC,
 ] as const;
 
-const INSTRUCTIONS = Object.values(INSTRUCTION_SET).sort((a, b) => a.opcode - b.opcode);
-
 function StateChip({ state }: { state: CpuState }) {
   return (
     <span className="rounded-md border border-line px-1.5 py-0.5 font-mono text-caption text-fg-muted">
@@ -34,7 +29,7 @@ function StateChip({ state }: { state: CpuState }) {
 }
 
 /** What a state sets for one signal, or a note for the two that depend on the instruction. */
-function signalCell(state: CpuState, name: (typeof SIGNALS)[number]): string {
+function signalCell(state: CpuState, name: ControlSignalName): string {
   if (state === CpuState.EXECUTE && name === "opULA") return "da instrução";
   if (state === CpuState.WRITEPC && (name === "wrPC" || name === "muxPC")) {
     return name === "wrPC" ? "1*" : "0*";
@@ -44,9 +39,6 @@ function signalCell(state: CpuState, name: (typeof SIGNALS)[number]): string {
 }
 
 export default function DatapathTab() {
-  const signalDefs = CONTROL_SIGNAL_DEFS.filter((d) => (SIGNALS as readonly string[]).includes(d.name));
-  const orderedDefs = SIGNALS.map((n) => signalDefs.find((d) => d.name === n)!);
-
   return (
     <div className="space-y-8">
       <section>
@@ -89,12 +81,12 @@ export default function DatapathTab() {
               </tr>
             </thead>
             <tbody>
-              {orderedDefs.map((d) => (
+              {CONTROL_SIGNAL_DEFS.map((d) => (
                 <tr key={d.name} className="border-b border-line last:border-b-0">
                   <td className="px-2.5 py-1.5 font-mono text-st-active">{d.name}</td>
                   <td className="num px-2.5 py-1.5 font-mono text-fg-muted">{d.bitWidth}</td>
-                  <td className="px-2.5 py-1.5 text-fg-muted">{SIGNAL_HELP[d.name]?.does ?? d.description}</td>
-                  <td className="px-2.5 py-1.5 font-mono text-fg-faint">{SIGNAL_HELP[d.name]?.values ?? ""}</td>
+                  <td className="px-2.5 py-1.5 text-fg-muted">{SIGNAL_HELP[d.name].does}</td>
+                  <td className="px-2.5 py-1.5 font-mono text-fg-faint">{SIGNAL_HELP[d.name].values ?? ""}</td>
                 </tr>
               ))}
             </tbody>
@@ -119,7 +111,7 @@ export default function DatapathTab() {
               </tr>
             </thead>
             <tbody>
-              {INSTRUCTIONS.map((d) => {
+              {INSTRUCTIONS_BY_OPCODE.map((d) => {
                 const sequence = OPCODE_SEQUENCES[d.opcode as Opcode] ?? [];
                 return (
                   <tr key={d.mnemonic} className="border-b border-line last:border-b-0">
@@ -150,8 +142,8 @@ export default function DatapathTab() {
             <thead>
               <tr className="border-b border-line bg-raised text-fg-muted">
                 <th className="px-2.5 py-1.5 font-normal">Estado</th>
-                {SIGNALS.map((s) => (
-                  <th key={s} className="px-1.5 py-1.5 font-mono text-caption font-normal">{s}</th>
+                {CONTROL_SIGNAL_DEFS.map(({ name }) => (
+                  <th key={name} className="px-1.5 py-1.5 font-mono text-caption font-normal">{name}</th>
                 ))}
                 <th className="px-2.5 py-1.5 font-normal">O que faz</th>
               </tr>
@@ -160,9 +152,9 @@ export default function DatapathTab() {
               {STATES.map((state) => (
                 <tr key={state} className="border-b border-line last:border-b-0">
                   <td className="px-2.5 py-1.5 font-mono text-fg">{CPU_STATE_LABELS[state]}</td>
-                  {SIGNALS.map((s) => (
-                    <td key={s} className="num px-1.5 py-1.5 text-center font-mono text-fg-muted">
-                      {signalCell(state, s) || <span className="text-fg-faint">·</span>}
+                  {CONTROL_SIGNAL_DEFS.map(({ name }) => (
+                    <td key={name} className="num px-1.5 py-1.5 text-center font-mono text-fg-muted">
+                      {signalCell(state, name) || <span className="text-fg-faint">·</span>}
                     </td>
                   ))}
                   <td className="min-w-[220px] px-2.5 py-1.5 text-fg-muted">{STATE_HELP[state]}</td>

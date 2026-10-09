@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { CpuState, CPU_STATE_LABELS } from "@/lib/simulator/CpuState";
 import { OPCODE_SEQUENCES } from "@/lib/simulator/Cpu";
-import { Opcode, opcodeToMnemonic } from "@/lib/simulator/ISA";
+import { Opcode, lookupInstruction } from "@/lib/simulator/ISA";
 
 /**
  * The control unit's finite-state machine, drawn as the tree it actually is:
@@ -211,9 +211,7 @@ export default function CpuFsmGraph({ currentState, nextState, opcode }: CpuFsmG
   const isFetchCurrent = currentState === CpuState.FETCH || currentState === CpuState.RESET;
   const isDecodeCurrent = currentState === CpuState.DECODE;
 
-  const currentMnemonic = activeBranch ? (() => {
-    try { return opcodeToMnemonic(opcode as Opcode); } catch { return null; }
-  })() : null;
+  const currentMnemonic = activeBranch ? (lookupInstruction(opcode)?.mnemonic ?? null) : null;
 
   const activeColX = activeBranch ? colX(activeBranch.col) : null;
 

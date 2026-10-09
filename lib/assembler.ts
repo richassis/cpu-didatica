@@ -40,8 +40,54 @@
  * Comments start with `;` and extend to end of line.
  */
 
-import { Encoder } from "@/lib/simulator/Encoder";
-import { INSTRUCTION_SET } from "@/lib/simulator/ISA";
+import {
+  INSTRUCTION_SET,
+  encodeInstruction,
+  fieldSpec,
+  type InstructionDescriptor,
+  type InstructionFields,
+  type Mnemonic,
+  type OperandSpec,
+} from "@/lib/simulator/ISA";
+
+// ── Messages ─────────────────────────────────────────────────────────────────
+
+/** Every message the assembler reports, in one place. */
+const MSG = {
+  invalidDataLine: (line: string) => `Declaração inválida na seção .data: "${line}"`,
+  duplicateLabel:  (name: string) => `Label duplicado: "${name}"`,
+  invalidDbValue:  (text: string) => `Valor inválido na declaração DB: "${text}"`,
+  unknownMnemonic: (token: string) => `Mnemônico desconhecido: "${token}"`,
+  labelNotFound:   (name: string) => `Label não encontrado: "${name}"`,
+  outOfRange: (field: string, min: number, max: number, value: number) =>
+    `${field} fora do range ${min}–${max}: ${value}`,
+  noOperands: (mnemonic: string) => `${mnemonic}: não aceita operandos`,
+  wrongArity: (mnemonic: string, usage: string[], got: number) =>
+    `${mnemonic}: esperado ${usage.length} ${usage.length === 1 ? "operando" : "operandos"} (${usage.join(", ")}), recebeu ${got}`,
+};
+
+/**
+ * How the messages name each operand: `usage` in the operand-count message,
+ * `range` in the out-of-range one. Keyed by the ISA's field and help label
+ * (`Rd` reads differently as a standard register and as the ULA's destination).
+ */
+const OPERAND_TERMS: Readonly<Record<string, { usage: string; range: string }>> = {
+  "gprAddr:Rd": { usage: "Rdst",   range: "Registrador" },
+  "gprAddr:Rs": { usage: "Rsrc",   range: "Registrador" },
+  "operand:N":  { usage: "imm",    range: "Imediato" },
+  "operand:M":  { usage: "addr",   range: "Endereço" },
+  "srcA:Ra":    { usage: "Rsrc_a", range: "SrcA" },
+  "srcB:Rb":    { usage: "Rsrc_b", range: "SrcB" },
+  "dst:Rd":     { usage: "Rdst",   range: "Dst" },
+};
+
+/** A lone address operand is a jump target, and is named as one. */
+const JUMP_TARGET_TERMS = { usage: "endereço ou label", range: "Endereço de jump" };
+
+function operandTerms(desc: InstructionDescriptor, spec: OperandSpec): { usage: string; range: string } {
+  if (desc.operands.length === 1 && spec.kind === "address") return JUMP_TARGET_TERMS;
+  return OPERAND_TERMS[`${spec.field}:${spec.label}`] ?? { usage: spec.label, range: spec.label };
+}
 
 // ── Public types ─────────────────────────────────────────────────────────────
 
@@ -179,12 +225,12 @@ function pass1(lines: string[]): Pass1Result {
       // Match: LABEL or LABEL: optionally followed by DB value
       const m = line.match(/^([A-Za-z_][A-Za-z0-9_]*):?\s*(.*)/);
       if (!m) {
-        errors.push({ line: lineNum, message: `Declaração inválida na seção .data: "${line}"` });
+        errors.push({ line: lineNum, message: MSG.invalidDataLine(line) });
         continue;
       }
       const name = m[1].toUpperCase();
       if (labels.has(name)) {
-        errors.push({ line: lineNum, message: `Label duplicado: "${name}"` });
+        errors.push({ line: lineNum, message: MSG.duplicateLabel(name) });
       } else {
         labels.set(name, dataAddr);
       }
@@ -198,7 +244,7 @@ function pass1(lines: string[]): Pass1Result {
         if (val !== null) {
           initialValue = val & 0xFFFF;
         } else if (rest) {
-          errors.push({ line: lineNum, message: `Valor inválido na declaração DB: "${rest}"` });
+          errors.push({ line: lineNum, message: MSG.invalidDbValue(rest) });
         }
       }
       dataWords[dataAddr] = initialValue;
@@ -215,7 +261,7 @@ function pass1(lines: string[]): Pass1Result {
     if (labelMatch) {
       const name = labelMatch[1].toUpperCase();
       if (labels.has(name)) {
-        errors.push({ line: lineNum, message: `Label duplicado: "${name}"` });
+        errors.push({ line: lineNum, message: MSG.duplicateLabel(name) });
       } else {
         labels.set(name, codeAddr);
       }
@@ -231,7 +277,7 @@ function pass1(lines: string[]): Pass1Result {
 
     // Validate mnemonic
     if (!(mnemonic in INSTRUCTION_SET)) {
-      errors.push({ line: lineNum, message: `Mnemônico desconhecido: "${tokens[0]}"` });
+      errors.push({ line: lineNum, message: MSG.unknownMnemonic(tokens[0]) });
       codeAddr++; // still reserve an address slot
       continue;
     }
@@ -256,7 +302,7 @@ function resolveOperand(
   if (typeof op === "number") return op;
   const addr = labels.get(op);
   if (addr === undefined) {
-    errors.push({ line: lineNum, message: `Label não encontrado: "${op}"` });
+    errors.push({ line: lineNum, message: MSG.labelNotFound(op) });
     return null;
   }
   return addr;
@@ -280,10 +326,50 @@ function checkRange(
   const max = (1 << bits) - 1;
   const min = allowNegative ? -(1 << (bits - 1)) : 0;
   if (value < min || value > max) {
-    errors.push({ line: lineNum, message: `${fieldName} fora do range ${min}–${max}: ${value}` });
+    errors.push({ line: lineNum, message: MSG.outOfRange(fieldName, min, max, value) });
     return false;
   }
   return true;
+}
+
+/**
+ * Check and encode one instruction's operands against its ISA descriptor:
+ * operand count, then label resolution (all operands, so every missing label
+ * is reported), then each value's range in order, stopping at the first bad one.
+ * @returns the encoded word, or `null` after pushing the error.
+ */
+function encodeOperands(
+  desc: InstructionDescriptor,
+  operands: Operand[],
+  lineNum: number,
+  errors: AssemblyError[],
+  resolve: (op: Operand) => number | null,
+): number | null {
+  const specs = desc.operands;
+  if (operands.length !== specs.length) {
+    const message = specs.length === 0
+      ? MSG.noOperands(desc.mnemonic)
+      : MSG.wrongArity(desc.mnemonic, specs.map((spec) => operandTerms(desc, spec).usage), operands.length);
+    errors.push({ line: lineNum, message });
+    return null;
+  }
+
+  const values = operands.map(resolve);
+  const fields: InstructionFields = {};
+  for (let i = 0; i < specs.length; i++) {
+    const value = values[i];
+    if (value === null) return null;
+    fields[specs[i].field] = value;
+  }
+
+  for (const spec of specs) {
+    const { bits } = fieldSpec(desc.format, spec.field);
+    if (!checkRange(fields[spec.field]!, bits, operandTerms(desc, spec).range, lineNum, errors, spec.signed)) {
+      return null;
+    }
+  }
+
+  return encodeInstruction(desc.mnemonic, fields);
 }
 
 function pass2(
@@ -304,116 +390,8 @@ function pass2(
 
     const resolve = (op: Operand) => resolveOperand(op, labels, lineNum, errors);
 
-    let word: number | null = null;
-
-    switch (mnemonic) {
-      // ── Standard: LDAI Rdst, imm ──────────────────────────────────────────
-      case "LDAI": {
-        if (operands.length !== 2) {
-          errors.push({ line: lineNum, message: `LDAI: esperado 2 operandos (Rdst, imm), recebeu ${operands.length}` });
-          break;
-        }
-        const dst = resolve(operands[0]);
-        const imm = resolve(operands[1]);
-        if (dst === null || imm === null) break;
-        if (!checkRange(dst, 3, "Registrador", lineNum, errors)) break;
-        if (!checkRange(imm, 8, "Imediato", lineNum, errors, /* allowNegative */ true)) break;
-        word = Encoder.assemble("LDAI", { gprAddr: dst, operand: imm });
-        break;
-      }
-
-      // ── Standard: LDA Rdst, addr ──────────────────────────────────────────
-      case "LDA": {
-        if (operands.length !== 2) {
-          errors.push({ line: lineNum, message: `LDA: esperado 2 operandos (Rdst, addr), recebeu ${operands.length}` });
-          break;
-        }
-        const dst = resolve(operands[0]);
-        const addr = resolve(operands[1]);
-        if (dst === null || addr === null) break;
-        if (!checkRange(dst, 3, "Registrador", lineNum, errors)) break;
-        if (!checkRange(addr, 8, "Endereço", lineNum, errors)) break;
-        word = Encoder.assemble("LDA", { gprAddr: dst, operand: addr });
-        break;
-      }
-
-      // ── Standard: STA Rsrc, addr ──────────────────────────────────────────
-      case "STA": {
-        if (operands.length !== 2) {
-          errors.push({ line: lineNum, message: `STA: esperado 2 operandos (Rsrc, addr), recebeu ${operands.length}` });
-          break;
-        }
-        const src = resolve(operands[0]);
-        const addr = resolve(operands[1]);
-        if (src === null || addr === null) break;
-        if (!checkRange(src, 3, "Registrador", lineNum, errors)) break;
-        if (!checkRange(addr, 8, "Endereço", lineNum, errors)) break;
-        word = Encoder.assemble("STA", { gprAddr: src, operand: addr });
-        break;
-      }
-
-      // ── ULA: ADD/SUB/AND/OR  Rsrc_a, Rsrc_b, Rdst ────────────────────────
-      case "ADD":
-      case "SUB":
-      case "AND":
-      case "OR": {
-        if (operands.length !== 3) {
-          errors.push({ line: lineNum, message: `${mnemonic}: esperado 3 operandos (Rsrc_a, Rsrc_b, Rdst), recebeu ${operands.length}` });
-          break;
-        }
-        const srcA = resolve(operands[0]);
-        const srcB = resolve(operands[1]);
-        const dst  = resolve(operands[2]);
-        if (srcA === null || srcB === null || dst === null) break;
-        if (!checkRange(srcA, 3, "SrcA", lineNum, errors)) break;
-        if (!checkRange(srcB, 3, "SrcB", lineNum, errors)) break;
-        if (!checkRange(dst,  3, "Dst",  lineNum, errors)) break;
-        word = Encoder.assemble(mnemonic as "ADD" | "SUB" | "AND" | "OR", { srcA, srcB, dst });
-        break;
-      }
-
-      // ── ULA: NOT Rsrc_a, Rdst ─────────────────────────────────────────────
-      case "NOT": {
-        if (operands.length !== 2) {
-          errors.push({ line: lineNum, message: `NOT: esperado 2 operandos (Rsrc_a, Rdst), recebeu ${operands.length}` });
-          break;
-        }
-        const srcA = resolve(operands[0]);
-        const dst  = resolve(operands[1]);
-        if (srcA === null || dst === null) break;
-        if (!checkRange(srcA, 3, "SrcA", lineNum, errors)) break;
-        if (!checkRange(dst,  3, "Dst",  lineNum, errors)) break;
-        // srcB is unused for NOT (pass 0)
-        word = Encoder.assemble("NOT", { srcA, srcB: 0, dst });
-        break;
-      }
-
-      // ── Jumps: JZ/JN/JMP  addr_or_label ──────────────────────────────────
-      case "JZ":
-      case "JN":
-      case "JMP": {
-        if (operands.length !== 1) {
-          errors.push({ line: lineNum, message: `${mnemonic}: esperado 1 operando (endereço ou label), recebeu ${operands.length}` });
-          break;
-        }
-        const target = resolve(operands[0]);
-        if (target === null) break;
-        if (!checkRange(target, 8, "Endereço de jump", lineNum, errors)) break;
-        word = Encoder.assemble(mnemonic as "JZ" | "JN" | "JMP", { operand: target });
-        break;
-      }
-
-      // ── HLT ───────────────────────────────────────────────────────────────
-      case "HLT": {
-        if (operands.length !== 0) {
-          errors.push({ line: lineNum, message: `HLT: não aceita operandos` });
-          break;
-        }
-        word = Encoder.assemble("HLT");
-        break;
-      }
-      // No default: pass 1 already rejected mnemonics outside INSTRUCTION_SET.
-    }
+    const desc = INSTRUCTION_SET[mnemonic as Mnemonic];
+    const word = encodeOperands(desc, operands, lineNum, errors, resolve);
 
     if (word !== null) {
       words[codeAddr] = word;

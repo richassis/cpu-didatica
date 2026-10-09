@@ -9,7 +9,7 @@
  * assembler already knew.
  */
 
-import { OPCODE_SHIFT, INSTRUCTION_SET } from "@/lib/simulator/ISA";
+import { extractFields, lookupInstruction } from "@/lib/simulator/ISA";
 
 /**
  * Decode a raw word into its mnemonic.
@@ -18,8 +18,7 @@ import { OPCODE_SHIFT, INSTRUCTION_SET } from "@/lib/simulator/ISA";
  * loads, and the memory views have to render those cells too.
  */
 export function decodeMnemonic(word: number): string {
-  const opcode = (word >>> OPCODE_SHIFT) & 0b11111;
-  const entry = Object.values(INSTRUCTION_SET).find((d) => d.opcode === opcode);
+  const entry = lookupInstruction(extractFields(word).opcode);
   if (!entry) return word === 0 ? "NOP" : "???";
   return entry.mnemonic;
 }

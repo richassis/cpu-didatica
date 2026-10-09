@@ -1,16 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Opcode, INSTRUCTION_SET, OPCODE_SEQUENCES } from "@/lib/simulator";
-import { OPCODE_BITS, OPCODE_SHIFT } from "@/lib/simulator/ISA";
+import { Opcode, INSTRUCTION_SET, INSTRUCTIONS_BY_OPCODE, OPCODE_SEQUENCES } from "@/lib/simulator";
+import { OPCODE_SHIFT, formatOpcodeBits } from "@/lib/simulator/ISA";
 import { assemble } from "@/lib/assembler";
 import { INSTRUCTION_HELP } from "@/lib/helpContent";
 import BitFields, { wordFields, type WordField } from "@/components/Help/BitFields";
 
 type Mnemonic = keyof typeof Opcode;
-
-/** Every instruction, ordered by opcode. */
-const INSTRUCTIONS = Object.values(INSTRUCTION_SET).sort((a, b) => a.opcode - b.opcode);
 
 /**
  * The instruction formats as they are actually used — one drawing per group
@@ -28,19 +25,20 @@ const FORMAT_GROUPS: { title: string; mnemonics: Mnemonic[]; registerMeaning?: s
 
 /** The field layout one group uses, labelled for that group. */
 function groupFields(group: (typeof FORMAT_GROUPS)[number]): WordField[] {
-  const opcode = INSTRUCTION_SET[group.mnemonics[0]].opcode;
+  const { opcode, operands } = INSTRUCTION_SET[group.mnemonics[0]];
+  const operandLabel = operands.find((o) => o.field === "operand")?.label;
   return wordFields(opcode << OPCODE_SHIFT).fields.map((f): WordField => {
     if (f.kind === "opcode") return { ...f, meaning: undefined };
     if (f.meaning?.startsWith("não usado")) return { ...f, label: "—", kind: "pad" };
     if (f.kind === "register" && group.registerMeaning) return { ...f, meaning: group.registerMeaning };
-    if (f.kind === "operand") return { ...f, label: f.meaning === "valor imediato N" ? "N" : "M" };
+    if (f.kind === "operand" && operandLabel) return { ...f, label: operandLabel };
     return f;
   });
 }
 
 /** Each instruction's example, assembled — the help text is static, so once. */
 const EXAMPLE_WORDS: Partial<Record<Mnemonic, number>> = Object.fromEntries(
-  INSTRUCTIONS.flatMap((d) => {
+  INSTRUCTIONS_BY_OPCODE.flatMap((d) => {
     const result = assemble(INSTRUCTION_HELP[d.mnemonic].example);
     return result && result.errors.length === 0 && result.words.length === 1
       ? [[d.mnemonic, result.words[0]]]
@@ -102,7 +100,7 @@ export default function IsaTab() {
       </section>
 
       <section>
-        <h3 className="t-node mb-1 text-fg">As {INSTRUCTIONS.length} instruções</h3>
+        <h3 className="t-node mb-1 text-fg">As {INSTRUCTIONS_BY_OPCODE.length} instruções</h3>
         <p className="mb-3 text-ui leading-relaxed text-fg-muted">
           <b className="text-fg">Rd</b> é o destino, <b className="text-fg">Rs</b>, <b className="text-fg">Ra</b> e{" "}
           <b className="text-fg">Rb</b> são fontes, <b className="text-fg">M</b> é um endereço de memória
@@ -125,7 +123,7 @@ export default function IsaTab() {
               </tr>
             </thead>
             <tbody>
-              {INSTRUCTIONS.map((d) => {
+              {INSTRUCTIONS_BY_OPCODE.map((d) => {
                 const help = INSTRUCTION_HELP[d.mnemonic];
                 const selected = parsed.word !== undefined && decoded?.mnemonic === d.mnemonic;
                 return (
@@ -137,7 +135,7 @@ export default function IsaTab() {
                     }`}
                   >
                     <td className="px-2.5 py-1.5 font-mono">
-                      <span className="text-st-data">{bin(d.opcode, OPCODE_BITS)}</span>{" "}
+                      <span className="text-st-data">{formatOpcodeBits(d.opcode)}</span>{" "}
                       <span className="text-fg-faint">{hex(d.opcode, 2)}</span>
                     </td>
                     <td className="px-2.5 py-1.5 font-mono">

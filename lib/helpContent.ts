@@ -2,21 +2,24 @@
  * helpContent.ts
  *
  * The prose of the Help window. Opcodes, field positions, signal widths and
- * state sequences are read from `lib/simulator` where they are shown, so they
+ * state sequences are read from `lib/simulator` where they are shown, and each
+ * instruction's syntax and the opULA values are built from it here, so they
  * cannot drift from what the simulator does. Some numbers are written by hand
- * here, though — the flag lists, the mux and opULA values in `SIGNAL_HELP`, the
- * memory and register-bank sizes in `COMPONENT_HELP` — and have to be updated
- * along with the hardware.
+ * here, though — the flag lists, the mux values in `SIGNAL_HELP`, the memory
+ * and register-bank sizes in `COMPONENT_HELP` — and have to be updated along
+ * with the hardware.
  *
- * `INSTRUCTION_HELP` is a `Record` over every mnemonic: adding an instruction
- * to the ISA without documenting it here is a compile error.
+ * `INSTRUCTION_HELP` and `SIGNAL_HELP` are `Record`s over every mnemonic and
+ * every control signal: adding one to the simulator without documenting it
+ * here is a compile error.
  */
 
-import type { Opcode } from "@/lib/simulator";
+import type { ControlSignalName } from "@/lib/simulator";
 import { CpuState } from "@/lib/simulator";
+import { ULA_OPERATIONS, instructionSyntax, ulaOpName, type Mnemonic } from "@/lib/simulator/ISA";
 
 export interface InstructionHelp {
-  /** How it is written in assembly. */
+  /** How it is written in assembly (from the ISA's operand list). */
   syntax: string;
   /** What it does, in register-transfer notation. */
   effect: string;
@@ -26,20 +29,25 @@ export interface InstructionHelp {
   example: string;
 }
 
-export const INSTRUCTION_HELP: Record<keyof typeof Opcode, InstructionHelp> = {
-  LDA:  { syntax: "LDA Rd, M",       effect: "Rd ← DMem[M]",             flags: "Z, N",    example: "LDA R1, 5" },
-  LDAI: { syntax: "LDAI Rd, N",      effect: "Rd ← N (8 bits, com sinal estendido para 16)", flags: "Z, N", example: "LDAI R0, -3" },
-  STA:  { syntax: "STA Rs, M",       effect: "DMem[M] ← Rs",             flags: "—",       example: "STA R2, 0" },
-  ADD:  { syntax: "ADD Ra, Rb, Rd",  effect: "Rd ← Ra + Rb",             flags: "Z, C, N, V", example: "ADD R0, R1, R2" },
-  SUB:  { syntax: "SUB Ra, Rb, Rd",  effect: "Rd ← Ra − Rb",             flags: "Z, C, N, V", example: "SUB R0, R1, R2" },
-  AND:  { syntax: "AND Ra, Rb, Rd",  effect: "Rd ← Ra e Rb (bit a bit)", flags: "Z, C, N, V", example: "AND R0, R1, R2" },
-  OR:   { syntax: "OR Ra, Rb, Rd",   effect: "Rd ← Ra ou Rb (bit a bit)", flags: "Z, C, N, V", example: "OR R0, R1, R2" },
-  NOT:  { syntax: "NOT Ra, Rd",      effect: "Rd ← não Ra (bit a bit)",  flags: "Z, C, N, V", example: "NOT R0, R1" },
-  JZ:   { syntax: "JZ M",            effect: "se Z = 1: PC ← M",         flags: "—",       example: "JZ 12" },
-  JN:   { syntax: "JN M",            effect: "se N = 1: PC ← M",         flags: "—",       example: "JN 20" },
-  JMP:  { syntax: "JMP M",           effect: "PC ← M (sempre)",          flags: "—",       example: "JMP 0" },
-  HLT:  { syntax: "HLT",             effect: "para a execução",          flags: "—",       example: "HLT" },
+/** Hand-written part of each instruction's help; `syntax` is added below. */
+const INSTRUCTION_PROSE: Record<Mnemonic, Omit<InstructionHelp, "syntax">> = {
+  LDA:  { effect: "Rd ← DMem[M]",             flags: "Z, N",    example: "LDA R1, 5" },
+  LDAI: { effect: "Rd ← N (8 bits, com sinal estendido para 16)", flags: "Z, N", example: "LDAI R0, -3" },
+  STA:  { effect: "DMem[M] ← Rs",             flags: "—",       example: "STA R2, 0" },
+  ADD:  { effect: "Rd ← Ra + Rb",             flags: "Z, C, N, V", example: "ADD R0, R1, R2" },
+  SUB:  { effect: "Rd ← Ra − Rb",             flags: "Z, C, N, V", example: "SUB R0, R1, R2" },
+  AND:  { effect: "Rd ← Ra e Rb (bit a bit)", flags: "Z, C, N, V", example: "AND R0, R1, R2" },
+  OR:   { effect: "Rd ← Ra ou Rb (bit a bit)", flags: "Z, C, N, V", example: "OR R0, R1, R2" },
+  NOT:  { effect: "Rd ← não Ra (bit a bit)",  flags: "Z, C, N, V", example: "NOT R0, R1" },
+  JZ:   { effect: "se Z = 1: PC ← M",         flags: "—",       example: "JZ 12" },
+  JN:   { effect: "se N = 1: PC ← M",         flags: "—",       example: "JN 20" },
+  JMP:  { effect: "PC ← M (sempre)",          flags: "—",       example: "JMP 0" },
+  HLT:  { effect: "para a execução",          flags: "—",       example: "HLT" },
 };
+
+export const INSTRUCTION_HELP = Object.fromEntries(
+  (Object.keys(INSTRUCTION_PROSE) as Mnemonic[]).map((m) => [m, { syntax: instructionSyntax(m), ...INSTRUCTION_PROSE[m] }]),
+) as Record<Mnemonic, InstructionHelp>;
 
 /** What the control unit does in each state, in one line. */
 export const STATE_HELP: Partial<Record<CpuState, string>> = {
@@ -59,7 +67,7 @@ export const STATE_HELP: Partial<Record<CpuState, string>> = {
 };
 
 /** The control signals, in the order they appear on the control unit. */
-export const SIGNAL_HELP: Record<string, { does: string; values?: string }> = {
+export const SIGNAL_HELP: Record<ControlSignalName, { does: string; values?: string }> = {
   muxPC:   { does: "De onde vem o próximo PC.", values: "1 = PC+1 · 0 = endereço do desvio" },
   wrPC:    { does: "Habilita a escrita no PC." },
   wrIR:    { does: "Habilita a escrita no IR." },
@@ -68,7 +76,7 @@ export const SIGNAL_HELP: Record<string, { does: string; values?: string }> = {
   muxAReg: { does: "Qual campo da instrução endereça a escrita no GPR.", values: "0 = campo do registrador · 1 = campo destino da ULA" },
   muxDReg: { does: "Qual dado é escrito no GPR.", values: "0 = imediato · 1 = memória de dados · 2 = resultado da ULA" },
   wrReg:   { does: "Habilita a escrita no banco de registradores." },
-  opULA:   { does: "Qual operação a ULA realiza.", values: "0 ADD · 1 SUB · 4 AND · 6 OR · 7 NOT" },
+  opULA:   { does: "Qual operação a ULA realiza.", values: ULA_OPERATIONS.map((op) => `${op} ${ulaOpName(op)}`).join(" · ") },
 };
 
 export interface ComponentHelp {

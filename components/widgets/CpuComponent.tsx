@@ -7,38 +7,9 @@ import NodeShell from "@/components/widgets/NodeShell";
 import CpuFsmGraph from "@/components/widgets/CpuFsmGraph";
 import FlagSquares from "@/components/widgets/FlagSquares";
 import { CpuState, CONTROL_SIGNAL_DEFS } from "@/lib/simulator/Cpu";
-import type { CPU } from "@/lib/simulator/Cpu";
 import { CPU_SIDE_INPUT_OFFSET } from "@/lib/widgetDefinitions";
 
-/**
- * The 9 control-signal outputs, in the order the CPU class declares them —
- * this is also the order `getPortOffset` walks when it auto-places the bottom
- * ports, so a signal's index in this array is its index among the bottom ports
- * too. The strip below reuses that same `(i + 1) / (n + 1)` formula so its dots
- * land under the real port dots without having to measure anything. The one
- * exception is `out_opULA`, whose widget definition pins `offset: 91` instead
- * of the computed 90 — about 9px right of its strip dot.
- */
-const BOTTOM_SIGNAL_ORDER = [
-  "muxPC", "wrPC", "wrIR", "rdMem", "wrMem",
-  "muxAReg", "muxDReg", "wrReg", "opULA",
-] as const;
-
-const SIGNAL_BITS = Object.fromEntries(CONTROL_SIGNAL_DEFS.map((d) => [d.name, d.bitWidth]));
-
-/** Read every control-signal output port value from the CPU instance. */
-function readSignals(cpu: CPU): Record<string, number | boolean> {
-  const out: Record<string, number | boolean> = {};
-  const portMap = cpu.getPorts();
-  for (const def of CONTROL_SIGNAL_DEFS) {
-    const port = portMap[`out_${def.name}`];
-    out[def.name] = port ? (port.value as number | boolean) : 0;
-  }
-  return out;
-}
-
-function formatSignal(value: number | boolean, bits: number, base: NumericBase): string {
-  if (typeof value === "boolean") return value ? "1" : "0";
+function formatSignal(value: number, bits: number, base: NumericBase): string {
   if (bits <= 1) return String(Number(value));
   // Every control line is unsigned, whatever the base.
   return formatNum(Number(value), base === "decSigned" ? "dec" : base, bits);
@@ -69,7 +40,6 @@ export default function CpuComponent({ component, zoom }: Props) {
   const currentState = cpu ? (cpu.previousState as CpuState) : CpuState.RESET;
   const opcode = cpu ? Number(cpu.in_opcode.value) : 0;
   const halted = cpu ? cpu.halted : false;
-  const signals = cpu ? readSignals(cpu) : {};
   // A dot lights when the executed state writes that signal — even to 0, and
   // even when the value doesn't change. The value printed under it tells which.
   const driven = new Set(cpu ? cpu.getDrivenControlSignalPorts() : []);
@@ -123,15 +93,18 @@ export default function CpuComponent({ component, zoom }: Props) {
         />
       </div>
 
-      {/* Signal strip: one dot per bottom control port, positioned with the
-          same (i+1)/(n+1) formula the port itself is auto-placed with, so a
-          dot sits directly under its port regardless of the node's width.
-          Tall enough that the value row ends clear of the port squares
-          straddling the bottom edge. */}
+      {/* Signal strip: one dot per bottom control port. The ports are the
+          control signals in `CONTROL_SIGNAL_DEFS` order, which is also the
+          order `getPortOffset` walks when it auto-places them, so the strip
+          reuses that same (i+1)/(n+1) formula and each dot sits directly under
+          its port regardless of the node's width — except `out_opULA`, whose
+          widget definition pins `offset: 91` instead of the computed 90, about
+          9px right of its dot. Tall enough that the value row ends clear of
+          the port squares straddling the bottom edge. */}
       <div className="relative h-16 shrink-0 border-t border-line">
-        {BOTTOM_SIGNAL_ORDER.map((name, i) => {
+        {CONTROL_SIGNAL_DEFS.map(({ name, bitWidth }, i) => {
           const active = isOn(name);
-          const left = ((i + 1) / (BOTTOM_SIGNAL_ORDER.length + 1)) * 100;
+          const left = ((i + 1) / (CONTROL_SIGNAL_DEFS.length + 1)) * 100;
           return (
             <div
               key={name}
@@ -149,7 +122,7 @@ export default function CpuComponent({ component, zoom }: Props) {
               <span
                 className={`num font-mono text-cv-md leading-none ${active ? "text-fg" : "text-fg-faint"}`}
               >
-                {formatSignal(signals[name] ?? 0, SIGNAL_BITS[name] ?? 1, base)}
+                {formatSignal(cpu ? cpu.controlPorts[name].value : 0, bitWidth, base)}
               </span>
             </div>
           );

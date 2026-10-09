@@ -1,6 +1,6 @@
 import type { Clockable } from "./Clockable";
 import { type Connectable, type PortMap, InputPort, OutputPort } from "./Port";
-import { UlaOperation, FLAG_BITS } from "./ISA";
+import { UlaOperation, FLAG_BITS, FLAG_COUNT, ULA_OP_BITS } from "./ISA";
 
 /**
  * Data model for the Arithmetic Logic Unit (ULA / ALU).
@@ -53,7 +53,7 @@ export class Ula implements Clockable, Connectable {
       "Operand B"
     );
     this.in_operation = new InputPort<number>(
-      "operation", "number", 3, UlaOperation.ADD,
+      "operation", "number", ULA_OP_BITS, UlaOperation.ADD,
       "Operation selector (UlaOperation enum)"
     );
 
@@ -79,7 +79,7 @@ export class Ula implements Clockable, Connectable {
       "Overflow flag (signed result out of range)"
     );
     this.out_flags = new OutputPort<number>(
-      "flags", "number", 4, 0,
+      "flags", "number", FLAG_COUNT, 0,
       "Flags bus: Z C N V"
     );
   }

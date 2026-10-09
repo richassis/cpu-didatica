@@ -26,14 +26,15 @@ export {
   type InstructionDescriptor,
   type StandardDescriptor,
   type ULADescriptor,
+  INSTRUCTIONS_BY_OPCODE,
+  lookupInstruction,
   opcodeToMnemonic,
   getDescriptor,
   UlaOperation,
   OPCODE_TO_ULA_OP,
 } from "./ISA";
-export { Encoder } from "./Encoder";
 export { Decoder } from "./Decoder";
-export { CPU, OPCODE_SEQUENCES, CONTROL_SIGNAL_DEFS, type ControlSignalDef } from "./Cpu";
+export { CPU, OPCODE_SEQUENCES, CONTROL_SIGNAL_DEFS, type ControlSignalDef, type ControlSignalName } from "./Cpu";
 // CpuState exported from its own module to avoid circular dependencies
 export { CpuState, CPU_STATE_LABELS, ALL_CPU_STATES } from "./CpuState";
 export { DEFAULT_TICK_STEPS } from "./CpuSteps";

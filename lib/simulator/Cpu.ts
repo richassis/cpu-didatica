@@ -1,5 +1,5 @@
 import type { Clockable } from "./Clockable";
-import { Opcode, UlaOperation, OPCODE_TO_ULA_OP, FLAG_BITS } from "./ISA";
+import { Opcode, UlaOperation, OPCODE_TO_ULA_OP, FLAG_BITS, FLAG_COUNT, OPCODE_BITS, ULA_OP_BITS } from "./ISA";
 import { InputPort, OutputPort, type Connectable, type PortMap } from "./Port";
 import { CpuState, ALL_CPU_STATES } from "./CpuState";
 import { DEFAULT_TICK_STEPS } from "./CpuSteps";
@@ -14,6 +14,8 @@ export { CpuState } from "./CpuState";
 export interface ControlSignalDef {
   name: string;
   bitWidth: number;
+  /** Value at rest, applied by `CPU.reset()`. */
+  reset: number;
   description: string;
 }
 
@@ -23,17 +25,34 @@ export interface ControlSignalDef {
  */
 const MAX_EVALUATE_PASSES = 8;
 
-export const CONTROL_SIGNAL_DEFS: ControlSignalDef[] = [
-  { name: "wrIR", bitWidth: 1, description: "Write enable for IR" },
-  { name: "muxAReg", bitWidth: 1, description: "GPR address mux select" },
-  { name: "muxDReg", bitWidth: 2, description: "GPR data mux select" },
-  { name: "wrPC", bitWidth: 1, description: "Write enable for PC" },
-  { name: "muxPC", bitWidth: 1, description: "PC source mux select" },
-  { name: "rdMem", bitWidth: 1, description: "Memory read enable" },
-  { name: "wrMem", bitWidth: 1, description: "Memory write enable" },
-  { name: "wrReg", bitWidth: 1, description: "Write enable for GPR" },
-  { name: "opULA", bitWidth: 3, description: "ULA operation select" },
-];
+/**
+ * The control signals — the one list every other one is derived from: the
+ * `out_<name>` ports, their order in `getPorts()` (which places them along the
+ * control unit's bottom edge), the reset values and the Help's signal table.
+ *
+ * Values (mux inputs as wired in the default project):
+ * - muxPC: 0=branch target (MAR), 1=PC+1
+ * - wrPC / wrIR / wrReg: 0=no write, 1=write
+ * - rdMem / wrMem: 0=idle, 1=read / write data memory
+ * - muxAReg: 0=register field [10:8] (standard format), 1=ULA dst field [2:0]
+ * - muxDReg: 0=sign-extended immediate, 1=memory data (MDR), 2=ULA result (R)
+ * - opULA: ULA operation code (see UlaOperation enum)
+ *
+ * Mux selects rest on the path FETCH uses, not on 0.
+ */
+export const CONTROL_SIGNAL_DEFS = [
+  { name: "muxPC",   bitWidth: 1,           reset: 1,                description: "PC source mux select" },
+  { name: "wrPC",    bitWidth: 1,           reset: 0,                description: "Write enable for PC" },
+  { name: "wrIR",    bitWidth: 1,           reset: 0,                description: "Write enable for IR" },
+  { name: "rdMem",   bitWidth: 1,           reset: 0,                description: "Memory read enable" },
+  { name: "wrMem",   bitWidth: 1,           reset: 0,                description: "Memory write enable" },
+  { name: "muxAReg", bitWidth: 1,           reset: 1,                description: "GPR address mux select" },
+  { name: "muxDReg", bitWidth: 2,           reset: 2,                description: "GPR data mux select" },
+  { name: "wrReg",   bitWidth: 1,           reset: 0,                description: "Write enable for GPR" },
+  { name: "opULA",   bitWidth: ULA_OP_BITS, reset: UlaOperation.ADD, description: "ULA operation select" },
+] as const satisfies readonly ControlSignalDef[];
+
+export type ControlSignalName = (typeof CONTROL_SIGNAL_DEFS)[number]["name"];
 
 /**
  * Maps each opcode to its ordered sequence of CpuState steps that execute
@@ -55,48 +74,16 @@ export const OPCODE_SEQUENCES: Readonly<Partial<Record<Opcode, CpuState[]>>> = {
   // HLT and unknown opcodes are handled in doDecode()
 };
 
-/**
- * Control signal configuration for each CPU state.
- * Defines which control signals are active and their values for each state.
- * 
- * Signal values (mux inputs as wired in the default project):
- * - wrReg: 0=no write, 1=write to GPR
- * - muxAReg: 0=register field [10:8] (standard format), 1=ULA dst field [2:0]
- * - muxDReg: 0=sign-extended immediate, 1=memory data (MDR), 2=ULA result (R)
- * - wrPC: 0=no write, 1=write to PC
- * - muxPC: 0=branch target (MAR), 1=PC+1
- * - rdMem: 0=no read, 1=read from data memory
- * - wrMem: 0=no write, 1=write to data memory
- * - wrIR: 0=no write, 1=write to IR
- * - opULA: ULA operation code (see UlaOperation enum)
- */
-export interface ControlSignals {
-  wrIR?: number;
-  muxAReg?: number;
-  muxDReg?: number;
-  wrPC?: number;
-  muxPC?: number;
-  rdMem?: number;
-  wrMem?: number;
-  wrReg?: number;
-  opULA?: number;
-}
+/** A value for some of the control signals; a signal left out is not driven. */
+export type ControlSignals = Partial<Record<ControlSignalName, number>>;
 
 /**
  * Control signal values at rest, applied by `CPU.reset()` (the RESET entry
- * below). Mux selects rest on the path FETCH uses, not on 0.
+ * below).
  */
-export const DEFAULT_CONTROL_SIGNALS: Readonly<ControlSignals> = {
-  wrIR: 0,
-  muxAReg: 1,              // Default mux selection
-  muxDReg: 2,              // Default mux selection
-  wrPC: 0,
-  muxPC: 1,                // Default mux selection
-  rdMem: 0,
-  wrMem: 0,
-  wrReg: 0,
-  opULA: UlaOperation.ADD, // Default ULA operation
-};
+export const DEFAULT_CONTROL_SIGNALS: Readonly<ControlSignals> = Object.fromEntries(
+  CONTROL_SIGNAL_DEFS.map((d) => [d.name, d.reset]),
+);
 
 /**
  * Control signal configurations for each CPU state.
@@ -216,7 +203,7 @@ export const STATE_CONTROL_SIGNALS: Readonly<Partial<Record<CpuState, ControlSig
  * unit doesn't light its dot (see `getDrivenControlSignalPorts`). Every other
  * signal a state writes lights whether or not its value changed.
  */
-export const STATE_CLEANUP_SIGNALS: Readonly<Partial<Record<CpuState, (keyof ControlSignals)[]>>> = {
+export const STATE_CLEANUP_SIGNALS: Readonly<Partial<Record<CpuState, ControlSignalName[]>>> = {
   [CpuState.FETCH]:     ["wrReg", "muxAReg", "muxDReg", "rdMem", "wrMem", "opULA"],
   [CpuState.DECODE]:    ["wrPC", "wrIR"],
   [CpuState.WRITEREG1]: ["rdMem"],
@@ -338,15 +325,8 @@ export class CPU implements Clockable, Connectable {
   readonly in_flagNegativeGpr: InputPort<number>;
 
   // ── Output Ports (Control Signals) ───────────────────────────
-  readonly out_wrIR: OutputPort<number>;
-  readonly out_muxAReg: OutputPort<number>;
-  readonly out_muxDReg: OutputPort<number>;
-  readonly out_wrPC: OutputPort<number>;
-  readonly out_muxPC: OutputPort<number>;
-  readonly out_rdMem: OutputPort<number>;
-  readonly out_wrMem: OutputPort<number>;
-  readonly out_wrReg: OutputPort<number>;
-  readonly out_opULA: OutputPort<number>;
+  /** One `out_<name>` port per entry of `CONTROL_SIGNAL_DEFS`. */
+  readonly controlPorts: Readonly<Record<ControlSignalName, OutputPort<number>>>;
   readonly out_state: OutputPort<number>;
   readonly out_halted: OutputPort<boolean>;
 
@@ -355,21 +335,15 @@ export class CPU implements Clockable, Connectable {
     this.name = name;
 
     // Input ports
-    this.in_opcode = new InputPort<number>("in_opcode", "opcode", 5, Opcode.HLT);
-    this.in_flags = new InputPort<number>("in_flags", "number", 4, 0);
+    this.in_opcode = new InputPort<number>("in_opcode", "opcode", OPCODE_BITS, Opcode.HLT);
+    this.in_flags = new InputPort<number>("in_flags", "number", FLAG_COUNT, 0);
     this.in_flagZeroGpr = new InputPort<number>("in_flagZeroGpr", "number", 1, 0);
     this.in_flagNegativeGpr = new InputPort<number>("in_flagNegativeGpr", "number", 1, 0);
 
     // Control signal output ports
-    this.out_wrIR = new OutputPort<number>("out_wrIR", "number", 1, 0);
-    this.out_muxAReg = new OutputPort<number>("out_muxAReg", "number", 1, 1);
-    this.out_muxDReg = new OutputPort<number>("out_muxDReg", "number", 2, 2);
-    this.out_wrPC = new OutputPort<number>("out_wrPC", "number", 1, 0);
-    this.out_muxPC = new OutputPort<number>("out_muxPC", "number", 1, 1);
-    this.out_rdMem = new OutputPort<number>("out_rdMem", "number", 1, 0);
-    this.out_wrMem = new OutputPort<number>("out_wrMem", "number", 1, 0);
-    this.out_wrReg = new OutputPort<number>("out_wrReg", "number", 1, 0);
-    this.out_opULA = new OutputPort<number>("out_opULA", "number", 3, UlaOperation.ADD);
+    this.controlPorts = Object.fromEntries(
+      CONTROL_SIGNAL_DEFS.map((d) => [d.name, new OutputPort<number>(`out_${d.name}`, "number", d.bitWidth, d.reset)]),
+    ) as Record<ControlSignalName, OutputPort<number>>;
     this.out_state = new OutputPort<number>("out_state", "number", 4, CpuState.RESET);
     this.out_halted = new OutputPort<boolean>("out_halted", "boolean", 1, false);
 
@@ -465,15 +439,7 @@ export class CPU implements Clockable, Connectable {
       in_flags: this.in_flags,
       in_flagZeroGpr: this.in_flagZeroGpr,
       in_flagNegativeGpr: this.in_flagNegativeGpr,
-      out_muxPC: this.out_muxPC,
-      out_wrPC: this.out_wrPC,
-      out_wrIR: this.out_wrIR,
-      out_rdMem: this.out_rdMem,
-      out_wrMem: this.out_wrMem,
-      out_muxAReg: this.out_muxAReg,
-      out_muxDReg: this.out_muxDReg,
-      out_wrReg: this.out_wrReg,
-      out_opULA: this.out_opULA,
+      ...Object.fromEntries(CONTROL_SIGNAL_DEFS.map((d) => [`out_${d.name}`, this.controlPorts[d.name]])),
       out_state: this.out_state,
       out_halted: this.out_halted,
     };
@@ -942,37 +908,20 @@ export class CPU implements Clockable, Connectable {
       return;
     }
 
-    // Apply all configured signals
-    if (config.wrReg !== undefined) {
-      this.setSignalIfChanged(this.out_wrReg, config.wrReg, force_write);
-    }
-    if (config.muxAReg !== undefined) {
-      this.setSignalIfChanged(this.out_muxAReg, config.muxAReg, force_write);
-    }
-    if (config.muxDReg !== undefined) {
-      this.setSignalIfChanged(this.out_muxDReg, config.muxDReg, force_write);
-    }
-    if (config.wrPC !== undefined) {
-      this.setSignalIfChanged(this.out_wrPC, config.wrPC, force_write);
-    }
-    if (config.muxPC !== undefined) {
-      this.setSignalIfChanged(this.out_muxPC, config.muxPC, force_write);
-    }
-    if (config.rdMem !== undefined) {
-      this.setSignalIfChanged(this.out_rdMem, config.rdMem, force_write);
-    }
-    if (config.wrMem !== undefined) {
-      this.setSignalIfChanged(this.out_wrMem, config.wrMem, force_write);
-    }
-    if (config.wrIR !== undefined) {
-      this.setSignalIfChanged(this.out_wrIR, config.wrIR, force_write);
+    // Apply all configured signals. opULA is left to the switch below: EXECUTE
+    // takes it from the opcode, and it is never force-written.
+    for (const { name } of CONTROL_SIGNAL_DEFS) {
+      const value = config[name];
+      if (name !== "opULA" && value !== undefined) {
+        this.setSignalIfChanged(this.controlPorts[name], value, force_write);
+      }
     }
 
     // Special handling for state-specific logic
     switch (state) {
       case CpuState.EXECUTE:
         // EXECUTE: set ULA operation based on opcode
-        this.setSignalIfChanged(this.out_opULA, this.opcodeToUlaOp(opcode));
+        this.setSignalIfChanged(this.controlPorts.opULA, this.opcodeToUlaOp(opcode));
         break;
 
       case CpuState.WRITEPC: {
@@ -983,8 +932,8 @@ export class CPU implements Clockable, Connectable {
           (opcode === Opcode.JN && this._latchedFlagNegative);
 
         if (taken) {
-          this.setSignalIfChanged(this.out_wrPC, 1);
-          this.setSignalIfChanged(this.out_muxPC, 0); // branch target (MAR)
+          this.setSignalIfChanged(this.controlPorts.wrPC, 1);
+          this.setSignalIfChanged(this.controlPorts.muxPC, 0); // branch target (MAR)
         }
         break;
       }
@@ -992,7 +941,7 @@ export class CPU implements Clockable, Connectable {
       default:
         // For other states, apply opULA if configured
         if (config.opULA !== undefined) {
-          this.setSignalIfChanged(this.out_opULA, config.opULA);
+          this.setSignalIfChanged(this.controlPorts.opULA, config.opULA);
         }
         break;
     }

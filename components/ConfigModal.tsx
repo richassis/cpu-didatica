@@ -10,7 +10,7 @@ import { useIsUnsignedPort } from "@/lib/portKinds";
 import { getWidgetDefinition } from "@/lib/widgetDefinitions";
 import { ConfigPanelForType, ComponentConfig } from "@/components/widgets/ConfigPanel";
 import { CpuState, CPU_STATE_LABELS, ALL_CPU_STATES, isClockable, Constant } from "@/lib/simulator";
-import { Opcode, INSTRUCTION_SET } from "@/lib/simulator/ISA";
+import { Opcode, INSTRUCTION_SET, formatOpcodeBits, lookupInstruction } from "@/lib/simulator/ISA";
 import { OPCODE_SEQUENCES } from "@/lib/simulator/Cpu";
 import type { CPU } from "@/lib/simulator/Cpu";
 
@@ -401,7 +401,7 @@ export default function ConfigModal({ component, onClose }: Props) {
                 <option value="">Disable testing mode</option>
                 {Object.entries(INSTRUCTION_SET).map(([mnemonic, descriptor]) => (
                   <option key={mnemonic} value={descriptor.opcode}>
-                    {mnemonic} (0b{descriptor.opcode.toString(2).padStart(5, "0")})
+                    {mnemonic} (0b{formatOpcodeBits(descriptor.opcode)})
                   </option>
                 ))}
               </select>
@@ -410,10 +410,10 @@ export default function ConfigModal({ component, onClose }: Props) {
               {testingModeOpcode !== null && (
                 <div className="space-y-2 rounded-lg border border-line p-3">
                   {(() => {
-                    const selectedInstruction = Object.entries(INSTRUCTION_SET).find(([, descriptor]) => descriptor.opcode === testingModeOpcode);
-                    if (!selectedInstruction) return null;
+                    const descriptor = lookupInstruction(testingModeOpcode);
+                    if (!descriptor) return null;
 
-                    const [mnemonic, descriptor] = selectedInstruction;
+                    const { mnemonic } = descriptor;
                     const steps = OPCODE_SEQUENCES[testingModeOpcode] ?? [];
                     const isStandard = descriptor.format === "standard";
 

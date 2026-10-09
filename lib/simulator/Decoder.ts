@@ -24,25 +24,14 @@
 import { Clockable } from "./Clockable";
 import {
   Opcode,
-  INSTRUCTION_SET,
   ISA_WORD_MAX,
   ISA_WORD_SIZE,
   OPCODE_BITS,
   GPR_ADDR_BITS,
   OPERAND_BITS,
-  OPCODE_MASK,
-  OPCODE_SHIFT,
-  GPR_ADDR_MASK,
-  GPR_ADDR_SHIFT,
-  OPERAND_MASK,
-  OPERAND_SHIFT,
-  ULA_SRC_A_MASK,
-  ULA_SRC_A_SHIFT,
-  ULA_SRC_B_MASK,
-  ULA_SRC_B_SHIFT,
-  ULA_DST_MASK,
-  ULA_DST_SHIFT,
-  opcodeToMnemonic,
+  extractFields,
+  lookupInstruction,
+  signExtend,
 } from "./ISA";
 import { Connectable, type PortMap, InputPort, OutputPort } from "./Port";
 
@@ -160,50 +149,33 @@ export class Decoder implements Clockable, Connectable {
 
   private _decode(): void {
     const raw    = this.in_instruction.value & ISA_WORD_MAX;
-    const opcode = ((raw & OPCODE_MASK) >>> OPCODE_SHIFT) as Opcode;
-
-    let mnemonic: keyof typeof Opcode;
-    try {
-      mnemonic = opcodeToMnemonic(opcode);
-    } catch {
-      // Unknown opcode – update opcode output only
-      this.out_opcode.set(opcode);
-      return;
-    }
-
-    const desc = INSTRUCTION_SET[mnemonic];
+    const fields = extractFields(raw);
+    const opcode = fields.opcode as Opcode;
+    const desc   = lookupInstruction(opcode);
 
     // Always update the opcode output
     this.out_opcode.set(opcode);
 
-    if (desc.format === "ula") {
-      const srcA = (raw & ULA_SRC_A_MASK) >>> ULA_SRC_A_SHIFT;
-      const srcB = (raw & ULA_SRC_B_MASK) >>> ULA_SRC_B_SHIFT;
-      const dst  = (raw & ULA_DST_MASK)   >>> ULA_DST_SHIFT;
+    // Unknown opcode – update opcode output only
+    if (!desc) return;
 
-      this.out_gprAddrA.set(srcA);
-      this.out_gprAddrB.set(srcB);
-      this.out_dst.set(dst);
+    if (desc.format === "ula") {
+      this.out_gprAddrA.set(fields.srcA);
+      this.out_gprAddrB.set(fields.srcB);
+      this.out_dst.set(fields.dst);
 
       // Clear standard outputs
       this.out_operand.set(0);
       this.out_operandSigned.set(0);
     } else {
-      const gprAddr = (raw & GPR_ADDR_MASK) >>> GPR_ADDR_SHIFT;
-      const operand = (raw & OPERAND_MASK)  >>> OPERAND_SHIFT;
-
-      this.out_gprAddrA.set(gprAddr);
-      this.out_operand.set(operand);
+      this.out_gprAddrA.set(fields.gprAddr);
+      this.out_operand.set(fields.operand);
 
       // Sign-extend bit 7 into bits 15:8. `& ISA_WORD_MAX` is required, not
       // cosmetic: OutputPort.set() clamps a raw negative number to 0 instead
       // of wrapping it, so the two's-complement bit pattern must already be
       // non-negative by the time it reaches `.set()`.
-      const signBit = 1 << (OPERAND_BITS - 1);
-      const operandSigned = operand & signBit
-        ? (operand - (1 << OPERAND_BITS)) & ISA_WORD_MAX
-        : operand;
-      this.out_operandSigned.set(operandSigned);
+      this.out_operandSigned.set(signExtend(fields.operand, OPERAND_BITS) & ISA_WORD_MAX);
 
       // Clear ULA outputs
       this.out_gprAddrB.set(0);
