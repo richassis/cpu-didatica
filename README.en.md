@@ -6,7 +6,7 @@
 
 A visual CPU simulator built for Computer Architecture and Organization courses.
 
-[**Open the simulator →**](https://cpu-didatica.vercel.app)
+[**Open the simulator →**](https://cpu-didatica.vercel.app/?lang=en)
 
 [![MIT License](https://img.shields.io/badge/license-MIT-3fd69a.svg)](LICENSE)
 [![CI](https://github.com/richassis/cpu-didatica/actions/workflows/ci.yml/badge.svg)](https://github.com/richassis/cpu-didatica/actions/workflows/ci.yml)
@@ -21,9 +21,9 @@ A visual CPU simulator built for Computer Architecture and Organization courses.
 
 </div>
 
-> The simulator's interface, its help and its example programs are in **Portuguese**: it was
-> made for Brazilian undergraduate courses. The assembly language, register names and state
-> names are the usual ones and read the same in any language.
+> The simulator speaks **English** and **Portuguese**: the interface, the help, the guided tour
+> and the example programs. It follows your browser's language, and you can switch at any time
+> in Settings. The link above opens it in English.
 
 ---
 
@@ -59,7 +59,8 @@ they're in.
   lit, and the control signals sit in a strip underneath it.
 - **Inspect memory.** The instruction and data memories scroll and follow the address in use.
 - **Tune the view.** Values can be shown in hex, decimal, signed decimal or binary. There are
-  also light and dark themes, text size, animation speed and a choice of which wires to show.
+  also light and dark themes, text size, animation speed, a choice of which wires to show, and
+  the interface language (English or Portuguese).
 - **Learn in place.** The built-in help has a guide, the full ISA reference, a description of
   every datapath block and a guided tour on first visit.
 - **Start from an example.** Five programs are ready to load: a basic example, a FOR loop,
@@ -173,6 +174,7 @@ new layout reaches every user as soon as it is deployed. To change it:
 app/             the single page, plus the layout-saving route (development only)
 components/      canvas, blocks, dialogs; ProgramMode/ is the student interface
 lib/             stores (Zustand), assembler, disassembler, animation
+lib/i18n/        the interface text, in Portuguese (pt/) and English (en/)
 lib/simulator/   the domain: CPU, ALU, memories, registers, buses — no React
 public/          default-project.cpud, the reference datapath
 ```

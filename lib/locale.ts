@@ -15,6 +15,15 @@ export const LOCALES: readonly Locale[] = ["pt", "en"];
 /** Where the chosen language is persisted (`localeStore`). */
 export const LOCALE_STORAGE_KEY = "simulator-locale";
 
+/**
+ * Each language's own name, the way the language picker shows it: someone who
+ * landed in the wrong language still recognises their own.
+ */
+export const LOCALE_NAMES: Readonly<Record<Locale, { short: string; long: string }>> = {
+  pt: { short: "PT", long: "Português" },
+  en: { short: "EN", long: "English" },
+};
+
 /** The `<html lang>` value for each language. */
 export const HTML_LANG: Readonly<Record<Locale, string>> = { pt: "pt-BR", en: "en" };
 

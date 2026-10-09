@@ -56,7 +56,7 @@ export default function SaveProgramDialog({ onClose }: Props) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
 
-  const fileName = buildCodeFileName(baseName, extension);
+  const fileName = buildCodeFileName(baseName, extension, t.program.defaultName);
 
   const lineCount = useMemo(() => assemblySource.split("\n").length, [assemblySource]);
 
@@ -71,7 +71,10 @@ export default function SaveProgramDialog({ onClose }: Props) {
     e.preventDefault();
     // Remember the cleaned-up name, so the next save opens on it rather than
     // on whatever raw text was typed here.
-    setProgramName(sanitizeFileBaseName(stripKnownExtension(baseName)));
+    // The default name is stored as the language-neutral DEFAULT_PROGRAM_BASENAME,
+    // so it keeps reading as the default after a language switch.
+    const saved = sanitizeFileBaseName(stripKnownExtension(baseName), t.program.defaultName);
+    setProgramName(saved === t.program.defaultName ? DEFAULT_PROGRAM_BASENAME : saved);
     exportAssembly(fileName);
     onClose();
   };

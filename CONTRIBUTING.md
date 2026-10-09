@@ -9,7 +9,8 @@ que esperar de uma contribuição.
 
 - **Relate o que confundiu.** Se um aluno travou em algum ponto, isso é um bug de didática e
   vale uma [issue](https://github.com/richassis/cpu-didatica/issues/new/choose).
-- **Revise os textos da ajuda.** Eles ficam em `lib/helpContent.ts`.
+- **Revise os textos e as traduções.** Eles ficam em `lib/i18n/`, em português (`pt/`) e
+  em inglês (`en/`).
 - **Escreva um programa de exemplo** que mostre algo que os cinco atuais não mostram. Mande
   como issue com o `.asm` anexado, ou como PR em `lib/presetPrograms.ts`.
 - **Conte como foi usar em aula** nas
@@ -71,16 +72,38 @@ Algumas regras que mantêm o projeto coerente:
   siga os fios, por exemplo o sinal `out_wrPC` da UC.
 - **Comentários explicam o porquê.** O código diz o que faz, e o comentário conta a decisão
   por trás dele.
-- **A interface fala português.** Os textos que o aluno lê ficam em português. Código,
-  identificadores e comentários podem continuar em inglês, como já estão.
+- **Nenhum texto da interface direto no componente.** Tudo o que o aluno lê sai do catálogo
+  em `lib/i18n/` (veja [Traduções](#traduções)). Código, identificadores e comentários ficam
+  em inglês, como já estão.
 
 ### Adicionando uma instrução
 
 1. `lib/simulator/ISA.ts`: o opcode e o formato.
 2. `lib/simulator/Cpu.ts`: a sequência de estados em `OPCODE_SEQUENCES` e os sinais emitidos.
 3. `lib/assembler.ts` e `lib/disassemble.ts`: a sintaxe.
-4. `lib/helpContent.ts`: o texto da ajuda. O compilador avisa se faltar.
-5. Um programa de exemplo que use a instrução.
+4. `lib/i18n/pt/reference.tsx` e `lib/i18n/en/reference.tsx`: o texto da ajuda, nos dois
+   idiomas. O compilador avisa se faltar.
+5. Um programa de exemplo que use a instrução, em `lib/presetPrograms.ts`, com a versão em
+   português e em inglês.
+
+## Traduções
+
+A interface existe em português e em inglês. Os textos ficam em `lib/i18n/`, uma pasta por
+idioma e um arquivo por área (barra, painéis, Ajuda, tour…):
+
+- **`pt/` é a referência.** Ele define as chaves, e o tipo `Messages` sai dele.
+- **`en/` é tipado contra o `pt/`.** Uma chave que falta ou sobra no inglês quebra o
+  `npx tsc --noEmit`.
+- **No componente,** `const t = useT()` e depois `t.area.chave`. Fora do React,
+  `getMessages()`.
+- **Plurais e ordem das palavras** ficam em funções no catálogo, como
+  `lines: (n) => ...`. Frases com `<b>` ou `font-mono` no meio são funções que devolvem JSX.
+- **Nomes de botões citados em outros textos** (o tour, o guia) vêm de `common.ui`, para não
+  saírem de sincronia com o botão.
+- **Os exemplos** têm uma versão por idioma em `lib/presetPrograms.ts`. Só mudam comentários
+  e nomes de labels: as duas versões têm que montar as mesmas palavras.
+
+Achou uma tradução estranha? Abra uma issue ou mande o PR direto no arquivo da área.
 
 ## Commits
 
@@ -105,9 +128,11 @@ Contributions in English are welcome: issues, PRs and discussions alike.
 - Set up with `npm install && npm run dev` (Node.js 20.9+).
 - Branch from **`dev`** and open your PR against **`dev`**. `main` is what is deployed.
 - Before opening a PR, run `npx tsc --noEmit`, `npm run lint` (no new errors) and
-  `npm run build`. If the change is visual or affects the simulation, run the "Exemplo Básico"
+  `npm run build`. If the change is visual or affects the simulation, run the "Basic Example"
   program to the end in the browser and say what you checked.
 - Open an issue before large changes, such as a new instruction, block or interface change.
+- Interface text lives in `lib/i18n/`: `pt/` defines the keys and `en/` is typed against it,
+  so every string you add needs both languages. Fixes to the English wording are very welcome.
 - `lib/simulator/` is plain TypeScript with no React. Numbers live there once, and the UI reads
   them.
 - Text shown to students stays in Portuguese. Code and comments can be in English.

@@ -54,8 +54,8 @@ Ela roda no navegador e não precisa de instalação nem de conta. Basta mandar 
 - **Inspecionar as memórias.** A memória de instruções e a de dados ficam roláveis e seguem o
   endereço em uso.
 - **Ajustar a visualização.** Os valores podem ser mostrados em hexadecimal, decimal, decimal
-  com sinal ou binário. Também há tema claro e escuro, tamanho do texto, velocidade da animação
-  e quais fios mostrar.
+  com sinal ou binário. Também há tema claro e escuro, tamanho do texto, velocidade da animação,
+  quais fios mostrar e o idioma da interface (português ou inglês).
 - **Aprender sem sair da tela.** A ajuda traz um guia, a referência completa da ISA, a descrição
   de cada bloco do caminho de dados e um tour guiado no primeiro acesso.
 - **Começar de um exemplo.** Há cinco programas prontos: Exemplo Básico, laço FOR, IF-THEN-ELSE,
@@ -170,6 +170,7 @@ então um layout novo chega a todos os usuários assim que é publicado. Para al
 app/             página única e a rota de gravação do layout (só em desenvolvimento)
 components/      canvas, blocos, janelas; ProgramMode/ é a interface do aluno
 lib/             stores (Zustand), montador, desmontador, animação
+lib/i18n/        os textos da interface, em português (pt/) e inglês (en/)
 lib/simulator/   o domínio: CPU, ULA, memórias, registradores, barramentos — sem React
 public/          default-project.cpud, o caminho de dados de referência
 ```

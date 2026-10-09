@@ -47,7 +47,7 @@ const ILLEGAL_FILENAME_CHARS = /[\\/:*?"<>|\u0000-\u001F]/g;
  * regardless of the platform the student is on — the file may well be opened
  * somewhere other than where it was saved.
  */
-export function sanitizeFileBaseName(raw: string): string {
+export function sanitizeFileBaseName(raw: string, fallback = DEFAULT_PROGRAM_BASENAME): string {
   const cleaned = raw
     .trim()
     .replace(ILLEGAL_FILENAME_CHARS, "")
@@ -56,7 +56,7 @@ export function sanitizeFileBaseName(raw: string): string {
     .replace(/^[.\s-]+|[.\s-]+$/g, "")
     .slice(0, MAX_BASENAME_LENGTH);
 
-  return cleaned || DEFAULT_PROGRAM_BASENAME;
+  return cleaned || fallback;
 }
 
 /** Drop a known code extension from a file name, leaving the stem. */
@@ -66,9 +66,17 @@ export function stripKnownExtension(name: string): string {
   return match ? name.slice(0, -match.length) : name;
 }
 
-/** Full file name for a download, from a raw base name and a chosen extension. */
-export function buildCodeFileName(base: string, extension: CodeFileExtension): string {
-  return `${sanitizeFileBaseName(stripKnownExtension(base))}${extension}`;
+/**
+ * Full file name for a download, from a raw base name and a chosen extension.
+ * `fallback` names a file whose name is left blank (the interface passes the
+ * default name in its language).
+ */
+export function buildCodeFileName(
+  base: string,
+  extension: CodeFileExtension,
+  fallback = DEFAULT_PROGRAM_BASENAME,
+): string {
+  return `${sanitizeFileBaseName(stripKnownExtension(base), fallback)}${extension}`;
 }
 
 /**

@@ -8,6 +8,7 @@ import {
   type TextSize,
 } from "@/lib/displayStore";
 import { useT } from "@/lib/i18n";
+import LanguagePicker from "@/components/LanguagePicker";
 
 /** Button labels — "decSigned" is a valid NumericBase but not a word anyone should read. */
 const BASE_LABELS: Record<NumericBase, string> = {
@@ -147,6 +148,9 @@ export default function SimulationSettings() {
           <span>{labels.high}</span>
         </div>
       </div>
+
+      <Section title={labels.language} />
+      <LanguagePicker />
     </div>
   );
 }

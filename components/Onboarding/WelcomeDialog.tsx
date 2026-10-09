@@ -7,6 +7,7 @@ import { useOnboardingStore } from "@/lib/onboardingStore";
 import { useHelpStore } from "@/lib/helpStore";
 import SplashScreen from "@/components/Onboarding/SplashScreen";
 import { useT } from "@/lib/i18n";
+import LanguagePicker from "@/components/LanguagePicker";
 
 /** The three points of the welcome, in order; their text is `onboarding.welcome.points`. */
 const POINTS = [
@@ -71,7 +72,12 @@ function WelcomeFlow() {
         aria-label={t.ariaLabel}
         className="relative z-10 w-full max-w-lg rounded-2xl border border-line bg-surface p-7"
       >
-        <div className="t-panel text-fg">{t.title}</div>
+        {/* The language first met is the browser's guess; the corner lets a
+            visitor who reads the other one switch before reading on. */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="t-panel text-fg">{t.title}</div>
+          <LanguagePicker compact />
+        </div>
         <p className="mt-2 text-ui leading-relaxed text-fg-muted">{t.intro}</p>
 
         <ul className="mt-5 space-y-3">

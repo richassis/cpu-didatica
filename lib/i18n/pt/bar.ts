@@ -30,6 +30,7 @@ export const bar = {
     speedSlider: "Velocidade da animação",
     low: "Baixa",
     high: "Alta",
+    language: "Idioma",
   },
 
   theme: {

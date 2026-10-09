@@ -29,6 +29,7 @@ export const bar: Messages["bar"] = {
     speedSlider: "Animation speed",
     low: "Low",
     high: "High",
+    language: "Language",
   },
 
   theme: {

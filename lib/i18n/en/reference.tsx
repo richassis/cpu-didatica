@@ -14,7 +14,7 @@ export const reference: Messages["reference"] = {
       </>
     ),
     groups: {
-      loadStore: { title: "LDA and STA", registerMeaning: "destination (LDA) · source (STA)" },
+      loadStore: { title: "LDA and STA", registerMeaning: "dest. (LDA) · source (STA)" },
       ldai:      { title: "LDAI" },
       branches:  { title: "Branches — JZ, JN and JMP" },
       hlt:       { title: "HLT" },
