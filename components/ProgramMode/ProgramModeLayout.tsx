@@ -12,6 +12,7 @@ import SimulationBar from "@/components/ProgramMode/SimulationBar";
 import { useExecutionStore } from "@/lib/executionStore";
 import { useMemoryPanelStore } from "@/lib/memoryPanelStore";
 import useSimulationShortcuts from "@/lib/useSimulationShortcuts";
+import { useT } from "@/lib/i18n";
 
 /** Share of the screen the code region takes before a program is running. */
 const WIDTH_BEFORE_RUN = "60%";
@@ -52,6 +53,7 @@ const MEMORY_PANEL_W = 480;
  * the region is showing — either code panel collapsed, or the memories open.
  */
 export default function ProgramModeLayout() {
+  const t = useT();
   const isTimelineActive = useExecutionStore((s) => s.isTimelineActive);
   const inspectedMemoryId = useMemoryPanelStore((s) => s.inspectedMemoryId);
   const memoryOpen = inspectedMemoryId !== null;
@@ -142,7 +144,7 @@ export default function ProgramModeLayout() {
           ) : (
             <div className="flex min-h-0 flex-1">
               {asmCollapsed ? (
-                <CollapsedRail label="Ling. Montagem" onExpand={() => setAsmCollapsed(false)} />
+                <CollapsedRail label={t.common.ui.assemblyPanel} onExpand={() => setAsmCollapsed(false)} />
               ) : (
                 <div className="min-h-0 min-w-0 flex-1">
                   <AssemblyPanel onToggleCollapse={() => setAsmCollapsed(true)} />
@@ -150,7 +152,7 @@ export default function ProgramModeLayout() {
               )}
 
               {machineCollapsed ? (
-                <CollapsedRail label="Ling. Máquina" onExpand={() => setMachineCollapsed(false)} />
+                <CollapsedRail label={t.common.ui.machinePanel} onExpand={() => setMachineCollapsed(false)} />
               ) : (
                 <AssembledPanel onToggleCollapse={() => setMachineCollapsed(true)} />
               )}
@@ -160,7 +162,7 @@ export default function ProgramModeLayout() {
           <div
             role="separator"
             aria-orientation="vertical"
-            aria-label="Redimensionar painel de códigos"
+            aria-label={t.program.layout.resize}
             onPointerDown={handleDragStart}
             className="absolute right-0 top-0 h-full w-2 cursor-col-resize bg-transparent hover:bg-line-strong"
           >
@@ -189,11 +191,12 @@ export default function ProgramModeLayout() {
  * neither panel component has to know how to draw its own collapsed state.
  */
 function CollapsedRail({ label, onExpand }: { label: string; onExpand: () => void }) {
+  const t = useT();
   return (
     <button
       onClick={onExpand}
       aria-expanded="false"
-      title={`Expandir ${label}`}
+      title={t.program.layout.expand(label)}
       className="flex shrink-0 flex-col items-center gap-2 border-r border-line bg-surface py-3 transition-colors hover:bg-raised"
       style={{ width: RAIL_W }}
     >

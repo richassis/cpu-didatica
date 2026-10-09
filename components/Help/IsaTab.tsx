@@ -3,8 +3,8 @@
 import { useMemo, useState } from "react";
 import { Opcode, INSTRUCTION_SET, INSTRUCTIONS_BY_OPCODE, OPCODE_SEQUENCES } from "@/lib/simulator";
 import { OPCODE_SHIFT, formatOpcodeBits } from "@/lib/simulator/ISA";
-import { assemble, type AssemblerMessage } from "@/lib/assembler";
-import { useT } from "@/lib/i18n";
+import { assemble } from "@/lib/assembler";
+import { useT, type Messages } from "@/lib/i18n";
 import { INSTRUCTION_HELP } from "@/lib/helpContent";
 import BitFields, { wordFields, type WordField } from "@/components/Help/BitFields";
 
@@ -15,23 +15,24 @@ type Mnemonic = keyof typeof Opcode;
  * of instructions that read the 16 bits the same way, rather than two generic
  * layouts the student has to specialise in their head.
  */
-const FORMAT_GROUPS: { title: string; mnemonics: Mnemonic[]; registerMeaning?: string }[] = [
-  { title: "LDA e STA", mnemonics: ["LDA", "STA"], registerMeaning: "destino (LDA) · fonte (STA)" },
-  { title: "LDAI", mnemonics: ["LDAI"] },
-  { title: "Desvios — JZ, JN e JMP", mnemonics: ["JZ", "JN", "JMP"] },
-  { title: "HLT", mnemonics: ["HLT"] },
-  { title: "ULA — ADD, SUB, AND e OR", mnemonics: ["ADD", "SUB", "AND", "OR"] },
-  { title: "NOT", mnemonics: ["NOT"] },
+const FORMAT_GROUPS: { id: keyof Messages["reference"]["isa"]["groups"]; mnemonics: Mnemonic[] }[] = [
+  { id: "loadStore", mnemonics: ["LDA", "STA"] },
+  { id: "ldai",      mnemonics: ["LDAI"] },
+  { id: "branches",  mnemonics: ["JZ", "JN", "JMP"] },
+  { id: "hlt",       mnemonics: ["HLT"] },
+  { id: "alu",       mnemonics: ["ADD", "SUB", "AND", "OR"] },
+  { id: "not",       mnemonics: ["NOT"] },
 ];
 
 /** The field layout one group uses, labelled for that group. */
-function groupFields(group: (typeof FORMAT_GROUPS)[number]): WordField[] {
+function groupFields(group: (typeof FORMAT_GROUPS)[number], t: Messages): WordField[] {
   const { opcode, operands } = INSTRUCTION_SET[group.mnemonics[0]];
   const operandLabel = operands.find((o) => o.field === "operand")?.label;
-  return wordFields(opcode << OPCODE_SHIFT).fields.map((f): WordField => {
+  const registerMeaning = t.reference.isa.groups[group.id].registerMeaning;
+  return wordFields(opcode << OPCODE_SHIFT, t.reference.bitFields).fields.map((f): WordField => {
     if (f.kind === "opcode") return { ...f, meaning: undefined };
     if (f.unused) return { ...f, label: "—", kind: "pad" };
-    if (f.kind === "register" && group.registerMeaning) return { ...f, meaning: group.registerMeaning };
+    if (f.kind === "register" && registerMeaning) return { ...f, meaning: registerMeaning };
     if (f.kind === "operand" && operandLabel) return { ...f, label: operandLabel };
     return f;
   });
@@ -60,71 +61,60 @@ const binGroups = (n: number) => bin(n, 16).replace(/(.{4})(?=.)/g, "$1 ");
 /** A word typed in hex or binary, or an instruction typed in assembly. */
 function parseEncoderInput(
   text: string,
-  formatError: (message: AssemblerMessage) => string,
+  messages: Messages,
 ): { word?: number; error?: string } {
   const t = text.trim();
   if (!t) return {};
 
   if (/^0x[0-9a-f]{1,4}$/i.test(t)) return { word: parseInt(t, 16) };
   if (/^(0b)?[01]{16}$/i.test(t)) return { word: parseInt(t.replace(/^0b/i, ""), 2) };
-  if (/^0x/i.test(t)) return { error: "Uma palavra tem até 4 dígitos hexadecimais (16 bits)." };
+  if (/^0x/i.test(t)) return { error: messages.reference.isa.tooManyHexDigits };
 
   const result = assemble(t);
   if (!result) return {};
-  if (result.errors.length > 0) return { error: formatError(result.errors[0].message) };
-  if (result.words.length !== 1) return { error: "Digite uma instrução por vez." };
+  if (result.errors.length > 0) return { error: messages.assembler.format(result.errors[0].message) };
+  if (result.words.length !== 1) return { error: messages.reference.isa.oneInstruction };
   return { word: result.words[0] };
 }
 
 export default function IsaTab() {
   const [input, setInput] = useState("ADD R1, R2, R3");
   const t = useT();
-  const parsed = useMemo(() => parseEncoderInput(input, t.assembler.format), [input, t]);
-  const decoded = parsed.word !== undefined ? wordFields(parsed.word) : null;
+  const parsed = useMemo(() => parseEncoderInput(input, t), [input, t]);
+  const decoded = parsed.word !== undefined ? wordFields(parsed.word, t.reference.bitFields) : null;
+  const isa = t.reference.isa;
 
   return (
     <div className="space-y-8">
       <section>
-        <h3 className="t-node mb-1 text-fg">Uma instrução tem 16 bits</h3>
-        <p className="mb-4 text-ui leading-relaxed text-fg-muted">
-          Os 5 primeiros bits são sempre o <b className="text-fg">opcode</b>, que diz qual instrução é.
-          O resto depende do formato de cada instrução: um registrador e um endereço{" "}
-          <b className="text-fg">M</b>, um registrador e um valor <b className="text-fg">N</b>, só um
-          endereço, três registradores da ULA — ou nada, no HLT. Campos marcados com{" "}
-          <span className="font-mono text-fg">—</span> não são usados.
-        </p>
+        <h3 className="t-node mb-1 text-fg">{isa.formatHeading}</h3>
+        <p className="mb-4 text-ui leading-relaxed text-fg-muted">{isa.formatIntro()}</p>
 
         <div className="space-y-5">
           {FORMAT_GROUPS.map((group) => (
-            <div key={group.title}>
-              <div className="t-section mb-1.5">{group.title}</div>
-              <BitFields fields={groupFields(group)} />
+            <div key={group.id}>
+              <div className="t-section mb-1.5">{isa.groups[group.id].title}</div>
+              <BitFields fields={groupFields(group, t)} />
             </div>
           ))}
         </div>
       </section>
 
       <section>
-        <h3 className="t-node mb-1 text-fg">As {INSTRUCTIONS_BY_OPCODE.length} instruções</h3>
-        <p className="mb-3 text-ui leading-relaxed text-fg-muted">
-          <b className="text-fg">Rd</b> é o destino, <b className="text-fg">Rs</b>, <b className="text-fg">Ra</b> e{" "}
-          <b className="text-fg">Rb</b> são fontes, <b className="text-fg">M</b> é um endereço de memória
-          (0 a 255) ou label, e <b className="text-fg">N</b> é um valor de −128 a 127 (de 128 a 255 é o mesmo
-          byte, lido como negativo). Clique numa linha
-          para ver a instrução codificada abaixo.
-        </p>
+        <h3 className="t-node mb-1 text-fg">{isa.instructionsHeading(INSTRUCTIONS_BY_OPCODE.length)}</h3>
+        <p className="mb-3 text-ui leading-relaxed text-fg-muted">{isa.instructionsIntro()}</p>
 
         <div className="overflow-x-auto rounded-lg border border-line">
           <table className="w-full border-collapse text-left text-small">
             <thead>
               <tr className="border-b border-line bg-raised text-fg-muted">
-                <th className="px-2.5 py-1.5 font-normal">Opcode</th>
-                <th className="px-2.5 py-1.5 font-normal">Sintaxe</th>
-                <th className="px-2.5 py-1.5 font-normal">Palavra do exemplo</th>
-                <th className="px-2.5 py-1.5 font-normal">Efeito</th>
-                <th className="px-2.5 py-1.5 font-normal">Formato</th>
-                <th className="px-2.5 py-1.5 font-normal">Flags</th>
-                <th className="px-2.5 py-1.5 font-normal">Ticks</th>
+                <th className="px-2.5 py-1.5 font-normal">{isa.columns.opcode}</th>
+                <th className="px-2.5 py-1.5 font-normal">{isa.columns.syntax}</th>
+                <th className="px-2.5 py-1.5 font-normal">{isa.columns.exampleWord}</th>
+                <th className="px-2.5 py-1.5 font-normal">{isa.columns.effect}</th>
+                <th className="px-2.5 py-1.5 font-normal">{isa.columns.format}</th>
+                <th className="px-2.5 py-1.5 font-normal">{isa.columns.flags}</th>
+                <th className="px-2.5 py-1.5 font-normal">{isa.columns.ticks}</th>
               </tr>
             </thead>
             <tbody>
@@ -155,8 +145,8 @@ export default function IsaTab() {
                         </>
                       )}
                     </td>
-                    <td className="px-2.5 py-1.5 font-mono text-fg-muted">{help.effect}</td>
-                    <td className="px-2.5 py-1.5 text-fg-muted">{d.format === "ula" ? "ULA" : "padrão"}</td>
+                    <td className="px-2.5 py-1.5 font-mono text-fg-muted">{t.reference.instructions[d.mnemonic].effect}</td>
+                    <td className="px-2.5 py-1.5 text-fg-muted">{isa.formats[d.format]}</td>
                     <td className="px-2.5 py-1.5 font-mono text-fg-muted">{help.flags}</td>
                     <td className="num px-2.5 py-1.5 font-mono text-fg-muted">{tickCount(d.opcode)}</td>
                   </tr>
@@ -165,21 +155,12 @@ export default function IsaTab() {
             </tbody>
           </table>
         </div>
-        <p className="mt-2 text-caption leading-snug text-fg-faint">
-          Ticks: quantos ciclos de clock a instrução leva, contando BUSCA e DECODIFICA. As
-          operações da ULA atualizam as flags Z (zero), C (vai-um), N (negativo) e V (overflow) da
-          ULA e da UC; LDA e LDAI atualizam só Z e N da UC.
-          Os desvios leem a última flag capturada.
-        </p>
+        <p className="mt-2 text-caption leading-snug text-fg-faint">{isa.ticksNote}</p>
       </section>
 
       <section>
-        <h3 className="t-node mb-1 text-fg">Codificador</h3>
-        <p className="mb-3 text-ui leading-relaxed text-fg-muted">
-          Digite uma instrução (<span className="font-mono">LDAI R0, -3</span>) ou uma palavra de
-          máquina em hexadecimal (<span className="font-mono">0x2143</span>) ou binário, e veja os bits
-          divididos em campos.
-        </p>
+        <h3 className="t-node mb-1 text-fg">{isa.encoderHeading}</h3>
+        <p className="mb-3 text-ui leading-relaxed text-fg-muted">{isa.encoderIntro()}</p>
 
         <input
           value={input}
@@ -187,7 +168,7 @@ export default function IsaTab() {
           spellCheck={false}
           autoCapitalize="off"
           autoComplete="off"
-          aria-label="Instrução ou palavra de máquina"
+          aria-label={isa.encoderInput}
           placeholder="ADD R1, R2, R3"
           className="h-9 w-full max-w-md rounded-lg border border-line bg-sunken px-3 font-mono text-ui text-fg placeholder:text-fg-faint focus:border-line-strong focus:outline-none"
         />
@@ -203,12 +184,12 @@ export default function IsaTab() {
             <div className="space-y-3">
               <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 font-mono text-ui">
                 <span className="text-fg">
-                  {decoded.mnemonic ?? "opcode desconhecido"}
+                  {decoded.mnemonic ?? isa.unknownOpcode}
                 </span>
                 <span className="text-fg-muted">{hex(parsed.word)}</span>
                 <span className="text-fg-faint">{bin(parsed.word, 16)}</span>
                 {decoded.mnemonic && (
-                  <span className="text-fg-faint">{INSTRUCTION_HELP[decoded.mnemonic as keyof typeof Opcode].effect}</span>
+                  <span className="text-fg-faint">{t.reference.instructions[decoded.mnemonic as Mnemonic].effect}</span>
                 )}
               </div>
               <BitFields fields={decoded.fields} word={parsed.word} />

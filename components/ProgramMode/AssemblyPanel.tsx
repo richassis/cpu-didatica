@@ -189,14 +189,14 @@ export default function AssemblyPanel({ onToggleCollapse }: { onToggleCollapse: 
       <button
         onClick={onToggleCollapse}
         aria-expanded="true"
-        title="Recolher Ling. Montagem"
+        title={t.program.assembly.collapse}
         className="flex shrink-0 items-center justify-between border-b border-line px-4 py-2 text-left transition-colors hover:bg-raised"
       >
         <span className="flex items-center gap-2">
-          <h2 className="t-panel text-fg">Ling. Montagem</h2>
+          <h2 className="t-panel text-fg">{t.common.ui.assemblyPanel}</h2>
           {isLocked && (
             <span className="rounded-md border border-st-warn px-1.5 py-0.5 font-mono text-caption text-st-warn">
-              travado
+              {t.program.assembly.locked}
             </span>
           )}
         </span>
@@ -206,7 +206,7 @@ export default function AssemblyPanel({ onToggleCollapse }: { onToggleCollapse: 
       {/* ── Preset selector ── */}
       <div className="shrink-0 border-b border-line px-3 py-2">
         <div className="flex items-center gap-2">
-          <label className="t-section shrink-0">Programa</label>
+          <label className="t-section shrink-0">{t.common.ui.program}</label>
           <select
             value={activePreset?.id ?? "__custom"}
             onChange={(e) => {
@@ -216,7 +216,7 @@ export default function AssemblyPanel({ onToggleCollapse }: { onToggleCollapse: 
             className="h-9 flex-1 cursor-pointer rounded-lg border border-line bg-sunken px-2 font-mono text-small text-fg focus:border-line-strong focus:outline-none disabled:cursor-not-allowed disabled:opacity-40"
           >
             {!activePreset && (
-              <option value="__custom" disabled>Personalizado</option>
+              <option value="__custom" disabled>{t.program.assembly.custom}</option>
             )}
             {PRESET_PROGRAMS.map((p) => (
               <option key={p.id} value={p.id}>{p.name[locale]}</option>
@@ -291,7 +291,7 @@ export default function AssemblyPanel({ onToggleCollapse }: { onToggleCollapse: 
               caret-st-active overflow-auto whitespace-pre ${FONT_CLASS} ${PAD_CLASS}
               ${isLocked ? "cursor-not-allowed" : ""}`}
             style={{ color: "transparent" }}
-            aria-label="Código-fonte assembly"
+            aria-label={t.program.assembly.source}
           />
         </div>
       </div>
@@ -302,7 +302,7 @@ export default function AssemblyPanel({ onToggleCollapse }: { onToggleCollapse: 
           {assemblyErrors.length > 0 && (
             <div className="space-y-0.5 rounded-lg border border-st-error px-2 py-1.5">
               <p className="font-mono text-small text-st-error">
-                Erros de montagem ({assemblyErrors.length})
+                {t.program.assembly.errors(assemblyErrors.length)}
               </p>
               {assemblyErrors.map((err, i) => (
                 <div key={i} className="font-mono text-small text-fg-muted">
@@ -313,7 +313,7 @@ export default function AssemblyPanel({ onToggleCollapse }: { onToggleCollapse: 
           )}
           {!assemblySource.trim() && (
             <div className="rounded-lg border border-st-warn px-2 py-1 font-mono text-small text-st-warn">
-              Código vazio — nada a montar
+              {t.program.assembly.empty}
             </div>
           )}
         </div>

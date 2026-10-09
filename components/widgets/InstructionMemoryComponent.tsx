@@ -14,11 +14,7 @@ import MemoryViewer from "@/components/MemoryViewer";
 import AddressList from "@/components/AddressList";
 import InstructionBuilder from "@/components/InstructionBuilder";
 import { decodeMnemonic } from "@/lib/disassemble";
-
-/** Student-visible text of this widget, in one place for translation. */
-const LABELS = {
-  viewAll: "Ver o programa inteiro",
-} as const;
+import { useT } from "@/lib/i18n";
 
 /**
  * Instruction memory. Same shape family as data memory — a spine and a full,
@@ -36,6 +32,7 @@ const LABELS = {
  */
 export default function InstructionMemoryComponent({ component, zoom }: Props) {
   const { id } = component;
+  const t = useT();
   const [builderOpen, setBuilderOpen] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState(0);
@@ -82,7 +79,7 @@ export default function InstructionMemoryComponent({ component, zoom }: Props) {
               }}
               className="shrink-0 rounded p-0.5 text-fg-faint transition-colors hover:text-fg"
               data-tour="imem-list"
-              title={LABELS.viewAll}
+              title={t.canvas.instructionMemory.viewAll}
             >
               <List size={12} strokeWidth={1.5} />
             </button>

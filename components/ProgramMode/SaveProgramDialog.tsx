@@ -5,11 +5,13 @@ import { createPortal } from "react-dom";
 import { useProgramDataStore } from "@/lib/programDataStore";
 import {
   CODE_FILE_EXTENSIONS,
+  DEFAULT_PROGRAM_BASENAME,
   buildCodeFileName,
   sanitizeFileBaseName,
   stripKnownExtension,
   type CodeFileExtension,
 } from "@/lib/codeFile";
+import { useT } from "@/lib/i18n";
 
 interface Props {
   onClose: () => void;
@@ -25,12 +27,18 @@ interface Props {
  * on disk.
  */
 export default function SaveProgramDialog({ onClose }: Props) {
+  const t = useT();
+  const L = t.program.save;
   const assemblySource = useProgramDataStore((s) => s.assemblySource);
   const storedName = useProgramDataStore((s) => s.programName);
   const setProgramName = useProgramDataStore((s) => s.setProgramName);
   const exportAssembly = useProgramDataStore((s) => s.exportAssembly);
 
-  const [baseName, setBaseName] = useState(storedName);
+  // A program nobody has named yet is stored under the default name; offer it
+  // in the interface language.
+  const [baseName, setBaseName] = useState(
+    storedName === DEFAULT_PROGRAM_BASENAME ? t.program.defaultName : storedName
+  );
   const [extension, setExtension] = useState<CodeFileExtension>(".asm");
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -82,11 +90,11 @@ export default function SaveProgramDialog({ onClose }: Props) {
         className="w-[420px] max-w-full rounded-2xl border border-line bg-surface p-6"
       >
         <h3 id="save-program-title" className="t-panel mb-5 text-fg">
-          Salvar programa
+          {L.title}
         </h3>
 
         <label className="t-section mb-1.5 block" htmlFor="save-program-name">
-          Nome
+          {L.name}
         </label>
         <input
           id="save-program-name"
@@ -99,10 +107,10 @@ export default function SaveProgramDialog({ onClose }: Props) {
         />
 
         <p className="mb-5 font-mono text-small text-fg-faint">
-          Será salvo como <span className="text-fg-muted">{fileName}</span>
+          {L.savedAs} <span className="text-fg-muted">{fileName}</span>
         </p>
 
-        <span className="t-section mb-1.5 block">Tipo</span>
+        <span className="t-section mb-1.5 block">{L.type}</span>
         <div className="mb-5 flex items-center gap-1">
           {CODE_FILE_EXTENSIONS.map((ext) => (
             <button
@@ -122,7 +130,7 @@ export default function SaveProgramDialog({ onClose }: Props) {
         </div>
 
         <div className="mb-5 border-t border-line pt-3 font-mono text-small text-fg-faint">
-          {lineCount} {lineCount === 1 ? "linha" : "linhas"} · {byteCount} bytes
+          {L.stats(lineCount, byteCount)}
         </div>
 
         <div className="flex justify-end gap-2">
@@ -131,13 +139,13 @@ export default function SaveProgramDialog({ onClose }: Props) {
             onClick={onClose}
             className="h-8 rounded-lg border border-line px-3 text-xs text-fg-muted transition-colors hover:border-line-strong hover:text-fg"
           >
-            Cancelar
+            {L.cancel}
           </button>
           <button
             type="submit"
             className="h-8 rounded-lg border border-st-active px-3 text-xs text-st-active transition-colors hover:bg-st-active/10"
           >
-            Salvar
+            {t.common.ui.save}
           </button>
         </div>
       </form>

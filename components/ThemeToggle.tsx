@@ -2,17 +2,19 @@
 
 import { Sun, Moon } from "lucide-react";
 import { useThemeStore } from "@/lib/themeStore";
+import { useT } from "@/lib/i18n";
 
 /**
  * Switches between the light and dark colour profiles. The store itself puts
  * the choice on <html> (see `themeStore.ts`).
  */
 export default function ThemeToggle() {
+  const t = useT().bar.theme;
   const theme = useThemeStore((s) => s.theme);
   const toggleTheme = useThemeStore((s) => s.toggleTheme);
 
   const isDark = theme === "dark";
-  const title = isDark ? "Mudar para o modo claro" : "Mudar para o modo escuro";
+  const title = isDark ? t.toLight : t.toDark;
 
   return (
     <button
@@ -22,7 +24,7 @@ export default function ThemeToggle() {
       aria-label={title}
     >
       {isDark ? <Sun size={14} strokeWidth={1.5} /> : <Moon size={14} strokeWidth={1.5} />}
-      {isDark ? "Claro" : "Escuro"}
+      {isDark ? t.light : t.dark}
     </button>
   );
 }

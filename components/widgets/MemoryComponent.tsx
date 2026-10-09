@@ -12,11 +12,7 @@ import { addrBitsFor, fmtAddr, ADDRESS_HIGHLIGHT_BG } from "@/lib/memoryFormat";
 import NodeShell from "@/components/widgets/NodeShell";
 import MemoryViewer from "@/components/MemoryViewer";
 import AddressList from "@/components/AddressList";
-
-/** Student-visible text of this widget, in one place for translation. */
-const LABELS = {
-  viewAll: "Ver toda a memória",
-} as const;
+import { useT } from "@/lib/i18n";
 
 /**
  * Data memory.
@@ -28,6 +24,7 @@ const LABELS = {
  */
 export default function MemoryComponent({ component, zoom }: Props) {
   const { id } = component;
+  const t = useT();
   const [editMode, setEditMode] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false);
   // Poking values is an authoring act, so it belongs to edit mode. In program
@@ -79,7 +76,7 @@ export default function MemoryComponent({ component, zoom }: Props) {
               openListing();
             }}
             className="shrink-0 rounded p-0.5 text-fg-faint transition-colors hover:text-fg"
-            title={LABELS.viewAll}
+            title={t.canvas.memory.viewAll}
           >
             <List size={12} strokeWidth={1.5} />
           </button>

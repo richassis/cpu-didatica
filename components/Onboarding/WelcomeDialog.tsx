@@ -6,12 +6,14 @@ import { CircuitBoard, Hammer, Play } from "lucide-react";
 import { useOnboardingStore } from "@/lib/onboardingStore";
 import { useHelpStore } from "@/lib/helpStore";
 import SplashScreen from "@/components/Onboarding/SplashScreen";
+import { useT } from "@/lib/i18n";
 
+/** The three points of the welcome, in order; their text is `onboarding.welcome.points`. */
 const POINTS = [
-  { icon: CircuitBoard, title: "Escreva em assembly", body: "Um programa curto, ou um dos exemplos prontos." },
-  { icon: Hammer, title: "Monte e simule", body: "Veja o texto virar palavras de 16 bits e o programa rodar." },
-  { icon: Play, title: "Acompanhe cada tick", body: "Os valores viajam pelo caminho de dados, passo a passo." },
-];
+  { id: "write", icon: CircuitBoard },
+  { id: "assemble", icon: Hammer },
+  { id: "follow", icon: Play },
+] as const;
 
 /**
  * The first thing a new visitor meets, and again whenever they ask for it in
@@ -40,13 +42,14 @@ function WelcomeFlow() {
   const startTour = useOnboardingStore((s) => s.startTour);
   const showHelp = useHelpStore((s) => s.show);
   const primaryRef = useRef<HTMLButtonElement>(null);
+  const t = useT().onboarding.welcome;
 
   useEffect(() => {
     if (stage === "choices") primaryRef.current?.focus();
   }, [stage]);
 
   useEffect(() => {
-    // Only Esc is handled here. Enter and Space belong to the Continuar button,
+    // Only Esc is handled here. Enter and Space belong to the Continue button,
     // which has focus: handling them as well would fire twice — once here and
     // once as the button's own click — and skip the welcome screen.
     const onKeyDown = (e: KeyboardEvent) => {
@@ -65,24 +68,21 @@ function WelcomeFlow() {
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Boas-vindas"
+        aria-label={t.ariaLabel}
         className="relative z-10 w-full max-w-lg rounded-2xl border border-line bg-surface p-7"
       >
-        <div className="t-panel text-fg">Bem-vindo à CPU Didática</div>
-        <p className="mt-2 text-ui leading-relaxed text-fg-muted">
-          Um simulador para ver, tick a tick, como uma CPU executa um programa: da instrução na
-          memória até o resultado gravado no registrador.
-        </p>
+        <div className="t-panel text-fg">{t.title}</div>
+        <p className="mt-2 text-ui leading-relaxed text-fg-muted">{t.intro}</p>
 
         <ul className="mt-5 space-y-3">
-          {POINTS.map(({ icon: Icon, title, body }) => (
-            <li key={title} className="flex items-start gap-3">
+          {POINTS.map(({ id, icon: Icon }) => (
+            <li key={id} className="flex items-start gap-3">
               <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-line text-st-active">
                 <Icon size={16} strokeWidth={1.5} />
               </span>
               <div>
-                <div className="t-node text-fg">{title}</div>
-                <div className="text-small text-fg-muted">{body}</div>
+                <div className="t-node text-fg">{t.points[id].title}</div>
+                <div className="text-small text-fg-muted">{t.points[id].body}</div>
               </div>
             </li>
           ))}
@@ -94,13 +94,13 @@ function WelcomeFlow() {
             onClick={startTour}
             className="h-9 rounded-lg border border-st-active bg-st-active/10 px-4 text-ui text-fg transition-colors hover:bg-st-active/20"
           >
-            Fazer o tutorial
+            {t.takeTour}
           </button>
           <button
             onClick={dismissWelcome}
             className="h-9 rounded-lg border border-line px-4 text-ui text-fg-muted transition-colors hover:border-line-strong hover:text-fg"
           >
-            Explorar sozinho
+            {t.explore}
           </button>
           <button
             onClick={() => {
@@ -109,7 +109,7 @@ function WelcomeFlow() {
             }}
             className="h-9 px-2 text-ui text-fg-faint transition-colors hover:text-fg"
           >
-            Abrir a ajuda
+            {t.openHelp}
           </button>
         </div>
       </div>

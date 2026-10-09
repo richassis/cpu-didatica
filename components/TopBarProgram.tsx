@@ -7,7 +7,7 @@ import { useProjectStore } from "@/lib/projectStore";
 import { DEFAULT_PROJECT_ID, isDefaultProject } from "@/lib/defaultProject";
 import { useProgramDataStore } from "@/lib/programDataStore";
 import { EDITOR_ENABLED } from "@/lib/editorFlag";
-import { CODE_FILE_ACCEPT } from "@/lib/codeFile";
+import { CODE_FILE_ACCEPT, DEFAULT_PROGRAM_BASENAME } from "@/lib/codeFile";
 import SaveProgramDialog from "@/components/ProgramMode/SaveProgramDialog";
 import { useLayoutStore, ZOOM_MIN, ZOOM_MAX } from "@/lib/store";
 import { useCanvasViewStore } from "@/lib/canvasViewStore";
@@ -16,7 +16,7 @@ import HelpDialog from "@/components/Help/HelpDialog";
 import { useHelpStore } from "@/lib/helpStore";
 import ThemeToggle from "./ThemeToggle";
 import ErrorToast from "./ErrorToast";
-import { getMessages } from "@/lib/i18n";
+import { getMessages, useT } from "@/lib/i18n";
 
 /**
  * Top bar for Program Mode (the default, end-user view).
@@ -30,6 +30,7 @@ import { getMessages } from "@/lib/i18n";
  * see it, and `enterEditMode` refuses anyway.
  */
 export default function TopBarProgram() {
+  const t = useT();
   const enterEditMode = useModeStore((s) => s.enterEditMode);
   const activeTabId = useProjectStore((s) => s.activeTabId);
   const setActiveTab = useProjectStore((s) => s.setActiveTab);
@@ -92,11 +93,11 @@ export default function TopBarProgram() {
       {/* Left: what is open. The name is the anchor the file actions act on —
           without it "Salvar" has no visible subject. */}
       <div className="flex min-w-0 items-center gap-3">
-        <span className="t-body shrink-0 select-none text-fg">CPU Didática</span>
+        <span className="t-body shrink-0 select-none text-fg">{t.bar.topBar.appName}</span>
         <span className="h-5 w-px shrink-0 bg-line" />
         <span className="truncate font-mono text-small text-fg-faint">
-          {programName}
-          <span className="text-fg-muted"> · {lineCount} linhas</span>
+          {programName === DEFAULT_PROGRAM_BASENAME ? t.program.defaultName : programName}
+          <span className="text-fg-muted"> · {t.bar.topBar.lines(lineCount)}</span>
         </span>
       </div>
 
@@ -112,19 +113,19 @@ export default function TopBarProgram() {
         <Cluster>
           <ClusterButton
             onClick={() => fileRef.current?.click()}
-            title="Abrir um arquivo de texto com código assembly"
+            title={t.bar.topBar.openTitle}
           >
             <Upload size={14} strokeWidth={1.5} />
-            Abrir
+            {t.common.ui.open}
           </ClusterButton>
           <ClusterDivider />
-          <ClusterButton onClick={() => setSaveOpen(true)} title="Salvar o código em um arquivo">
+          <ClusterButton onClick={() => setSaveOpen(true)} title={t.bar.topBar.saveTitle}>
             <Download size={14} strokeWidth={1.5} />
-            Salvar
+            {t.common.ui.save}
           </ClusterButton>
         </Cluster>
 
-        <PanelButton tour="settings" label="Ajustes" active={panel === "settings"} onClick={() => togglePanel("settings")}>
+        <PanelButton tour="settings" label={t.common.ui.settings} active={panel === "settings"} onClick={() => togglePanel("settings")}>
           <Settings2 size={14} strokeWidth={1.5} />
         </PanelButton>
 
@@ -138,16 +139,16 @@ export default function TopBarProgram() {
             onClick={() => zoomOut?.()}
             disabled={!zoomOut || zoom <= ZOOM_MIN}
             className="flex h-8 w-8 items-center justify-center text-fg-muted transition-colors hover:text-fg disabled:opacity-30"
-            title="Diminuir zoom"
-            aria-label="Diminuir zoom"
+            title={t.bar.topBar.zoomOut}
+            aria-label={t.bar.topBar.zoomOut}
           >
             <Minus size={14} strokeWidth={1.5} />
           </button>
           <button
             onClick={() => fit?.()}
             className="num min-w-[3.5rem] text-center font-mono text-xs text-fg-muted transition-colors hover:text-fg"
-            title="Ajustar à tela"
-            aria-label="Ajustar à tela"
+            title={t.bar.topBar.fitToScreen}
+            aria-label={t.bar.topBar.fitToScreen}
           >
             {Math.round(zoom * 100)}%
           </button>
@@ -155,15 +156,15 @@ export default function TopBarProgram() {
             onClick={() => zoomIn?.()}
             disabled={!zoomIn || zoom >= ZOOM_MAX}
             className="flex h-8 w-8 items-center justify-center text-fg-muted transition-colors hover:text-fg disabled:opacity-30"
-            title="Aumentar zoom"
-            aria-label="Aumentar zoom"
+            title={t.bar.topBar.zoomIn}
+            aria-label={t.bar.topBar.zoomIn}
           >
             <Plus size={14} strokeWidth={1.5} />
           </button>
         </Cluster>
         </div>
 
-        <PanelButton tour="help" label="Ajuda" active={helpOpen} onClick={() => { setPanel(null); showHelp(); }}>
+        <PanelButton tour="help" label={t.common.ui.help} active={helpOpen} onClick={() => { setPanel(null); showHelp(); }}>
           <HelpCircle size={14} strokeWidth={1.5} />
         </PanelButton>
 
@@ -183,7 +184,7 @@ export default function TopBarProgram() {
         <div
           role="dialog"
           aria-modal="false"
-          aria-label="Ajustes da simulação"
+          aria-label={t.bar.topBar.settingsDialog}
           className="absolute right-4 top-full z-50 mt-2 max-h-[calc(100vh-120px)] overflow-y-auto rounded-2xl border border-line bg-surface p-4"
         >
           <SimulationSettings />

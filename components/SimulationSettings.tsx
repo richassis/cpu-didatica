@@ -7,6 +7,7 @@ import {
   type NumericBase,
   type TextSize,
 } from "@/lib/displayStore";
+import { useT } from "@/lib/i18n";
 
 /** Button labels — "decSigned" is a valid NumericBase but not a word anyone should read. */
 const BASE_LABELS: Record<NumericBase, string> = {
@@ -17,10 +18,10 @@ const BASE_LABELS: Record<NumericBase, string> = {
 };
 
 /** The button's own "A" is drawn at the size it selects (relative to the base). */
-const TEXT_SIZES: Array<{ id: TextSize; label: string; sample: string }> = [
-  { id: "small", label: "Texto pequeno", sample: "0.75rem" },
-  { id: "medium", label: "Texto médio", sample: "0.9375rem" },
-  { id: "large", label: "Texto grande", sample: "1.125rem" },
+const TEXT_SIZES: Array<{ id: TextSize; sample: string }> = [
+  { id: "small", sample: "0.75rem" },
+  { id: "medium", sample: "0.9375rem" },
+  { id: "large", sample: "1.125rem" },
 ];
 
 const SLIDER_STEPS = 100;
@@ -46,6 +47,8 @@ function sliderToDuration(position: number): number {
  * simulation. Both surfaces now mount this.
  */
 export default function SimulationSettings() {
+  const t = useT();
+  const labels = t.bar.settings;
   const numericBase = useDisplayStore((s) => s.numericBase);
   const setNumericBase = useDisplayStore((s) => s.setNumericBase);
   const showWiresAndPorts = useDisplayStore((s) => s.showWiresAndPorts);
@@ -61,7 +64,7 @@ export default function SimulationSettings() {
 
   return (
     <div className="w-72">
-      <Section title="Valores" first />
+      <Section title={labels.values} first />
       <div className="mb-1 flex items-center gap-1">
         {(["hex", "dec", "decSigned", "bin"] as const).map((b) => (
           <button
@@ -79,14 +82,14 @@ export default function SimulationSettings() {
         ))}
       </div>
 
-      <Section title="Texto" />
+      <Section title={labels.text} />
       <div className="mb-1 flex items-center gap-1">
-        {TEXT_SIZES.map(({ id, label, sample }) => (
+        {TEXT_SIZES.map(({ id, sample }) => (
           <button
             key={id}
             onClick={() => setTextSize(id)}
             aria-pressed={textSize === id}
-            title={label}
+            title={labels.textSizes[id]}
             className={`flex-1 rounded-lg border px-2 py-1 transition-colors ${
               textSize === id
                 ? "border-st-active text-st-active"
@@ -99,27 +102,27 @@ export default function SimulationSettings() {
         ))}
       </div>
 
-      <Section title="Sinais" />
+      <Section title={labels.signals} />
       <div className="space-y-1">
         {/* The master switch. It used to exist only on the edit-mode FAB, which
             made it the one display setting a student could never reach — while
             the three it governs were already here. */}
-        <Toggle label="Fios e portas" on={showWiresAndPorts} onChange={setShowWiresAndPorts} />
+        <Toggle label={labels.wiresAndPorts} on={showWiresAndPorts} onChange={setShowWiresAndPorts} />
         <Toggle
-          label="Sinais de controle"
+          label={labels.controlSignals}
           on={showCpuSignalWires}
           onChange={setShowCpuSignalWires}
           disabled={!showWiresAndPorts}
         />
         <Toggle
-          label="Fios de dados"
+          label={labels.dataWires}
           on={showDataSignalWires}
           onChange={setShowDataSignalWires}
           disabled={!showWiresAndPorts}
         />
       </div>
 
-      <Section title="Velocidade" />
+      <Section title={labels.speed} />
       {/* Left is slow, right is fast. The store keeps the time a dot takes to
           cross a reference wire, where smaller is faster, and the slider runs
           on its logarithm: speed is a ratio, so equal steps along the bar are
@@ -132,7 +135,7 @@ export default function SimulationSettings() {
           step={1}
           value={speedToSlider(animationDurationMs)}
           onChange={(e) => setAnimationDurationMs(sliderToDuration(Number(e.target.value)))}
-          aria-label="Velocidade da animação"
+          aria-label={labels.speedSlider}
           className="timeline-slider h-4 w-full cursor-pointer appearance-none bg-transparent"
           style={{
             background:
@@ -140,8 +143,8 @@ export default function SimulationSettings() {
           }}
         />
         <div className="flex items-center justify-between font-mono text-caption text-fg-faint">
-          <span>Baixa</span>
-          <span>Alta</span>
+          <span>{labels.low}</span>
+          <span>{labels.high}</span>
         </div>
       </div>
     </div>

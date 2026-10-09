@@ -1,6 +1,7 @@
 "use client";
 
 import { Silhouette, MemorySpine } from "@/components/widgets/silhouettes";
+import { useT } from "@/lib/i18n";
 
 /**
  * How to read the canvas.
@@ -51,63 +52,60 @@ function StateSample({ color, label, note }: { color: string; label: string; not
 }
 
 export default function Legend() {
+  const { shapeHeading, colorHeading, shapes, states } = useT().legend;
   return (
     <div className="w-[380px]">
       <div className="grid grid-cols-2 gap-x-4 gap-y-3">
             <div>
-              <div className="t-section mb-2">Forma — o que é</div>
+              <div className="t-section mb-2">{shapeHeading}</div>
               <div className="space-y-2">
-                <ShapeSample label="Registrador" note="guarda um único valor">
+                <ShapeSample {...shapes.register}>
                   <span className="node--boxed absolute inset-0 rounded-[6px]" />
                 </ShapeSample>
 
-                <ShapeSample label="Memória" note="lombada na borda esquerda">
+                <ShapeSample {...shapes.memory}>
                   <span className="node--boxed absolute inset-0 rounded-[6px]" />
                   <MemorySpine />
                 </ShapeSample>
 
-                <ShapeSample label="ULA" note="trapézio com entalhe">
+                <ShapeSample {...shapes.alu}>
                   <Silhouette kind="alu" />
                 </ShapeSample>
 
-                <ShapeSample label="Multiplexador" note="trapézio, sem entalhe">
+                <ShapeSample {...shapes.mux}>
                   <Silhouette kind="mux" />
                 </ShapeSample>
 
-                <ShapeSample label="Decodificador" note="barra vertical fina">
+                <ShapeSample {...shapes.decoder}>
                   <span className="node--boxed absolute inset-y-0 left-1/2 w-2 -translate-x-1/2 rounded-[3px]" />
                 </ShapeSample>
 
-                <ShapeSample label="Unidade de controle" note="tracejada — comanda o caminho de dados">
+                <ShapeSample {...shapes.control}>
                   <span className="node--boxed node--control absolute inset-0 rounded-[6px]" />
                 </ShapeSample>
               </div>
             </div>
 
             <div>
-              <div className="t-section mb-2">Cor — o que está acontecendo</div>
+              <div className="t-section mb-2">{colorHeading}</div>
               <div className="space-y-2">
                 <StateSample
                   color="var(--st-active)"
-                  label="Ativo"
-                  note="componente executando neste tick"
+                  {...states.active}
                 />
                 <StateSample
                   color="var(--st-data)"
-                  label="Fio de dado"
-                  note="azul em movimento; registrador com valor"
+                  {...states.dataWire}
                 />
                 <StateSample
                   color="var(--st-active)"
-                  label="Fio de controle"
-                  note="verde em movimento; sinal da UC"
+                  {...states.controlWire}
                 />
-                <StateSample color="var(--st-warn)" label="Atenção" note="flag ativada" />
-                <StateSample color="var(--st-error)" label="Erro" note="CPU parada pelo HLT" />
+                <StateSample color="var(--st-warn)" {...states.warning} />
+                <StateSample color="var(--st-error)" {...states.error} />
                 <StateSample
                   color="var(--border-strong)"
-                  label="Ocioso"
-                  note="fora deste tick"
+                  {...states.idle}
                 />
               </div>
             </div>

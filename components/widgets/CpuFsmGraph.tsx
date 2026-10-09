@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { CpuState, CPU_STATE_LABELS } from "@/lib/simulator/CpuState";
 import { OPCODE_SEQUENCES } from "@/lib/simulator/Cpu";
 import { Opcode, lookupInstruction } from "@/lib/simulator/ISA";
+import { useT } from "@/lib/i18n";
 
 /**
  * The control unit's finite-state machine, drawn as the tree it actually is:
@@ -168,6 +169,7 @@ export interface CpuFsmGraphProps {
 }
 
 export default function CpuFsmGraph({ currentState, nextState, opcode }: CpuFsmGraphProps) {
+  const t = useT();
   const svgRef = useRef<SVGSVGElement>(null);
   const [vScale, setVScale] = useState(1);
 
@@ -225,7 +227,7 @@ export default function CpuFsmGraph({ currentState, nextState, opcode }: CpuFsmG
       viewBox={`0 0 ${GRAPH_W} ${GRAPH_H}`}
       preserveAspectRatio="xMidYMid meet"
       className="h-full w-full"
-      aria-label="Diagrama de estados da unidade de controle"
+      aria-label={t.canvas.fsm.diagram}
     >
       {/* FETCH → DECODE link, then DECODE → fan-out spine. */}
       <Edge x1={HEADER_X} y1={FETCH_Y + BOX_H / 2} x2={HEADER_X} y2={DECODE_Y - BOX_H / 2} active={isFetchCurrent || isDecodeCurrent} />
@@ -337,7 +339,7 @@ export default function CpuFsmGraph({ currentState, nextState, opcode }: CpuFsmG
           fontFamily="var(--font-mono, monospace)"
           fill="var(--text-faint)"
         >
-          próx.: {CPU_STATE_LABELS[nextState]}
+          {t.canvas.fsm.next(CPU_STATE_LABELS[nextState])}
         </text>
       )}
     </svg>

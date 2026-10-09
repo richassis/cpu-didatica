@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { createPortal } from "react-dom";
 import { useOnboardingStore } from "@/lib/onboardingStore";
 import { TOUR_STEPS, nextApplicable, previousApplicable } from "@/lib/tourSteps";
+import { useT } from "@/lib/i18n";
 
 /** Air between the lit element and the edge of the cut-out. */
 const PAD = 6;
@@ -68,6 +69,7 @@ export default function TourOverlay() {
   const stepIndex = useOnboardingStore((s) => s.stepIndex);
   const goToStep = useOnboardingStore((s) => s.goToStep);
   const endTour = useOnboardingStore((s) => s.endTour);
+  const t = useT();
 
   const step = TOUR_STEPS[stepIndex];
   const [box, setBox] = useState<Box | null>(null);
@@ -179,9 +181,11 @@ export default function TourOverlay() {
   const hasPrev = previousApplicable(stepIndex) !== -1;
   const openHole = Boolean(step.action) && box !== null;
   const position = placeBalloon(box, cardSize);
+  const tour = t.onboarding.tour;
+  const text = tour.steps[step.id];
 
   // Numbering counts the steps already passed and those still to come that
-  // apply, so a step done by the student's own click (Montar) still counts and
+  // apply, so a step done by the student's own click (Assemble) still counts and
   // the numbers never jump.
   const applicable = TOUR_STEPS.map((s, i) => ({ s, i })).filter(({ s, i }) => i <= stepIndex || !s.applicable || s.applicable());
   const position1 = applicable.findIndex(({ i }) => i === stepIndex) + 1;
@@ -224,20 +228,20 @@ export default function TourOverlay() {
         ref={cardRef}
         role="dialog"
         aria-modal="true"
-        aria-label={`Tutorial: ${step.title}`}
+        aria-label={tour.ariaLabel(text.title)}
         tabIndex={-1}
         className="fixed z-[10001] w-[min(22rem,calc(100vw-1.5rem))] rounded-2xl border border-line-strong bg-surface p-4 outline-none"
         style={{ left: position.left, top: position.top }}
       >
         <div className="flex items-baseline justify-between gap-3">
-          <div className="t-node text-fg">{step.title}</div>
+          <div className="t-node text-fg">{text.title}</div>
           <div className="shrink-0 font-mono text-micro text-fg-faint">
-            {position1} de {applicable.length}
+            {tour.stepOf(position1, applicable.length)}
           </div>
         </div>
-        <p className="mt-2 text-small leading-relaxed text-fg-muted">{step.body}</p>
-        {step.action && (
-          <p className="mt-2 text-small leading-snug text-st-active">{step.action.hint}</p>
+        <p className="mt-2 text-small leading-relaxed text-fg-muted">{text.body}</p>
+        {step.action && text.hint && (
+          <p className="mt-2 text-small leading-snug text-st-active">{text.hint}</p>
         )}
 
         <div className="mt-4 flex items-center justify-between gap-2">
@@ -245,7 +249,7 @@ export default function TourOverlay() {
             onClick={() => endTour()}
             className="text-small text-fg-faint transition-colors hover:text-fg"
           >
-            Pular tutorial
+            {tour.skip}
           </button>
           <div className="flex items-center gap-2">
             {hasPrev && (
@@ -253,7 +257,7 @@ export default function TourOverlay() {
                 onClick={back}
                 className="h-8 rounded-lg border border-line px-3 text-small text-fg-muted transition-colors hover:border-line-strong hover:text-fg"
               >
-                Voltar
+                {tour.back}
               </button>
             )}
             {step.action ? (
@@ -261,14 +265,14 @@ export default function TourOverlay() {
                 onClick={step.action.run}
                 className="h-8 rounded-lg border border-line px-3 text-small text-fg-muted transition-colors hover:border-line-strong hover:text-fg"
               >
-                {step.action.label}
+                {tour.doItForMe}
               </button>
             ) : (
               <button
                 onClick={advance}
                 className="h-8 rounded-lg border border-st-active bg-st-active/10 px-3 text-small text-fg transition-colors hover:bg-st-active/20"
               >
-                {isLast ? "Concluir" : "Próximo"}
+                {isLast ? tour.finish : t.common.ui.next}
               </button>
             )}
           </div>

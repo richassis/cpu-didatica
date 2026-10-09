@@ -7,6 +7,7 @@ import {
   type FieldSpec,
   type InstructionFormat,
 } from "@/lib/simulator/ISA";
+import type { Messages } from "@/lib/i18n";
 
 export type FieldKind = "opcode" | "register" | "operand" | "pad";
 
@@ -22,47 +23,55 @@ export interface WordField {
   unused?: boolean;
 }
 
-/** How each field of the layout is drawn. */
-const FIELD_LOOK: Record<FieldSpec["name"], { label: string; kind: FieldKind }> = {
-  opcode:  { label: "Opcode", kind: "opcode" },
-  gprAddr: { label: "R", kind: "register" },
-  operand: { label: "Operando (M ou N)", kind: "operand" },
-  srcA:    { label: "Ra", kind: "register" },
-  srcB:    { label: "Rb", kind: "register" },
-  pad:     { label: "—", kind: "pad" },
-  dst:     { label: "Rd", kind: "register" },
+/** How each field of the layout is drawn; its label comes from the catalog. */
+const FIELD_KIND: Record<FieldSpec["name"], FieldKind> = {
+  opcode:  "opcode",
+  gprAddr: "register",
+  operand: "operand",
+  srcA:    "register",
+  srcB:    "register",
+  pad:     "pad",
+  dst:     "register",
 };
 
-function toWordField(spec: FieldSpec): WordField {
-  const { label, kind } = FIELD_LOOK[spec.name];
-  return { label, hi: spec.shift + spec.bits - 1, lo: spec.shift, kind };
+type BitFieldsText = Messages["reference"]["bitFields"];
+
+function toWordField(spec: FieldSpec, text: BitFieldsText): WordField {
+  return { label: text.labels[spec.name], hi: spec.shift + spec.bits - 1, lo: spec.shift, kind: FIELD_KIND[spec.name] };
 }
 
 /** Field layout of the two instruction formats, straight from the ISA. */
-export function formatFields(format: InstructionFormat): WordField[] {
-  return FIELD_LAYOUT[format].map(toWordField);
+export function formatFields(format: InstructionFormat, text: BitFieldsText): WordField[] {
+  return FIELD_LAYOUT[format].map((spec) => toWordField(spec, text));
 }
 
-/** The fields of a concrete word, with each one's meaning for that instruction. */
-export function wordFields(word: number): { mnemonic: string | null; format: InstructionFormat; fields: WordField[] } {
+/**
+ * The fields of a concrete word, with each one's meaning for that instruction,
+ * in the language of `text` (`t.reference.bitFields`).
+ */
+export function wordFields(
+  word: number,
+  text: BitFieldsText,
+): { mnemonic: string | null; format: InstructionFormat; fields: WordField[] } {
   const entry = lookupInstruction(extractFields(word).opcode);
   const format = entry?.format ?? "standard";
+  const m = text.meanings;
   const fields = FIELD_LAYOUT[format].map((spec): WordField => {
-    const f = toWordField(spec);
+    const f = toWordField(spec, text);
     if (!entry) return f;
     const operand = entry.operands.find((o) => o.field === spec.name);
     switch (spec.name) {
       case "opcode":  return { ...f, meaning: entry.mnemonic };
-      case "srcA":    return { ...f, meaning: "primeiro operando" };
-      case "srcB":    return operand ? { ...f, meaning: "segundo operando" } : { ...f, meaning: "não usado (NOT)", unused: true };
-      case "dst":     return { ...f, meaning: "destino do resultado" };
-      case "pad":     return { ...f, meaning: "não usado", unused: true };
+      case "srcA":    return { ...f, meaning: m.firstOperand };
+      case "srcB":    return operand ? { ...f, meaning: m.secondOperand } : { ...f, meaning: m.unusedByNot, unused: true };
+      case "dst":     return { ...f, meaning: m.resultDestination };
+      case "pad":     return { ...f, meaning: m.unused, unused: true };
       case "gprAddr":
-        if (!operand) return { ...f, meaning: "não usado", unused: true };
-        return { ...f, meaning: operand.label === "Rs" ? "registrador fonte" : "registrador destino" };
+        if (!operand) return { ...f, meaning: m.unused, unused: true };
+        return { ...f, meaning: operand.label === "Rs" ? m.sourceRegister : m.destinationRegister };
       case "operand":
-        if (!operand) return { ...f, meaning: "não usado", unused: true };
-        return { ...f, meaning: operand.kind === "immediate" ? "valor imediato N" : "endereço M" };
+        if (!operand) return { ...f, meaning: m.unused, unused: true };
+        return { ...f, meaning: operand.kind === "immediate" ? m.immediate : m.address };
     }
   });
   return { mnemonic: entry?.mnemonic ?? null, format, fields };

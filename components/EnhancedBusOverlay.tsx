@@ -34,6 +34,7 @@ import {
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import type { WireDescriptor } from "@/lib/simulator";
 import { Adder, CONTROL_SIGNAL_BY_PORT, Decoder, Incrementer, Mux, Register, Ula } from "@/lib/simulator";
+import { useT } from "@/lib/i18n";
 
 /** Components whose outputs settle in the evaluate phase, with no commit. */
 function isCombinational(obj: unknown): boolean {
@@ -135,6 +136,7 @@ export default function EnhancedBusOverlay({
   // ask nothing at all, so dragging a segment, inserting a corner and deleting
   // a wire with the Delete key all worked on the read-only canvas.
   const editing = useCanvasEditing();
+  const t = useT();
 
   const components = useLayoutStore((s) => s.components);
   const zoom = useLayoutStore((s) => s.zoom);
@@ -1163,7 +1165,7 @@ export default function EnhancedBusOverlay({
           textAnchor="middle"
           style={{ fill: "var(--text-faint)", fontSize: "14px" }}
         >
-          No wire connections
+          {t.canvas.wires.none}
         </text>
       )}
     </svg>

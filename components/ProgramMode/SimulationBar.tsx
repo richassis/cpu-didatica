@@ -69,15 +69,8 @@ export default function SimulationBar() {
   const isLocked = isTimelineActive || isRunning;
   const status = mountStatus({ mountedSource, assemblySource, assembled, assemblyErrors });
   const canRun = status === "ok" && !isLocked;
-  const runTitle = isLocked
-    ? "Simulação em andamento"
-    : status === "none"
-      ? "Monte o programa primeiro"
-      : status === "stale"
-        ? "Montagem desatualizada — monte de novo"
-        : status === "errors"
-          ? "Corrija os erros de montagem"
-          : "Simular o programa até HLT";
+  const L = t.bar.simulation;
+  const runTitle = isLocked ? L.runTitle.locked : L.runTitle[status];
 
   /**
    * Every manual navigation stops playback first. It cannot live inside
@@ -124,7 +117,7 @@ export default function SimulationBar() {
                 data-tour="montar"
                 onClick={() => mountProgram()}
                 disabled={isLocked}
-                title="Montar (compilar) o código-fonte"
+                title={L.assembleTitle}
                 className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                   status === "ok"
                     ? "border-line text-fg-muted hover:border-line-strong hover:text-fg"
@@ -132,7 +125,7 @@ export default function SimulationBar() {
                 }`}
               >
                 <Hammer size={14} strokeWidth={1.5} className={status === "ok" ? "" : "text-st-active"} />
-                Montar
+                {t.common.ui.assemble}
                 {status === "stale" && (
                   <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-st-warn" aria-hidden />
                 )}
@@ -154,7 +147,7 @@ export default function SimulationBar() {
                 ) : (
                   <Play size={14} strokeWidth={1.5} className={status === "ok" ? "text-st-active" : ""} />
                 )}
-                {isRunning ? "Simulando…" : "Simular"}
+                {isRunning ? L.simulating : t.common.ui.simulate}
               </button>
 
               {!isTimelineActive && (
@@ -164,12 +157,12 @@ export default function SimulationBar() {
                   }`}
                 >
                   {status === "errors"
-                    ? `${assemblyErrors.length} ${assemblyErrors.length === 1 ? "erro" : "erros"} de montagem`
+                    ? L.status.errors(assemblyErrors.length)
                     : status === "ok" && assembled
-                      ? `${assembled.listing.length} instruções — simule para percorrer tick a tick`
+                      ? L.status.ready(assembled.listing.length)
                       : status === "stale"
-                        ? "código alterado — monte de novo"
-                        : "monte o programa para simular"}
+                        ? L.status.stale
+                        : L.status.none}
                 </span>
               )}
             </div>
@@ -180,14 +173,14 @@ export default function SimulationBar() {
                   <TransportButton
                     onClick={manual(goToStart)}
                     disabled={!canGoBack}
-                    title="Ir para o início"
+                    title={L.goToStart}
                   >
                     <SkipBack size={14} strokeWidth={1.5} />
                   </TransportButton>
                   <TransportButton
                     onClick={manual(stepBackward)}
                     disabled={!canGoBack}
-                    title="Voltar um tick"
+                    title={L.stepBack}
                   >
                     <ChevronLeft size={16} strokeWidth={1.5} />
                   </TransportButton>
@@ -197,8 +190,8 @@ export default function SimulationBar() {
                       buttons rather than one hidden mode. */}
                   <button
                     onClick={togglePlay}
-                    title={isPlaying ? "Pausar" : "Percorrer todos os ticks"}
-                    aria-label={isPlaying ? "Pausar" : "Reproduzir"}
+                    title={isPlaying ? L.pause : L.playTitle}
+                    aria-label={isPlaying ? L.pause : L.play}
                     className="flex h-8 items-center gap-1.5 rounded-lg border border-line-strong px-3 text-xs text-fg transition-colors hover:border-st-active"
                   >
                     {isPlaying ? (
@@ -206,13 +199,13 @@ export default function SimulationBar() {
                     ) : (
                       <Play size={14} strokeWidth={1.5} className="text-st-active" />
                     )}
-                    {isPlaying ? "Pausar" : "Reproduzir"}
+                    {isPlaying ? L.pause : L.play}
                   </button>
 
                   <TransportButton
                     onClick={manual(stepForward)}
                     disabled={!canGoForward}
-                    title="Avançar um tick"
+                    title={L.stepForward}
                   >
                     <ChevronRight size={16} strokeWidth={1.5} />
                   </TransportButton>
@@ -220,7 +213,7 @@ export default function SimulationBar() {
                   <TransportButton
                     onClick={manual(goToEnd)}
                     disabled={!canGoForward}
-                    title="Ir para o fim, sem animar"
+                    title={L.goToEnd}
                   >
                     <SkipForward size={14} strokeWidth={1.5} />
                   </TransportButton>
@@ -236,11 +229,11 @@ export default function SimulationBar() {
               {isTimelineActive && (
                 <button
                   onClick={manual(exitTimeline)}
-                  title="Encerrar a linha do tempo"
+                  title={L.stopTitle}
                   className="flex h-8 items-center gap-1.5 rounded-lg border border-st-error px-3 text-xs text-st-error transition-colors hover:bg-st-error/10"
                 >
                   <X size={13} strokeWidth={1.5} />
-                  Encerrar
+                  {t.common.ui.stop}
                 </button>
               )}
             </div>
@@ -278,7 +271,7 @@ export default function SimulationBar() {
                     pause();
                     goToTick(Number(event.target.value));
                   }}
-                  aria-label="Tick"
+                  aria-label={L.timeline}
                   className="timeline-slider absolute inset-0 w-full cursor-pointer appearance-none bg-transparent"
                 />
               </div>
@@ -321,6 +314,7 @@ function TransportButton({
  * by accident. The `F` key does the same (`useSimulationShortcuts`).
  */
 function BoostButton() {
+  const L = useT().bar.simulation;
   const boost = usePlaybackStore((s) => s.boost);
   const setBoost = usePlaybackStore((s) => s.setBoost);
 
@@ -344,8 +338,8 @@ function BoostButton() {
       onKeyUp={(e) => {
         if (e.key === "Enter" || e.key === " ") setBoost(false);
       }}
-      title="Segure para acelerar a animação (F)"
-      aria-label="Acelerar a animação"
+      title={L.boostTitle}
+      aria-label={L.boost}
       aria-pressed={boost}
       className={`flex h-8 w-8 items-center justify-center rounded-lg border transition-colors ${
         boost

@@ -9,7 +9,7 @@ import { useLayoutStore, type ComponentInstance } from "@/lib/store";
 import { useProgramDataStore, mountStatus } from "@/lib/programDataStore";
 import { decodeMnemonic } from "@/lib/disassemble";
 import AddressList from "@/components/AddressList";
-import { useDisplayLabel } from "@/lib/i18n";
+import { useDisplayLabel, useT } from "@/lib/i18n";
 
 /**
  * Both memories, side by side, where the code panels are — instruction memory
@@ -18,6 +18,7 @@ import { useDisplayLabel } from "@/lib/i18n";
  * button opens both; "Voltar ao código" swaps back to the editor.
  */
 export default function MemoryPanel() {
+  const t = useT();
   const close = useMemoryPanelStore((s) => s.closeMemoryPanel);
   const components = useLayoutStore((s) => s.components);
 
@@ -31,7 +32,7 @@ export default function MemoryPanel() {
         className="flex shrink-0 items-center gap-1 border-b border-line px-3 py-1.5 text-left text-small text-fg-muted transition-colors hover:bg-raised hover:text-fg"
       >
         <ChevronLeft size={13} strokeWidth={1.5} className="shrink-0" />
-        Voltar ao código
+        {t.program.memoryPanel.back}
       </button>
 
       <div className="flex min-h-0 flex-1">
@@ -55,6 +56,7 @@ function MemoryColumn({
 }) {
   const { id } = component;
   const label = useDisplayLabel(component.label);
+  const columns = useT().program.columns;
 
   const revision = useSimulatorStore((s) => s.revision);
   const imem = useSimulatorStore((s) => (instruction ? s.getInstructionMemory(id) : undefined));
@@ -106,7 +108,7 @@ function MemoryColumn({
         unsigned={instruction}
         decode={instruction ? decodeMnemonic : undefined}
         name={instruction ? undefined : name}
-        headers={{ addr: "End", word: "Palavra", decode: "Opcode", name: "Nome" }}
+        headers={{ addr: columns.addr, word: columns.word, decode: columns.opcode, name: columns.name }}
       />
     </section>
   );
