@@ -54,9 +54,14 @@ const PORT_KINDS: Readonly<Record<string, KindTable>> = {
     out_flagZero: "flag",
     out_flagNegative: "flag",
   },
-  // `overflow` and the packed `flags` bus are still shown as data: marking
-  // them as flags would change what the signed-decimal base shows today.
-  UlaComponent: { operation: "control", zero: "flag", carry: "flag", negative: "flag" },
+  UlaComponent: {
+    operation: "control",
+    flags: "flag",
+    zero: "flag",
+    carry: "flag",
+    negative: "flag",
+    overflow: "flag",
+  },
   AdderComponent: { carry: "flag" },
   IncrementerComponent: { carry: "flag" },
   MuxComponent: { sel: "control" },
