@@ -45,11 +45,11 @@ export class Ula implements Clockable, Connectable {
 
     // Create input ports
     this.in_a = new InputPort<number>(
-      "operand_a", "number", bitWidth, 0,
+      "a", "number", bitWidth, 0,
       "Operand A"
     );
     this.in_b = new InputPort<number>(
-      "operand_b", "number", bitWidth, 0,
+      "b", "number", bitWidth, 0,
       "Operand B"
     );
     this.in_operation = new InputPort<number>(

@@ -16,8 +16,18 @@ export interface ControlSignalDef {
   bitWidth: number;
   /** Value at rest, applied by `CPU.reset()`. */
   reset: number;
+  /** What the signal does at the receiving end (see `ControlSignalRole`). */
+  role: ControlSignalRole;
   description: string;
 }
+
+/**
+ * - `select`: picks a MUX input, so it also changes the MUX's output
+ * - `writeEnable`: the receiver latches on this tick while it is high
+ * - `readEnable`: the receiver drives its output from storage
+ * - `operation`: chooses what the ULA computes
+ */
+export type ControlSignalRole = "select" | "writeEnable" | "readEnable" | "operation";
 
 /**
  * Safety cap for the combinational settle loop in `tickAllComponentsPhased()`.
@@ -41,18 +51,28 @@ const MAX_EVALUATE_PASSES = 8;
  * Mux selects rest on the path FETCH uses, not on 0.
  */
 export const CONTROL_SIGNAL_DEFS = [
-  { name: "muxPC",   bitWidth: 1,           reset: 1,                description: "PC source mux select" },
-  { name: "wrPC",    bitWidth: 1,           reset: 0,                description: "Write enable for PC" },
-  { name: "wrIR",    bitWidth: 1,           reset: 0,                description: "Write enable for IR" },
-  { name: "rdMem",   bitWidth: 1,           reset: 0,                description: "Memory read enable" },
-  { name: "wrMem",   bitWidth: 1,           reset: 0,                description: "Memory write enable" },
-  { name: "muxAReg", bitWidth: 1,           reset: 1,                description: "GPR address mux select" },
-  { name: "muxDReg", bitWidth: 2,           reset: 2,                description: "GPR data mux select" },
-  { name: "wrReg",   bitWidth: 1,           reset: 0,                description: "Write enable for GPR" },
-  { name: "opULA",   bitWidth: ULA_OP_BITS, reset: UlaOperation.ADD, description: "ULA operation select" },
+  { name: "muxPC",   bitWidth: 1,           reset: 1,                role: "select",      description: "PC source mux select" },
+  { name: "wrPC",    bitWidth: 1,           reset: 0,                role: "writeEnable", description: "Write enable for PC" },
+  { name: "wrIR",    bitWidth: 1,           reset: 0,                role: "writeEnable", description: "Write enable for IR" },
+  { name: "rdMem",   bitWidth: 1,           reset: 0,                role: "readEnable",  description: "Memory read enable" },
+  { name: "wrMem",   bitWidth: 1,           reset: 0,                role: "writeEnable", description: "Memory write enable" },
+  { name: "muxAReg", bitWidth: 1,           reset: 1,                role: "select",      description: "GPR address mux select" },
+  { name: "muxDReg", bitWidth: 2,           reset: 2,                role: "select",      description: "GPR data mux select" },
+  { name: "wrReg",   bitWidth: 1,           reset: 0,                role: "writeEnable", description: "Write enable for GPR" },
+  { name: "opULA",   bitWidth: ULA_OP_BITS, reset: UlaOperation.ADD, role: "operation",   description: "ULA operation select" },
 ] as const satisfies readonly ControlSignalDef[];
 
 export type ControlSignalName = (typeof CONTROL_SIGNAL_DEFS)[number]["name"];
+
+/** The key of the CPU port that drives a control signal. */
+export function controlPortKey(name: ControlSignalName): `out_${ControlSignalName}` {
+  return `out_${name}`;
+}
+
+/** Each control signal's definition, by the key of the CPU port that drives it. */
+export const CONTROL_SIGNAL_BY_PORT: ReadonlyMap<string, ControlSignalDef> = new Map(
+  CONTROL_SIGNAL_DEFS.map((d) => [controlPortKey(d.name), d]),
+);
 
 /**
  * Maps each opcode to its ordered sequence of CpuState steps that execute
@@ -328,7 +348,7 @@ export class CPU implements Clockable, Connectable {
   /** One `out_<name>` port per entry of `CONTROL_SIGNAL_DEFS`. */
   readonly controlPorts: Readonly<Record<ControlSignalName, OutputPort<number>>>;
   readonly out_state: OutputPort<number>;
-  readonly out_halted: OutputPort<boolean>;
+  readonly out_halted: OutputPort<number>;
 
   constructor(id: string, name: string = "CPU") {
     this.id = id;
@@ -342,10 +362,10 @@ export class CPU implements Clockable, Connectable {
 
     // Control signal output ports
     this.controlPorts = Object.fromEntries(
-      CONTROL_SIGNAL_DEFS.map((d) => [d.name, new OutputPort<number>(`out_${d.name}`, "number", d.bitWidth, d.reset)]),
+      CONTROL_SIGNAL_DEFS.map((d) => [d.name, new OutputPort<number>(controlPortKey(d.name), "number", d.bitWidth, d.reset)]),
     ) as Record<ControlSignalName, OutputPort<number>>;
     this.out_state = new OutputPort<number>("out_state", "number", 4, CpuState.RESET);
-    this.out_halted = new OutputPort<boolean>("out_halted", "boolean", 1, false);
+    this.out_halted = new OutputPort<number>("out_halted", "number", 1, 0);
 
     this.resetLatchedFlags();
   }
@@ -439,7 +459,7 @@ export class CPU implements Clockable, Connectable {
       in_flags: this.in_flags,
       in_flagZeroGpr: this.in_flagZeroGpr,
       in_flagNegativeGpr: this.in_flagNegativeGpr,
-      ...Object.fromEntries(CONTROL_SIGNAL_DEFS.map((d) => [`out_${d.name}`, this.controlPorts[d.name]])),
+      ...Object.fromEntries(CONTROL_SIGNAL_DEFS.map((d) => [controlPortKey(d.name), this.controlPorts[d.name]])),
       out_state: this.out_state,
       out_halted: this.out_halted,
     };
@@ -555,7 +575,7 @@ export class CPU implements Clockable, Connectable {
     // RESET only restores defaults — no state has driven anything yet.
     this._drivenControlSignalPorts.clear();
     this.out_state.set(CpuState.RESET);
-    this.out_halted.set(false);
+    this.out_halted.set(0);
     // After reset, the next state should be FETCH
     this._state = CpuState.FETCH;
   }
@@ -568,7 +588,7 @@ export class CPU implements Clockable, Connectable {
     this._totalTicks = snapshot.totalTicks;
     this._previousState = snapshot.previousState;
     this.out_state.set(snapshot.state);
-    this.out_halted.set(snapshot.halted);
+    this.out_halted.set(snapshot.halted ? 1 : 0);
     // Restore the latched flags from the snapshot rather than re-reading the
     // ULA's live outputs — during replay those reflect whatever is on the wire
     // now, not what was latched on the EXECUTE this frame belongs to.
@@ -810,7 +830,7 @@ export class CPU implements Clockable, Connectable {
     }
 
     this.out_state.set(this._state);
-    this.out_halted.set(this._halted);
+    this.out_halted.set(this._halted ? 1 : 0);
   }
 
   // ── Fixed phases ─────────────────────────────────────────────
@@ -948,7 +968,7 @@ export class CPU implements Clockable, Connectable {
 
     // A cleanup write that found the line already at rest didn't do anything.
     for (const name of STATE_CLEANUP_SIGNALS[state] ?? []) {
-      const portName = `out_${name}`;
+      const portName = controlPortKey(name);
       if (!this._changedControlSignalPorts.has(portName)) {
         this._drivenControlSignalPorts.delete(portName);
       }

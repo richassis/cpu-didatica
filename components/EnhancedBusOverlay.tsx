@@ -8,7 +8,7 @@ import { usePlaybackStore, BOOST_RATE } from "@/lib/playbackStore";
 import { useDisplayStore, formatPortValue, isInstantSpeed, ANIMATION_REFERENCE_PX } from "@/lib/displayStore";
 import { CANVAS_TEXT_SCALE } from "@/lib/textSize";
 import { buildSchedule, wireProgress } from "@/lib/animationSchedule";
-import { findInstructionRegisterIds, isUnsignedPort } from "@/lib/portKinds";
+import { findInstructionRegisterIds, isUnsignedPort, portKind } from "@/lib/portKinds";
 import { useWireCreationStore } from "@/lib/wireCreationStore";
 import { useWireSelectionStore } from "@/lib/wireSelectionStore";
 import { useProjectStore } from "@/lib/projectStore";
@@ -33,7 +33,7 @@ import {
 } from "@/lib/wireRouting";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import type { WireDescriptor } from "@/lib/simulator";
-import { Adder, Decoder, Incrementer, Mux, Register, Ula } from "@/lib/simulator";
+import { Adder, CONTROL_SIGNAL_BY_PORT, Decoder, Incrementer, Mux, Register, Ula } from "@/lib/simulator";
 
 /** Components whose outputs settle in the evaluate phase, with no commit. */
 function isCombinational(obj: unknown): boolean {
@@ -114,9 +114,6 @@ function pointAlongPath(path: Point[], totalLength: number, progress: number): P
 
 /** A step made only of very short wires still lasts this long, so it can be seen. */
 const MIN_STEP_MS = 80;
-
-/** The control unit's inputs that carry flags into it. */
-const CPU_FLAG_INPUTS = new Set(["in_flags", "in_flagZeroGpr", "in_flagNegativeGpr"]);
 
 function normalizeNodes(nodes: Array<{ x: number; y: number }>): Point[] {
   const snapped = nodes.map((node) => ({
@@ -339,7 +336,8 @@ export default function EnhancedBusOverlay({
       );
 
       const sourceComponent = components.find((c) => c.id === wire.sourceComponentId);
-      const isCpuControlSignal = sourceComponent?.type === "CpuComponent";
+      // Classified by the port it leaves: a control output drives a control wire.
+      const isCpuControlSignal = portKind(sourceComponent?.type ?? "", wire.sourcePortName) === "control";
 
       data.push({
         wire,
@@ -646,7 +644,7 @@ export default function EnhancedBusOverlay({
         mask.revealInputPort(wire.targetComponentId, wire.targetPortName);
         // A MUX select also fixes the MUX's output: the wire leaving it must
         // carry the newly selected value, not the previous selection.
-        if (wire.targetPortName === "sel") {
+        if (CONTROL_SIGNAL_BY_PORT.get(wire.sourcePortName)?.role === "select") {
           mask.revealOutputPort(wire.targetComponentId, "result");
         }
       }
@@ -700,7 +698,7 @@ export default function EnhancedBusOverlay({
           const landedWire = wireDataByIdRef.current.get(timing.id)?.wire;
           // The UC's flags change when the flags reach it, not at the start
           // of the tick.
-          if (landedWire && CPU_FLAG_INPUTS.has(landedWire.targetPortName)) {
+          if (landedWire && portKind("CpuComponent", landedWire.targetPortName) === "flag") {
             const cpuId = useSimulatorStore.getState().getPrimaryCpu()?.id;
             if (landedWire.targetComponentId === cpuId) {
               useDisplayMaskStore.getState().revealControlFlags();

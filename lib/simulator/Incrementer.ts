@@ -48,7 +48,7 @@ export class Incrementer implements Clockable, Connectable {
       `Input + ${step}`,
     );
     this.out_carry = new OutputPort<number>(
-      "carry", "boolean", 1, 0,
+      "carry", "number", 1, 0,
       "Carry/overflow flag",
     );
   }

@@ -3,10 +3,9 @@
 import { useState, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useSimulatorStore } from "@/lib/simulatorStore";
-import { useLayoutStore } from "@/lib/store";
 import { useWireCreationStore } from "@/lib/wireCreationStore";
 import { useDisplayStore, formatPortValue } from "@/lib/displayStore";
-import { useIsUnsignedPort } from "@/lib/portKinds";
+import { usePortKind } from "@/lib/portKinds";
 import type { PortSide } from "@/lib/portPositioning";
 
 const DRAG_THRESHOLD = 4; // px of movement before we consider it a drag
@@ -41,28 +40,6 @@ interface Props {
   onPortHoverEnd?: () => void;
 }
 
-/**
- * Determine if a port is a control signal based on component type and port name.
- *
- * Every CPU output is a control signal, so the name checks below only need to
- * catch the receiving end on the other components: the mux select, the write
- * enables of the GPR and registers, the memory read/write strobes and the ULA
- * operation.
- */
-function isControlSignalPort(componentType: string, portName: string, direction: "input" | "output"): boolean {
-  if (componentType === "CpuComponent" && direction === "output") {
-    return true;
-  }
-
-  return (
-    portName === "sel" ||
-    portName.includes("writeEnable") ||
-    portName.includes("rdMem") ||
-    portName.includes("wrMem") ||
-    portName.includes("operation")
-  );
-}
-
 export default function PortIndicator({ 
   portName, 
   direction, 
@@ -83,7 +60,6 @@ export default function PortIndicator({
   const dotRef = useRef<HTMLDivElement>(null);
   const objects = useSimulatorStore((s) => s.objects);
   const revision = useSimulatorStore((s) => s.revision);
-  const components = useLayoutStore((s) => s.components);
   const phase = useWireCreationStore((s) => s.phase);
   const isCreating = phase === "dragging";
 
@@ -91,12 +67,9 @@ export default function PortIndicator({
   const pointerDownPos = useRef<{ x: number; y: number } | null>(null);
   const isDragging = useRef(false);
 
-  // Get component type for control signal detection
-  const component = components.find(c => c.id === componentId);
-  const componentType = component?.type ?? "";
-  const isControlSignal = isControlSignalPort(componentType, portName, direction);
-  const isUnsignedPort = useIsUnsignedPort();
-  const unsigned = isUnsignedPort(componentId, portName);
+  const kind = usePortKind()(componentId, portName);
+  const isControlSignal = kind === "control";
+  const unsigned = kind !== "data";
 
   const portValue = useMemo(() => {
     void revision;
@@ -110,9 +83,6 @@ export default function PortIndicator({
     const val = port.value;
     if (typeof val === "number") {
       return formatPortValue(val, base, port.bitWidth ?? undefined, unsigned);
-    }
-    if (typeof val === "boolean") {
-      return val ? "1" : "0";
     }
     return String(val);
   }, [componentId, portName, objects, revision, base, unsigned]);

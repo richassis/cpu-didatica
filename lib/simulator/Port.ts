@@ -15,9 +15,10 @@
  * Describes the data type carried by a port.
  * - `"number"` – a numeric signal (with optional bitWidth constraint)
  * - `"opcode"` – an Opcode enum value (treated as number under the hood)
- * - `"boolean"` – a flag signal
+ *
+ * A one-bit signal (an enable, a flag) is a `"number"` of width 1 carrying 0/1.
  */
-export type PortDataType = "number" | "opcode" | "boolean";
+export type PortDataType = "number" | "opcode";
 
 export interface PortDescriptor {
   /** Unique name within the owning component, e.g. "result", "opcode", "a". */
@@ -30,6 +31,13 @@ export interface PortDescriptor {
   bitWidth: number | null;
   /** Human-readable description of what the port carries (documentation only). */
   description?: string;
+}
+
+/** Clamp a numeric value into the port's bit width (no-op when unconstrained). */
+function clampToWidth<T>(value: T, bitWidth: number | null): T {
+  if (bitWidth === null || typeof value !== "number") return value;
+  const max = (1 << bitWidth) - 1;
+  return Math.max(0, Math.min(max, Math.floor(value))) as T;
 }
 
 // ── Base Port class ──────────────────────────────────────────────────────────
@@ -90,11 +98,7 @@ export class InputPort<T = number> extends Port<T> {
 
   /** Set the value directly, bypassing the wire. */
   set(value: T): void {
-    // Clamp numeric values if bitWidth is defined
-    if ((this.dataType === "number" || this.dataType === "opcode") && this.bitWidth !== null && typeof value === "number") {
-      const max = (1 << this.bitWidth) - 1;
-      value = Math.max(0, Math.min(max, Math.floor(value))) as T;
-    }
+    value = clampToWidth(value, this.bitWidth);
     this._value = value;
     if (this.onChange) {
       this.onChange(value);
@@ -152,14 +156,7 @@ export class OutputPort<T = number> extends Port<T> {
    * Set the output value and immediately propagate to all connected inputs.
    */
   set(value: T): void {
-    // Clamp numeric values if bitWidth is defined
-    if (this.dataType === "number" || this.dataType === "opcode") {
-      if (this.bitWidth !== null && typeof value === "number") {
-        const max = (1 << this.bitWidth) - 1;
-        value = Math.max(0, Math.min(max, Math.floor(value))) as T;
-      }
-    }
-
+    value = clampToWidth(value, this.bitWidth);
     this._value = value;
 
     // Immediate propagation to all targets
@@ -174,14 +171,7 @@ export class OutputPort<T = number> extends Port<T> {
    * components downstream (see `displayMaskStore`).
    */
   setWithoutPropagate(value: T): void {
-    // Clamp numeric values if bitWidth is defined
-    if (this.dataType === "number" || this.dataType === "opcode") {
-      if (this.bitWidth !== null && typeof value === "number") {
-        const max = (1 << this.bitWidth) - 1;
-        value = Math.max(0, Math.min(max, Math.floor(value))) as T;
-      }
-    }
-
+    value = clampToWidth(value, this.bitWidth);
     this._value = value;
   }
 

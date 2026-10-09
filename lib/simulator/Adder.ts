@@ -34,11 +34,11 @@ export class Adder implements Clockable, Connectable {
     this.bitWidth = bitWidth;
 
     this.in_a = new InputPort<number>(
-      "operand_a", "number", bitWidth, 0,
+      "a", "number", bitWidth, 0,
       "Operand A"
     );
     this.in_b = new InputPort<number>(
-      "operand_b", "number", bitWidth, 0,
+      "b", "number", bitWidth, 0,
       "Operand B"
     );
     this.out_result = new OutputPort<number>(
@@ -46,7 +46,7 @@ export class Adder implements Clockable, Connectable {
       "A + B result"
     );
     this.out_carry = new OutputPort<number>(
-      "carry", "boolean", 1, 0,
+      "carry", "number", 1, 0,
       "Carry/overflow flag"
     );
   }

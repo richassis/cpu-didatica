@@ -6,7 +6,7 @@ import { useDisplayStore, formatNum, type NumericBase } from "@/lib/displayStore
 import NodeShell from "@/components/widgets/NodeShell";
 import CpuFsmGraph from "@/components/widgets/CpuFsmGraph";
 import FlagSquares, { flagSpecs } from "@/components/widgets/FlagSquares";
-import { CpuState, CONTROL_SIGNAL_DEFS } from "@/lib/simulator/Cpu";
+import { CpuState, CONTROL_SIGNAL_DEFS, controlPortKey, type ControlSignalName } from "@/lib/simulator/Cpu";
 import { CPU_SIDE_INPUT_OFFSET } from "@/lib/widgetDefinitions";
 
 function formatSignal(value: number, bits: number, base: NumericBase): string {
@@ -44,7 +44,7 @@ export default function CpuComponent({ component, zoom }: Props) {
   // even when the value doesn't change. The value printed under it tells which.
   const driven = new Set(cpu ? cpu.getDrivenControlSignalPorts() : []);
 
-  const isOn = (name: string) => driven.has(`out_${name}`);
+  const isOn = (name: ControlSignalName) => driven.has(controlPortKey(name));
 
   return (
     <NodeShell

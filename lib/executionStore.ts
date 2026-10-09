@@ -1,8 +1,9 @@
 import { create } from "zustand";
-import { CpuState, Memory, Register } from "@/lib/simulator";
+import { CONTROL_SIGNAL_DEFS, CpuState, Memory, Register, controlPortKey } from "@/lib/simulator";
 import type { WireDescriptor } from "@/lib/simulator";
 import type { ComponentState } from "@/lib/store";
-import { useSimulatorStore } from "@/lib/simulatorStore";
+import { inferComponentType, useSimulatorStore } from "@/lib/simulatorStore";
+import { portKind } from "@/lib/portKinds";
 import type { CPU, CpuInternalStateSnapshot } from "@/lib/simulator/Cpu";
 import { useDisplayMaskStore } from "@/lib/displayMaskStore";
 
@@ -194,7 +195,9 @@ function buildSubstepGroups(cpu: CPU | null, executedState: CpuState): SubstepGr
  *     deve acender o componente." Mux selects don't count — a mux lights from
  *     its own `tickSteps`.
  */
-const ENABLE_SIGNAL_PORTS = new Set(["out_wrPC", "out_wrIR", "out_wrReg", "out_wrMem"]);
+const ENABLE_SIGNAL_PORTS: ReadonlySet<string> = new Set(
+  CONTROL_SIGNAL_DEFS.filter((d) => d.role === "writeEnable").map((d) => controlPortKey(d.name)),
+);
 function computeActivatedComponents(
   cpu: CPU | null,
   wires: WireDescriptor[],
@@ -241,9 +244,11 @@ function registerFedWires(): WireDescriptor[] {
 function computeWireValues(frames: TickFrame[]): void {
   if (frames.length === 0) return;
   const sim = useSimulatorStore.getState();
-  const cpuId = sim.getPrimaryCpu()?.id;
   // Control-signal wires reflect the CPU's current state and never go stale.
-  const wires = sim.getWires().filter((w) => w.sourceComponentId !== cpuId);
+  const wires = sim.getWires().filter((w) => {
+    const source = sim.objects.get(w.sourceComponentId);
+    return !source || portKind(inferComponentType(source), w.sourcePortName) !== "control";
+  });
 
   const carried = new Map<string, number>();
   for (const w of wires) {
@@ -351,7 +356,7 @@ function resolvePcRegisterId(cpuId: string): string | null {
   const wire = useSimulatorStore
     .getState()
     .getWires()
-    .find((w) => w.sourceComponentId === cpuId && w.sourcePortName === "out_wrPC");
+    .find((w) => w.sourceComponentId === cpuId && w.sourcePortName === controlPortKey("wrPC"));
   return wire?.targetComponentId ?? null;
 }
 

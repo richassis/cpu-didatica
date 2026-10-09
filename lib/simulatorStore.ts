@@ -34,7 +34,11 @@ function isConnectable(obj: unknown): obj is Connectable {
   );
 }
 
-function inferComponentType(obj: SimulatorObject): string {
+/**
+ * The widget type of a data-layer object. A `PipelineRegister` reads as a
+ * `Register` (same class, same ports).
+ */
+export function inferComponentType(obj: SimulatorObject): string {
   if (obj instanceof Register) return "Register";
   if (obj instanceof Constant) return "ConstantComponent";
   if (obj instanceof Gpr) return "GprComponent";
