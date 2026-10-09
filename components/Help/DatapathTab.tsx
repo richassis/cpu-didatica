@@ -1,12 +1,10 @@
 "use client";
 
 import { Fragment } from "react";
-import { Opcode, OPCODE_SEQUENCES, CONTROL_SIGNAL_DEFS, INSTRUCTION_SET, CpuState, CPU_STATE_LABELS } from "@/lib/simulator";
+import { Opcode, OPCODE_SEQUENCES, CONTROL_SIGNAL_DEFS, INSTRUCTIONS_BY_OPCODE, CpuState, CPU_STATE_LABELS, type ControlSignalName } from "@/lib/simulator";
 import { STATE_CONTROL_SIGNALS } from "@/lib/simulator/Cpu";
-import { COMPONENT_HELP, SIGNAL_HELP, STATE_HELP } from "@/lib/helpContent";
-
-/** The signals the control unit shows, in its own order (`muxAMem` is not wired). */
-const SIGNALS = ["muxPC", "wrPC", "wrIR", "rdMem", "wrMem", "muxAReg", "muxDReg", "wrReg", "opULA"] as const;
+import { COMPONENT_IDS, SIGNAL_VALUES } from "@/lib/helpContent";
+import { useT } from "@/lib/i18n";
 
 /** The states, in the order a tick sequence meets them. */
 const STATES = [
@@ -23,8 +21,6 @@ const STATES = [
   CpuState.WRITEPC,
 ] as const;
 
-const INSTRUCTIONS = Object.values(INSTRUCTION_SET).sort((a, b) => a.opcode - b.opcode);
-
 function StateChip({ state }: { state: CpuState }) {
   return (
     <span className="rounded-md border border-line px-1.5 py-0.5 font-mono text-caption text-fg-muted">
@@ -34,8 +30,8 @@ function StateChip({ state }: { state: CpuState }) {
 }
 
 /** What a state sets for one signal, or a note for the two that depend on the instruction. */
-function signalCell(state: CpuState, name: (typeof SIGNALS)[number]): string {
-  if (state === CpuState.EXECUTE && name === "opULA") return "da instrução";
+function signalCell(state: CpuState, name: ControlSignalName, fromInstruction: string): string {
+  if (state === CpuState.EXECUTE && name === "opULA") return fromInstruction;
   if (state === CpuState.WRITEPC && (name === "wrPC" || name === "muxPC")) {
     return name === "wrPC" ? "1*" : "0*";
   }
@@ -44,57 +40,52 @@ function signalCell(state: CpuState, name: (typeof SIGNALS)[number]): string {
 }
 
 export default function DatapathTab() {
-  const signalDefs = CONTROL_SIGNAL_DEFS.filter((d) => (SIGNALS as readonly string[]).includes(d.name));
-  const orderedDefs = SIGNALS.map((n) => signalDefs.find((d) => d.name === n)!);
-
+  const t = useT();
+  const dp = t.reference.datapath;
   return (
     <div className="space-y-8">
       <section>
-        <h3 className="t-node mb-1 text-fg">O caminho de dados</h3>
-        <p className="mb-3 text-ui leading-relaxed text-fg-muted">
-          Um esquema simplificado. As linhas azuis são fios de dados; a unidade de controle (UC) manda
-          os sinais de controle para todos os blocos. O desenho completo, com todos os fios, é o que
-          você vê ao lado do código.
-        </p>
+        <h3 className="t-node mb-1 text-fg">{dp.heading}</h3>
+        <p className="mb-3 text-ui leading-relaxed text-fg-muted">{dp.intro}</p>
         <Schematic />
       </section>
 
       <section>
-        <h3 className="t-node mb-3 text-fg">Componentes</h3>
+        <h3 className="t-node mb-3 text-fg">{dp.componentsHeading}</h3>
         <div className="grid gap-2 sm:grid-cols-2">
-          {COMPONENT_HELP.map((c) => (
-            <div key={c.name} className="rounded-lg border border-line px-3 py-2">
-              <div className="t-node text-fg">{c.name}</div>
-              <div className="font-mono text-caption leading-snug text-fg-faint">{c.spec}</div>
-              <p className="mt-1 text-small leading-snug text-fg-muted">{c.role}</p>
-            </div>
-          ))}
+          {COMPONENT_IDS.map((id) => {
+            const c = t.reference.components[id];
+            return (
+              <div key={id} className="rounded-lg border border-line px-3 py-2">
+                <div className="t-node text-fg">{c.name}</div>
+                <div className="font-mono text-caption leading-snug text-fg-faint">{c.spec}</div>
+                <p className="mt-1 text-small leading-snug text-fg-muted">{c.role}</p>
+              </div>
+            );
+          })}
         </div>
       </section>
 
       <section>
-        <h3 className="t-node mb-1 text-fg">Sinais de controle</h3>
-        <p className="mb-3 text-ui leading-relaxed text-fg-muted">
-          A UC não calcula nada: ela liga e desliga estes sinais, estado a estado, e os blocos
-          fazem o resto.
-        </p>
+        <h3 className="t-node mb-1 text-fg">{dp.signalsHeading}</h3>
+        <p className="mb-3 text-ui leading-relaxed text-fg-muted">{dp.signalsIntro}</p>
         <div className="overflow-x-auto rounded-lg border border-line">
           <table className="w-full border-collapse text-left text-small">
             <thead>
               <tr className="border-b border-line bg-raised text-fg-muted">
-                <th className="px-2.5 py-1.5 font-normal">Sinal</th>
-                <th className="px-2.5 py-1.5 font-normal">Bits</th>
-                <th className="px-2.5 py-1.5 font-normal">O que faz</th>
-                <th className="px-2.5 py-1.5 font-normal">Valores</th>
+                <th className="px-2.5 py-1.5 font-normal">{dp.signalColumns.signal}</th>
+                <th className="px-2.5 py-1.5 font-normal">{dp.signalColumns.bits}</th>
+                <th className="px-2.5 py-1.5 font-normal">{dp.signalColumns.does}</th>
+                <th className="px-2.5 py-1.5 font-normal">{dp.signalColumns.values}</th>
               </tr>
             </thead>
             <tbody>
-              {orderedDefs.map((d) => (
+              {CONTROL_SIGNAL_DEFS.map((d) => (
                 <tr key={d.name} className="border-b border-line last:border-b-0">
                   <td className="px-2.5 py-1.5 font-mono text-st-active">{d.name}</td>
                   <td className="num px-2.5 py-1.5 font-mono text-fg-muted">{d.bitWidth}</td>
-                  <td className="px-2.5 py-1.5 text-fg-muted">{SIGNAL_HELP[d.name]?.does ?? d.description}</td>
-                  <td className="px-2.5 py-1.5 font-mono text-fg-faint">{SIGNAL_HELP[d.name]?.values ?? ""}</td>
+                  <td className="px-2.5 py-1.5 text-fg-muted">{t.reference.signals[d.name].does}</td>
+                  <td className="px-2.5 py-1.5 font-mono text-fg-faint">{t.reference.signals[d.name].values ?? SIGNAL_VALUES[d.name] ?? ""}</td>
                 </tr>
               ))}
             </tbody>
@@ -103,23 +94,19 @@ export default function DatapathTab() {
       </section>
 
       <section>
-        <h3 className="t-node mb-1 text-fg">Máquina de estados</h3>
-        <p className="mb-3 text-ui leading-relaxed text-fg-muted">
-          Toda instrução começa com <b className="text-fg">BUSCA</b> (FETCH) e{" "}
-          <b className="text-fg">DECODIFICA</b> (DECODE). Depois, o opcode escolhe o caminho. Cada
-          estado dura um tick de clock e, ao terminar, a UC volta para a BUSCA.
-        </p>
+        <h3 className="t-node mb-1 text-fg">{dp.fsmHeading}</h3>
+        <p className="mb-3 text-ui leading-relaxed text-fg-muted">{dp.fsmIntro()}</p>
 
         <div className="overflow-x-auto rounded-lg border border-line">
           <table className="w-full border-collapse text-left text-small">
             <thead>
               <tr className="border-b border-line bg-raised text-fg-muted">
-                <th className="px-2.5 py-1.5 font-normal">Instrução</th>
-                <th className="px-2.5 py-1.5 font-normal">Estados</th>
+                <th className="px-2.5 py-1.5 font-normal">{dp.sequenceColumns.instruction}</th>
+                <th className="px-2.5 py-1.5 font-normal">{dp.sequenceColumns.states}</th>
               </tr>
             </thead>
             <tbody>
-              {INSTRUCTIONS.map((d) => {
+              {INSTRUCTIONS_BY_OPCODE.map((d) => {
                 const sequence = OPCODE_SEQUENCES[d.opcode as Opcode] ?? [];
                 return (
                   <tr key={d.mnemonic} className="border-b border-line last:border-b-0">
@@ -144,38 +131,34 @@ export default function DatapathTab() {
           </table>
         </div>
 
-        <h4 className="t-section mb-2 mt-6">O que cada estado faz e quais sinais define</h4>
+        <h4 className="t-section mb-2 mt-6">{dp.statesHeading}</h4>
         <div className="overflow-x-auto rounded-lg border border-line">
           <table className="w-full border-collapse text-left text-small">
             <thead>
               <tr className="border-b border-line bg-raised text-fg-muted">
-                <th className="px-2.5 py-1.5 font-normal">Estado</th>
-                {SIGNALS.map((s) => (
-                  <th key={s} className="px-1.5 py-1.5 font-mono text-caption font-normal">{s}</th>
+                <th className="px-2.5 py-1.5 font-normal">{dp.stateColumns.state}</th>
+                {CONTROL_SIGNAL_DEFS.map(({ name }) => (
+                  <th key={name} className="px-1.5 py-1.5 font-mono text-caption font-normal">{name}</th>
                 ))}
-                <th className="px-2.5 py-1.5 font-normal">O que faz</th>
+                <th className="px-2.5 py-1.5 font-normal">{dp.stateColumns.does}</th>
               </tr>
             </thead>
             <tbody>
               {STATES.map((state) => (
                 <tr key={state} className="border-b border-line last:border-b-0">
                   <td className="px-2.5 py-1.5 font-mono text-fg">{CPU_STATE_LABELS[state]}</td>
-                  {SIGNALS.map((s) => (
-                    <td key={s} className="num px-1.5 py-1.5 text-center font-mono text-fg-muted">
-                      {signalCell(state, s) || <span className="text-fg-faint">·</span>}
+                  {CONTROL_SIGNAL_DEFS.map(({ name }) => (
+                    <td key={name} className="num px-1.5 py-1.5 text-center font-mono text-fg-muted">
+                      {signalCell(state, name, dp.fromInstruction) || <span className="text-fg-faint">·</span>}
                     </td>
                   ))}
-                  <td className="min-w-[220px] px-2.5 py-1.5 text-fg-muted">{STATE_HELP[state]}</td>
+                  <td className="min-w-[220px] px-2.5 py-1.5 text-fg-muted">{t.reference.states[state]}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <p className="mt-2 text-caption leading-snug text-fg-faint">
-          · o estado não mexe no sinal, que mantém o valor de antes. * só se o desvio é tomado: JMP
-          sempre; JZ, JC e JN quando a flag correspondente está ligada. No estado RESET todos os
-          sinais voltam ao valor inicial.
-        </p>
+        <p className="mt-2 text-caption leading-snug text-fg-faint">{dp.statesNote}</p>
       </section>
     </div>
   );
@@ -224,9 +207,10 @@ function Wire({ points }: { points: Array<[number, number]> }) {
  * in one glance before the student meets the detailed one.
  */
 function Schematic() {
+  const text = useT().reference.datapath.schematic;
   return (
     <div className="overflow-x-auto rounded-lg border border-line bg-sunken p-2">
-      <svg viewBox="0 0 720 340" className="min-w-[640px]" role="img" aria-label="Esquema simplificado do caminho de dados">
+      <svg viewBox="0 0 720 340" className="min-w-[640px]" role="img" aria-label={text.label}>
         <defs>
           <marker id="help-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
             <path d="M0,0 L8,4 L0,8 z" fill="var(--st-data)" />
@@ -238,7 +222,7 @@ function Schematic() {
         <Box x={100} y={30} w={60} h={34} label="PC" />
         <Box x={200} y={30} w={78} h={34} label="IMem" />
         <Box x={318} y={30} w={60} h={34} label="IR" />
-        <Box x={418} y={30} w={92} h={34} label="Decodif." />
+        <Box x={418} y={30} w={92} h={34} label={text.decoder} />
         <Box x={100} y={104} w={60} h={34} label="PC+1" />
         <Wire points={[[64, 47], [100, 47]]} />
         <Wire points={[[160, 47], [200, 47]]} />
@@ -249,10 +233,10 @@ function Schematic() {
 
         {/* Registers and ULA */}
         <Box x={330} y={140} w={110} h={86} label="GPR" sub="R0 – R7" />
-        <Box x={218} y={160} w={50} h={46} label="MUX" sub="dado" />
+        <Box x={218} y={160} w={50} h={46} label="MUX" sub={text.gprData} />
         <Box x={480} y={148} w={40} h={26} label="A" />
         <Box x={480} y={192} w={40} h={26} label="B" />
-        <Box x={560} y={152} w={70} h={62} label="ULA" sub="Z C N" />
+        <Box x={560} y={152} w={70} h={62} label={text.alu} sub="Z C N V" />
         <Box x={654} y={168} w={50} h={30} label="R" />
         <Wire points={[[464, 64], [464, 116], [385, 116], [385, 140]]} />
         <Wire points={[[440, 161], [480, 161]]} />
@@ -273,10 +257,10 @@ function Schematic() {
         <Wire points={[[248, 256], [248, 276]]} />
 
         {/* Control unit */}
-        <Box x={10} y={322} w={694} h={16} label="UC — máquina de estados que emite os sinais de controle para todos os blocos" dashed />
+        <Box x={10} y={322} w={694} h={16} label={text.controlUnit} dashed />
 
-        <text x={248} y={250} textAnchor="middle" fontSize={10} fill="var(--text-faint)" className="font-mono">operando M do IR</text>
-        <text x={232} y={154} textAnchor="middle" fontSize={10} fill="var(--text-faint)" className="font-mono">imediato · memória · ULA</text>
+        <text x={248} y={250} textAnchor="middle" fontSize={10} fill="var(--text-faint)" className="font-mono">{text.irOperand}</text>
+        <text x={232} y={154} textAnchor="middle" fontSize={10} fill="var(--text-faint)" className="font-mono">{text.gprDataSources}</text>
       </svg>
     </div>
   );

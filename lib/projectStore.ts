@@ -92,9 +92,6 @@ interface ProjectState {
   
   /** Cached project data for each tab */
   projectData: Record<string, ProjectData>;
-  
-  /** Whether the welcome/new project modal should be shown */
-  showWelcome: boolean;
 
   // ── Actions ──────────────────────────────────────────────────
 
@@ -106,12 +103,6 @@ interface ProjectState {
   
   /** Close a tab */
   closeTab: (tabId: string) => void;
-  
-  /** Rename a project */
-  renameProject: (tabId: string, name: string) => void;
-  
-  /** Mark a project as dirty (unsaved changes) */
-  markDirty: (tabId: string) => void;
   
   /** Update project data (for saving) */
   updateProjectData: (tabId: string, data: Partial<ProjectData>) => void;
@@ -125,12 +116,6 @@ interface ProjectState {
   /** Update visual nodes for a wire in the active project. */
   updateWireNodes: (wireId: string, nodes: Array<{ x: number; y: number }>) => void;
 
-  /** Replace active project wire list in one operation. */
-  replaceProjectWires: (wires: WireDescriptor[]) => void;
-  
-  /** Get current project data */
-  getCurrentProjectData: () => ProjectData | null;
-  
   /** Get current project data with enhanced component configurations */
   getCurrentProjectDataEnhanced: () => ProjectData | null;
   
@@ -139,9 +124,6 @@ interface ProjectState {
   
   /** Export project data for saving to file */
   exportProject: (tabId: string) => ProjectData | null;
-  
-  /** Set welcome modal visibility */
-  setShowWelcome: (show: boolean) => void;
   
   /** Mark project as saved (not dirty) */
   markSaved: (tabId: string) => void;
@@ -163,7 +145,6 @@ export const useProjectStore = create<ProjectState>()(
       tabs: [],
       activeTabId: null,
       projectData: {},
-      showWelcome: true,
 
       createProject: (name) => {
         const id = uuidv4();
@@ -180,7 +161,6 @@ export const useProjectStore = create<ProjectState>()(
           tabs: [...state.tabs, newTab],
           activeTabId: id,
           projectData: { ...state.projectData, [id]: newProject },
-          showWelcome: false,
         }));
 
         return id;
@@ -214,31 +194,8 @@ export const useProjectStore = create<ProjectState>()(
             tabs: newTabs,
             activeTabId: newActiveId,
             projectData: newProjectData,
-            showWelcome: newTabs.length === 0,
           };
         });
-      },
-
-      renameProject: (tabId, name) => {
-        set((state) => ({
-          tabs: state.tabs.map((t) =>
-            t.id === tabId ? { ...t, name } : t
-          ),
-          projectData: {
-            ...state.projectData,
-            [tabId]: state.projectData[tabId]
-              ? { ...state.projectData[tabId], name, updatedAt: new Date().toISOString() }
-              : state.projectData[tabId],
-          },
-        }));
-      },
-
-      markDirty: (tabId) => {
-        set((state) => ({
-          tabs: state.tabs.map((t) =>
-            t.id === tabId ? { ...t, isDirty: true } : t
-          ),
-        }));
       },
 
       markSaved: (tabId) => {
@@ -350,36 +307,6 @@ export const useProjectStore = create<ProjectState>()(
         });
       },
 
-      replaceProjectWires: (wires) => {
-        set((state) => {
-          const tabId = state.activeTabId;
-          if (!tabId) return state;
-
-          const existing = state.projectData[tabId];
-          if (!existing) return state;
-
-          return {
-            projectData: {
-              ...state.projectData,
-              [tabId]: {
-                ...existing,
-                wires,
-                updatedAt: new Date().toISOString(),
-              },
-            },
-            tabs: state.tabs.map((t) =>
-              t.id === tabId ? { ...t, isDirty: true } : t
-            ),
-          };
-        });
-      },
-
-      getCurrentProjectData: () => {
-        const { activeTabId, projectData } = get();
-        if (!activeTabId) return null;
-        return projectData[activeTabId] || null;
-      },
-      
       getCurrentProjectDataEnhanced: () => {
         const { activeTabId } = get();
         if (!activeTabId) return null;
@@ -413,7 +340,6 @@ export const useProjectStore = create<ProjectState>()(
           tabs: [...state.tabs, newTab],
           activeTabId: id,
           projectData: { ...state.projectData, [id]: importedProject },
-          showWelcome: false,
         }));
 
         // If this is a v2+ project with component configurations, restore them.
@@ -504,10 +430,6 @@ export const useProjectStore = create<ProjectState>()(
         };
       },
 
-      setShowWelcome: (show) => {
-        set({ showWelcome: show });
-      },
-      
       loadDefaultProject: async () => {
         const { projectData } = get();
         
@@ -543,7 +465,6 @@ export const useProjectStore = create<ProjectState>()(
         projectData: Object.fromEntries(
           Object.entries(state.projectData).filter(([id]) => id !== DEFAULT_PROJECT_ID)
         ),
-        showWelcome: state.tabs.length === 0,
       }),
       onRehydrateStorage: () => (state) => {
         if (state) {
@@ -567,7 +488,6 @@ function migrateProjectData(state: ProjectState): void {
   for (const project of Object.values(state.projectData)) {
     if (!project || (project.version ?? 1) >= CURRENT_PROJECT_VERSION) continue;
 
-    // User projects only get the cosmetic changes.
     for (const component of project.components ?? []) {
       // v6: the block called "CPU" is the control unit. Only instances still
       // carrying a default label are renamed — anything the user named
@@ -602,7 +522,7 @@ function migrateProjectData(state: ProjectState): void {
 
 /**
  * Ensure the default project exists in the store.
- * Called on rehydration and can be called manually.
+ * Called on rehydration.
  */
 function ensureDefaultProject(state: ProjectState): void {
   const hasDefault = state.tabs.some(t => t.id === DEFAULT_PROJECT_ID);
@@ -622,7 +542,6 @@ function ensureDefaultProject(state: ProjectState): void {
     // If no active tab, set default as active
     if (!state.activeTabId) {
       state.activeTabId = DEFAULT_PROJECT_ID;
-      state.showWelcome = false;
     }
   }
   

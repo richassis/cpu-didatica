@@ -9,21 +9,20 @@
  *  - revealComponents() called by EnhancedBusOverlay when a substep's wires finish;
  *                       reveals the components those wires TARGET (dataflow order)
  *  - revealAll()        called on animation end or fast-scrub to finalize everything
- *  - deactivate()       called when exiting timeline or edit mode
+ *  - deactivate()       called by the execution store when the timeline loads or
+ *                       exits, or a frame has nothing to animate
  */
 
 import { create } from "zustand";
 import type { TickSnapshot, SubstepGroup } from "./executionStore";
 import { applySnapshot } from "./executionStore";
 import { useSimulatorStore } from "./simulatorStore";
-import { Gpr, Memory, InstructionMemory } from "./simulator";
+import { Gpr, Memory, InstructionMemory, Ula } from "./simulator";
+import { CpuState } from "./simulator/CpuState";
 
 interface DisplayMaskState {
   /** Whether progressive reveal is active (only during timeline animation). */
   isActive: boolean;
-
-  /** The pre-tick snapshot (starting point — what widgets show initially). */
-  baseSnapshot: TickSnapshot | null;
 
   /** The post-tick snapshot (target — what widgets show after reveal). */
   targetSnapshot: TickSnapshot | null;
@@ -57,7 +56,8 @@ interface DisplayMaskState {
 
   /**
    * Initialize for a new tick animation.
-   * Applies the baseSnapshot to live simulator objects so widgets start showing old values.
+   * Applies `baseSnapshot` (the pre-tick state) to live simulator objects so
+   * widgets start showing old values.
    */
   init: (
     baseSnapshot: TickSnapshot,
@@ -111,12 +111,26 @@ interface DisplayMaskState {
   revealOutputPorts: (componentId: string) => void;
 
   /**
+   * Move the ULA's own flags (shown inside the ULA) to their post-tick value.
+   * Called when the ULA computes — its operands have landed or it starts
+   * sending its result — never at the start of the tick.
+   */
+  revealUlaFlags: () => void;
+
+  /**
+   * Move the control unit's flags (shown in the UC) to their post-tick value.
+   * Called when the flags reach the UC: the ULA's flags wire lands on it, or —
+   * for LDA/LDAI — the loaded value lands in the GPR that produces them.
+   */
+  revealControlFlags: () => void;
+
+  /**
    * Force-reveal all remaining components.
    * Called when: skipping animation, fast scrubbing, animation ends.
    */
   revealAll: () => void;
 
-  /** Deactivate progressive reveal (exit timeline, edit mode, etc.) */
+  /** Deactivate progressive reveal (timeline loaded or exited, nothing to animate). */
   deactivate: () => void;
 
   /**
@@ -124,12 +138,6 @@ interface DisplayMaskState {
    * Widgets use this to decide styling (dimmed vs bright).
    */
   isRevealed: (componentId: string) => boolean;
-
-  /**
-   * Check if a component is active in the current tick
-   * (i.e., is in any substep group for this state).
-   */
-  isActiveInCurrentTick: (componentId: string) => boolean;
 }
 
 /**
@@ -198,7 +206,6 @@ function applyComponentTargetState(componentId: string, targetSnapshot: TickSnap
 
 export const useDisplayMaskStore = create<DisplayMaskState>()((set, get) => ({
   isActive: false,
-  baseSnapshot: null,
   targetSnapshot: null,
   revealedComponents: new Set(),
   substepGroups: [],
@@ -213,10 +220,15 @@ export const useDisplayMaskStore = create<DisplayMaskState>()((set, get) => ({
     // Restore CPU internal state from TARGET so FSM labels are correct, and
     // immediately reveal the CPU's post-tick output ports — control signals are
     // not animated, they just take their new values at the start of the state.
+    // The flags are the exception: they are produced by the data, so they stay
+    // on their pre-tick values until that data arrives (`revealUlaFlags`,
+    // `revealControlFlags`).
     const revealed = new Set<string>();
     const cpu = useSimulatorStore.getState().getPrimaryCpu();
     if (cpu) {
       cpu.restoreInternalState(targetSnapshot.cpuInternalState);
+      cpu.restoreUlaFlags(baseSnapshot.cpuInternalState.ulaFlags);
+      cpu.restoreLatchedFlags(baseSnapshot.cpuInternalState);
       if (applyComponentTargetState(cpu.id, targetSnapshot)) {
         revealed.add(cpu.id);
       }
@@ -232,7 +244,6 @@ export const useDisplayMaskStore = create<DisplayMaskState>()((set, get) => ({
 
     set({
       isActive: true,
-      baseSnapshot,
       targetSnapshot,
       substepGroups,
       activatedComponents,
@@ -259,11 +270,23 @@ export const useDisplayMaskStore = create<DisplayMaskState>()((set, get) => ({
     const newRevealed = new Set(revealedComponents);
     let changed = false;
 
+    // LDA/LDAI set the UC's Z/N from the value written into the GPR, so they
+    // change once that value lands there — the same rule `latchFlagsIfProduced`
+    // follows in the CPU.
+    const { previousState } = targetSnapshot.cpuInternalState;
+    const loadsFlags =
+      previousState === CpuState.WRITEREG1 || previousState === CpuState.WRITEREG2;
+    const objects = useSimulatorStore.getState().objects;
+
     for (const componentId of componentIds) {
       if (applyComponentTargetState(componentId, targetSnapshot)) {
         newRevealed.add(componentId);
         changed = true;
       }
+      const obj = objects.get(componentId);
+      // The ULA computes as soon as its operands have landed.
+      if (obj instanceof Ula) get().revealUlaFlags();
+      if (obj instanceof Gpr && loadsFlags) get().revealControlFlags();
     }
 
     if (!changed) return;
@@ -341,6 +364,26 @@ export const useDisplayMaskStore = create<DisplayMaskState>()((set, get) => ({
       if (port.setWithoutPropagate) port.setWithoutPropagate(value);
       else port.set?.(value);
     }
+    // A ULA sending its result has computed, flags included.
+    if (obj instanceof Ula) get().revealUlaFlags();
+    useSimulatorStore.setState((s) => ({ revision: s.revision + 1 }));
+  },
+
+  revealUlaFlags: () => {
+    const { targetSnapshot, isActive } = get();
+    if (!isActive || !targetSnapshot) return;
+    const cpu = useSimulatorStore.getState().getPrimaryCpu();
+    if (!cpu) return;
+    cpu.restoreUlaFlags(targetSnapshot.cpuInternalState.ulaFlags);
+    useSimulatorStore.setState((s) => ({ revision: s.revision + 1 }));
+  },
+
+  revealControlFlags: () => {
+    const { targetSnapshot, isActive } = get();
+    if (!isActive || !targetSnapshot) return;
+    const cpu = useSimulatorStore.getState().getPrimaryCpu();
+    if (!cpu) return;
+    cpu.restoreLatchedFlags(targetSnapshot.cpuInternalState);
     useSimulatorStore.setState((s) => ({ revision: s.revision + 1 }));
   },
 
@@ -359,7 +402,6 @@ export const useDisplayMaskStore = create<DisplayMaskState>()((set, get) => ({
   deactivate: () => {
     set({
       isActive: false,
-      baseSnapshot: null,
       targetSnapshot: null,
       revealedComponents: new Set(),
       substepGroups: [],
@@ -372,10 +414,5 @@ export const useDisplayMaskStore = create<DisplayMaskState>()((set, get) => ({
     const { isActive, revealedComponents } = get();
     if (!isActive) return true;
     return revealedComponents.has(componentId);
-  },
-
-  isActiveInCurrentTick: (componentId) => {
-    const { substepGroups } = get();
-    return substepGroups.some((g) => g.componentIds.includes(componentId));
   },
 }));

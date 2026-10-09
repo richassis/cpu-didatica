@@ -41,8 +41,8 @@ export default function PortsOverlay({ componentId }: Props) {
   const hoveredTargetPort = useWireCreationStore((s) => s.hoveredTargetPort);
 
   const showWiresAndPorts = useDisplayStore((s) => s.showWiresAndPorts);
-  // Port drag-to-connect is authoring, so it follows the canvas rather than the
-  // mode: the program-mode viewer mounts a read-only canvas even in edit mode.
+  // Port drag-to-connect is authoring, so it asks the canvas it sits in (see
+  // CanvasEditingContext) rather than reading the mode store directly.
   const isEditableCanvas = useCanvasEditing();
 
   const isCreating = phase === "dragging";
@@ -179,7 +179,7 @@ export default function PortsOverlay({ componentId }: Props) {
         // Skip ports explicitly marked hidden in the widget's portConfig.
         if (portConfig?.ports?.[port.name]?.hidden) return null;
 
-        const { side, offset } = getPortPlacement(port.name, port.direction, ports, portConfig);
+        const { side, offset, inset } = getPortPlacement(port.name, port.direction, ports, portConfig);
 
         // During wire creation, check if this port is a valid drop target
         const isCompatibleTarget =
@@ -199,6 +199,7 @@ export default function PortsOverlay({ componentId }: Props) {
             componentId={componentId}
             position={side}
             offset={offset}
+            inset={inset}
             portSide={side}
             isDropTarget={isCompatibleTarget}
             isHoveredTarget={isHovered}

@@ -24,6 +24,6 @@ export default function RegisterComponent({ component, zoom }: Props) {
     : "0x0000";
 
   return (
-    <NodeShell component={component} zoom={zoom} sequential value={displayValue} />
+    <NodeShell component={component} zoom={zoom} value={displayValue} />
   );
 }

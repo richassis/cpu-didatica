@@ -9,12 +9,11 @@ import { useNodeState, type NodeState } from "@/lib/useNodeState";
 import ConfigModal from "@/components/ConfigModal";
 import { useCanvasEditing } from "@/components/CanvasEditingContext";
 import { EDITOR_ENABLED } from "@/lib/editorFlag";
+import { useDisplayLabel } from "@/lib/i18n";
 import PortsOverlay from "@/components/PortsOverlay";
 import {
   Silhouette,
-  ClockNotch,
   MemorySpine,
-  GLYPHS,
   type SilhouetteKind,
 } from "@/components/widgets/silhouettes";
 
@@ -34,11 +33,9 @@ interface NodeShellProps {
   silhouette?: SilhouetteKind | "custom";
   /**
    * Custom outline layer, drawn under everything and never hidden by the LOD
-   * rules — a silhouette has to survive all the way down to 25%.
+   * rules — a silhouette has to survive at every zoom.
    */
   frame?: ReactNode;
-  /** Sequential component: gets the clock notch. */
-  sequential?: boolean;
   /** Memory: gets the spine on the left border. */
   spine?: boolean;
   /** Control unit: dashed outline. Reserved for exactly one component type. */
@@ -57,20 +54,20 @@ interface NodeShellProps {
   compactValue?: boolean;
   /** Extra controls in the title row, left of the config button. */
   actions?: ReactNode;
-  /** Internal anatomy. Hidden below 100% zoom by the LOD rules. */
+  /** Internal anatomy. Hidden below 60% zoom by the LOD rules, unless `dense`. */
   children?: ReactNode;
   /**
    * Anatomy that stays visible at `mid` zoom instead of only `full` — for
    * content the LOD rules exist to reveal in the first place (address lists,
    * the FSM graph, the signal strip), rather than incidental detail that is
-   * fine to lose first. Still hidden at `low`.
+   * fine to lose first.
    */
   dense?: boolean;
 }
 
 /**
  * Everything every node on the canvas has in common: placement, dragging,
- * state, corner badge, title, ports and the config modal.
+ * state, title, ports and the config modal.
  *
  * Before this existed each of the twelve widgets carried its own copy of the
  * dnd-kit boilerplate and its own colour ternaries, which is how the canvas
@@ -84,7 +81,6 @@ export default function NodeShell({
   state,
   silhouette,
   frame,
-  sequential = false,
   spine = false,
   control = false,
   value,
@@ -93,7 +89,8 @@ export default function NodeShell({
   children,
   dense = false,
 }: NodeShellProps) {
-  const { id, x, y, w, h, label, type } = component;
+  const { id, x, y, w, h, type } = component;
+  const label = useDisplayLabel(component.label);
   const [configOpen, setConfigOpen] = useState(false);
   const derivedState = useNodeState(id);
   const nodeState = state ?? derivedState;
@@ -132,8 +129,6 @@ export default function NodeShell({
     touchAction: editing ? "none" : undefined,
   };
 
-  const Glyph = GLYPHS[type];
-
   return (
     <>
       <div
@@ -160,21 +155,10 @@ export default function NodeShell({
         {silhouette && silhouette !== "custom" && <Silhouette kind={silhouette} />}
         {frame}
         {spine && <MemorySpine />}
-        {sequential && <ClockNotch />}
 
-        {/* Badge notched into the top-left corner. It replaces the full-width
-            coloured header bar every node used to carry — that bar spent a
-            large block of saturated colour on identity alone. */}
-        {Glyph && (
-          <div
-            className="node-badge absolute left-0 top-0 z-10 flex h-5 w-5 items-center justify-center rounded-br-md border-b border-r"
-            aria-hidden
-          >
-            <Glyph size={12} strokeWidth={1.5} />
-          </div>
-        )}
-
-        <div className="relative z-10 flex shrink-0 items-center gap-1 pl-6 pr-1 pt-0.5">
+        {/* Title only — no type icon. The name already says what the block is,
+            and the silhouette carries the rest. */}
+        <div className="relative z-10 flex shrink-0 items-center gap-1 pl-2 pr-1 pt-0.5">
           <span className="node-title t-node min-w-0 flex-1 truncate leading-none">{label}</span>
           {actions}
           {editing && (

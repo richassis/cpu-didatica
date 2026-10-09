@@ -2,7 +2,7 @@
   "id": "default-full-datapath",
   "name": "Full Datapath",
   "createdAt": "2026-04-07T03:40:44.124Z",
-  "updatedAt": "2026-09-28T23:16:36.755Z",
+  "updatedAt": "2026-10-07T00:35:40.370Z",
   "components": [
     {
       "id": "cpu-1",
@@ -16,9 +16,7 @@
       "state": {
         "ports": {
           "in_opcode": 5,
-          "in_flagZero": 0,
-          "in_flagCarry": 0,
-          "in_flagNegative": 0,
+          "in_flags": 0,
           "in_flagZeroGpr": 0,
           "in_flagNegativeGpr": 0,
           "out_muxPC": 1,
@@ -31,7 +29,7 @@
           "out_wrReg": 0,
           "out_opULA": 0,
           "out_state": 0,
-          "out_halted": false
+          "out_halted": 0
         }
       }
     },
@@ -129,7 +127,9 @@
           "result": 0,
           "zero": 0,
           "carry": 0,
-          "negative": 0
+          "negative": 0,
+          "overflow": 0,
+          "flags": 0
         }
       }
     },
@@ -191,7 +191,7 @@
       "type": "MuxComponent",
       "label": "MUX_PC",
       "x": 304,
-      "y": 624,
+      "y": 608,
       "w": 64,
       "h": 96,
       "meta": {
@@ -317,7 +317,7 @@
       "w": 144,
       "h": 48,
       "x": 1520,
-      "y": 656,
+      "y": 608,
       "meta": {
         "bitWidth": 16,
         "hasWriteEnable": false
@@ -334,9 +334,10 @@
       "w": 144,
       "h": 48,
       "x": 1520,
-      "y": 784,
+      "y": 816,
       "meta": {
-        "bitWidth": 16
+        "bitWidth": 16,
+        "hasWriteEnable": false
       },
       "tickSteps": [
         2
@@ -348,8 +349,8 @@
       "label": "MAR",
       "w": 144,
       "h": 48,
-      "x": 992,
-      "y": 1008,
+      "x": 448,
+      "y": 960,
       "meta": {
         "bitWidth": 8,
         "mirrorPorts": true,
@@ -370,7 +371,7 @@
       "label": "R",
       "w": 144,
       "h": 48,
-      "x": 1504,
+      "x": 1520,
       "y": 928,
       "meta": {
         "bitWidth": 16,
@@ -467,29 +468,6 @@
       "nodes": []
     },
     {
-      "id": "dc5cc45c-b9ba-4358-ac75-07c603566556",
-      "sourceComponentId": "decoder-1",
-      "sourcePortName": "operandSigned",
-      "targetComponentId": "9c3b9c7b-52e0-4388-9287-b4e8144873b2",
-      "targetPortName": "in_0",
-      "label": "",
-      "visible": true,
-      "nodes": [
-        {
-          "x": 1056,
-          "y": 736
-        },
-        {
-          "x": 1120,
-          "y": 736
-        },
-        {
-          "x": 1120,
-          "y": 832
-        }
-      ]
-    },
-    {
       "id": "eadbc3c9-bb47-4b57-800e-dadb1066b486",
       "sourceComponentId": "adder-pc",
       "sourcePortName": "result",
@@ -499,16 +477,8 @@
       "visible": true,
       "nodes": [
         {
-          "x": 448,
-          "y": 656
-        },
-        {
           "x": 288,
-          "y": 656
-        },
-        {
-          "x": 288,
-          "y": 560
+          "y": 688
         }
       ]
     },
@@ -528,33 +498,13 @@
       ]
     },
     {
-      "id": "hidden-ula-zero-cpu",
+      "id": "ula-flags-cpu",
       "sourceComponentId": "ula-1",
-      "sourcePortName": "zero",
+      "sourcePortName": "flags",
       "targetComponentId": "cpu-1",
-      "targetPortName": "in_flagZero",
+      "targetPortName": "in_flags",
       "label": "",
-      "visible": false,
-      "nodes": []
-    },
-    {
-      "id": "hidden-ula-carry-cpu",
-      "sourceComponentId": "ula-1",
-      "sourcePortName": "carry",
-      "targetComponentId": "cpu-1",
-      "targetPortName": "in_flagCarry",
-      "label": "",
-      "visible": false,
-      "nodes": []
-    },
-    {
-      "id": "hidden-ula-negative-cpu",
-      "sourceComponentId": "ula-1",
-      "sourcePortName": "negative",
-      "targetComponentId": "cpu-1",
-      "targetPortName": "in_flagNegative",
-      "label": "",
-      "visible": false,
+      "visible": true,
       "nodes": []
     },
     {
@@ -565,12 +515,7 @@
       "targetPortName": "data",
       "label": "",
       "visible": true,
-      "nodes": [
-        {
-          "x": 1856,
-          "y": 992
-        }
-      ]
+      "nodes": []
     },
     {
       "id": "ae22e979-a198-4c34-9da1-569d7c0538f8",
@@ -582,8 +527,16 @@
       "visible": true,
       "nodes": [
         {
+          "x": 1504,
+          "y": 960
+        },
+        {
           "x": 1184,
-          "y": 944
+          "y": 960
+        },
+        {
+          "x": 1184,
+          "y": 864
         }
       ]
     },
@@ -597,20 +550,16 @@
       "visible": true,
       "nodes": [
         {
-          "x": 992,
-          "y": 1056
-        },
-        {
-          "x": 304,
-          "y": 1056
-        },
-        {
-          "x": 304,
-          "y": 1072
+          "x": 416,
+          "y": 992
         },
         {
           "x": 272,
-          "y": 1072
+          "y": 992
+        },
+        {
+          "x": 272,
+          "y": 656
         }
       ]
     },
@@ -891,29 +840,6 @@
       ]
     },
     {
-      "id": "fff34aee-be14-4ec6-b62c-bb053be6cb2a",
-      "sourceComponentId": "decoder-1",
-      "sourcePortName": "opcode",
-      "targetComponentId": "cpu-1",
-      "targetPortName": "in_opcode",
-      "label": "",
-      "visible": true,
-      "nodes": [
-        {
-          "x": 592,
-          "y": 608
-        },
-        {
-          "x": 592,
-          "y": 352
-        },
-        {
-          "x": 576,
-          "y": 352
-        }
-      ]
-    },
-    {
       "id": "efd62695-e22a-42c3-9b7d-d31c5180b1dd",
       "sourceComponentId": "fb653707-7a61-4e5c-8ce4-5f1346e715b2",
       "sourcePortName": "value",
@@ -923,12 +849,20 @@
       "visible": true,
       "nodes": [
         {
-          "x": 992,
-          "y": 1072
+          "x": 432,
+          "y": 984
+        },
+        {
+          "x": 432,
+          "y": 944
         },
         {
           "x": 768,
-          "y": 1072
+          "y": 944
+        },
+        {
+          "x": 768,
+          "y": 864
         }
       ]
     },
@@ -943,7 +877,19 @@
       "nodes": [
         {
           "x": 1152,
-          "y": 844
+          "y": 808
+        },
+        {
+          "x": 1152,
+          "y": 1104
+        },
+        {
+          "x": 608,
+          "y": 1104
+        },
+        {
+          "x": 608,
+          "y": 984
         }
       ]
     },
@@ -987,7 +933,7 @@
       "visible": true,
       "nodes": [
         {
-          "x": 1696,
+          "x": 1680,
           "y": 1088
         },
         {
@@ -1019,6 +965,44 @@
       "label": "",
       "visible": false,
       "nodes": []
+    },
+    {
+      "id": "fda1a490-e5eb-4f33-b4fc-d222ab5c4b07",
+      "sourceComponentId": "decoder-1",
+      "sourcePortName": "opcode",
+      "targetComponentId": "cpu-1",
+      "targetPortName": "in_opcode",
+      "label": "",
+      "visible": true,
+      "nodes": [
+        {
+          "x": 1056,
+          "y": 592
+        },
+        {
+          "x": 592,
+          "y": 592
+        },
+        {
+          "x": 592,
+          "y": 448
+        }
+      ]
+    },
+    {
+      "id": "54e00dc6-c0e4-40c3-9cb9-92df8ba50559",
+      "sourceComponentId": "decoder-1",
+      "sourcePortName": "operandSigned",
+      "targetComponentId": "9c3b9c7b-52e0-4388-9287-b4e8144873b2",
+      "targetPortName": "in_0",
+      "label": "",
+      "visible": true,
+      "nodes": [
+        {
+          "x": 1120,
+          "y": 768
+        }
+      ]
     }
   ],
   "canvasSize": {
@@ -1236,5 +1220,5 @@
       }
     }
   ],
-  "version": 5
+  "version": 7
 }

@@ -3,22 +3,23 @@
 import { useExecutionStore } from "@/lib/executionStore";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { usePlaybackStore } from "@/lib/playbackStore";
+import { useT } from "@/lib/i18n";
 
 /**
  * Seven-segment tick counter.
  *
  * The tick was previously written twice — a 32px figure inside the timeline
  * card and a small `T{n}` in the canvas clock toolbar — and neither read as an
- * instrument. This is the single counter, now part of the simulation bar, sitting
- * beside the player it belongs to.
+ * instrument. This is the one current-tick readout, part of the simulation bar,
+ * sitting beside the player it belongs to. (The total, "de N", also appears as
+ * "/ N" at the end of the player's controls.)
  *
  * Drawn as inline SVG rather than with a display webfont: the repo has no font
  * files, and a seven-segment shape is seven polygons.
  *
- * On colour: the lit segments are plain foreground, not the accent. A block
- * this large filled with a saturated hue would eat most of the screen's colour
- * budget, and colour here has to keep meaning "state" — which is why the one
- * coloured case is a halted CPU.
+ * On colour: the counter takes the control-wire green — segments, border and
+ * a faint fill — while the simulation runs, so it stands out as part of that
+ * state, and turns red once the CPU halts.
  */
 
 /** Segment presence per digit, in order: a b c d e f g. */
@@ -73,6 +74,7 @@ function Digit({ char, lit }: { char: string; lit: string }) {
 }
 
 export default function TickDisplay() {
+  const L = useT().bar.tick;
   const currentIndex = useExecutionStore((s) => s.currentIndex);
   const totalTicks = useExecutionStore((s) => s.totalTicks);
   const isTimelineActive = useExecutionStore((s) => s.isTimelineActive);
@@ -84,13 +86,16 @@ export default function TickDisplay() {
   if (!isTimelineActive) return null;
 
   const halted = getPrimaryCpu()?.halted ?? false;
-  const lit = halted ? "var(--st-error)" : "var(--text)";
+  const lit = halted ? "var(--st-error)" : "var(--st-active)";
   const digits = String(Math.min(currentIndex, 9999)).padStart(4, "0").split("");
 
   return (
     <div
-      className="flex items-center gap-2 rounded-lg border border-line px-2 py-1"
-      style={{ background: "var(--surface)" }}
+      className="flex items-center gap-2 rounded-lg border px-2 py-1"
+      style={{
+        borderColor: lit,
+        background: `color-mix(in srgb, ${lit} 10%, var(--surface))`,
+      }}
     >
       <div className="flex items-center gap-0.5">
         {digits.map((char, i) => (
@@ -98,8 +103,10 @@ export default function TickDisplay() {
         ))}
       </div>
       <div className="flex flex-col items-start leading-none">
-        <span className="t-section leading-none">{halted ? "halted" : "tick"}</span>
-        <span className="num mt-1 font-mono text-caption text-fg-faint">de {totalTicks}</span>
+        <span className="t-section leading-none">{halted ? L.halted : L.tick}</span>
+        <span className="num mt-1 font-mono text-caption text-fg-faint">
+          {L.ofTotal(totalTicks)}
+        </span>
       </div>
 
       {/*
@@ -107,7 +114,7 @@ export default function TickDisplay() {
         hundred ticks would otherwise queue three hundred announcements.
       */}
       <span className="sr-only" role="status" aria-live={isPlaying ? "off" : "polite"}>
-        {`Tick ${currentIndex} of ${totalTicks}${halted ? ", halted" : ""}`}
+        {L.status(currentIndex, totalTicks, halted)}
       </span>
     </div>
   );

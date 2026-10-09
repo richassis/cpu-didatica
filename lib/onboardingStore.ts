@@ -2,9 +2,9 @@
  * onboardingStore.ts
  *
  * First-run state: whether the welcome screen has been seen, and the guided
- * tour — which step it is on and whether it ever finished.
+ * tour — whether it is running and which step it is on.
  *
- * Only the two "seen" flags are persisted. A tour left open must not come back
+ * Only the "welcome seen" flag is persisted. A tour left open must not come back
  * after a reload, halfway through a step that assumed a state the reload wiped.
  */
 
@@ -15,10 +15,10 @@ import { usePlaybackStore } from "./playbackStore";
 import { useMemoryPanelStore } from "./memoryPanelStore";
 import { useProgramDataStore } from "./programDataStore";
 import { PRESET_PROGRAMS } from "./presetPrograms";
+import { useLocaleStore } from "./localeStore";
 
 interface OnboardingState {
   welcomeSeen: boolean;
-  tourCompleted: boolean;
 
   /** The welcome screen was asked for again (from the Help), seen or not. */
   welcomeForced: boolean;
@@ -30,14 +30,13 @@ interface OnboardingState {
   /** Start the tour from the first step, on a clean, unmounted program. */
   startTour: () => void;
   goToStep: (index: number) => void;
-  endTour: (completed: boolean) => void;
+  endTour: () => void;
 }
 
 export const useOnboardingStore = create<OnboardingState>()(
   persist(
     (set) => ({
       welcomeSeen: false,
-      tourCompleted: false,
       welcomeForced: false,
       tourActive: false,
       stepIndex: 0,
@@ -54,7 +53,7 @@ export const useOnboardingStore = create<OnboardingState>()(
         if (execution.isTimelineActive) execution.exitTimeline();
         useMemoryPanelStore.getState().closeMemoryPanel();
         useProgramDataStore.setState({
-          assemblySource: PRESET_PROGRAMS[0].source,
+          assemblySource: PRESET_PROGRAMS[0].source[useLocaleStore.getState().locale],
           assembled: null,
           assemblyErrors: [],
           mountedSource: null,
@@ -64,17 +63,12 @@ export const useOnboardingStore = create<OnboardingState>()(
 
       goToStep: (index) => set({ stepIndex: index }),
 
-      endTour: (completed) =>
-        set((s) => ({
-          tourActive: false,
-          stepIndex: 0,
-          tourCompleted: s.tourCompleted || completed,
-        })),
+      endTour: () => set({ tourActive: false, stepIndex: 0 }),
     }),
     {
       name: "simulator-onboarding",
       version: 1,
-      partialize: (s) => ({ welcomeSeen: s.welcomeSeen, tourCompleted: s.tourCompleted }),
+      partialize: (s) => ({ welcomeSeen: s.welcomeSeen }),
     },
   ),
 );

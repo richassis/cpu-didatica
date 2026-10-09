@@ -7,7 +7,7 @@ import { useProjectStore } from "@/lib/projectStore";
 import { DEFAULT_PROJECT_ID, isDefaultProject } from "@/lib/defaultProject";
 import { useProgramDataStore } from "@/lib/programDataStore";
 import { EDITOR_ENABLED } from "@/lib/editorFlag";
-import { CODE_FILE_ACCEPT } from "@/lib/codeFile";
+import { CODE_FILE_ACCEPT, DEFAULT_PROGRAM_BASENAME } from "@/lib/codeFile";
 import SaveProgramDialog from "@/components/ProgramMode/SaveProgramDialog";
 import { useLayoutStore, ZOOM_MIN, ZOOM_MAX } from "@/lib/store";
 import { useCanvasViewStore } from "@/lib/canvasViewStore";
@@ -15,19 +15,22 @@ import SimulationSettings from "@/components/SimulationSettings";
 import HelpDialog from "@/components/Help/HelpDialog";
 import { useHelpStore } from "@/lib/helpStore";
 import ThemeToggle from "./ThemeToggle";
+import ErrorToast from "./ErrorToast";
+import { getMessages, useT } from "@/lib/i18n";
 
 /**
  * Top bar for Program Mode (the default, end-user view).
  *
  * Left: what is open. Right, in two groups: the file and display controls
  * (Abrir/Salvar, Ajustes, Claro/Escuro), then the view controls (zoom, Ajuda).
- * Montar and Simular live in the bottom bar with the player. Ajustes and Ajuda
- * open a panel just under this bar.
+ * Montar and Simular live in the bottom bar with the player. Ajustes opens a
+ * panel just under this bar; Ajuda opens the help modal (HelpDialog).
  *
  * The "Edit mode" entry point exists only in developer builds. Students never
  * see it, and `enterEditMode` refuses anyway.
  */
 export default function TopBarProgram() {
+  const t = useT();
   const enterEditMode = useModeStore((s) => s.enterEditMode);
   const activeTabId = useProjectStore((s) => s.activeTabId);
   const setActiveTab = useProjectStore((s) => s.setActiveTab);
@@ -40,6 +43,8 @@ export default function TopBarProgram() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [saveOpen, setSaveOpen] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
+  // Ajustes is the only panel under this bar; Ajuda is a modal with its own
+  // open state in useHelpStore.
   const [panel, setPanel] = useState<"settings" | null>(null);
   const helpOpen = useHelpStore((s) => s.open);
   const showHelp = useHelpStore((s) => s.show);
@@ -50,7 +55,7 @@ export default function TopBarProgram() {
   const zoomOut = useCanvasViewStore((s) => s.zoomOut);
   const fit = useCanvasViewStore((s) => s.fit);
 
-  // Escape closes whichever panel is open.
+  // Escape closes the settings panel. HelpDialog handles its own Escape.
   useEffect(() => {
     if (!panel) return;
     const onKey = (e: KeyboardEvent) => {
@@ -77,7 +82,7 @@ export default function TopBarProgram() {
     if (file) {
       setImportError(null);
       importAssembly(file).catch((err: unknown) => {
-        setImportError(err instanceof Error ? err.message : "Falha ao abrir o arquivo.");
+        setImportError(err instanceof Error ? err.message : getMessages().errors.fileOpenFailed);
       });
     }
     e.target.value = "";
@@ -88,11 +93,11 @@ export default function TopBarProgram() {
       {/* Left: what is open. The name is the anchor the file actions act on —
           without it "Salvar" has no visible subject. */}
       <div className="flex min-w-0 items-center gap-3">
-        <span className="t-body shrink-0 select-none text-fg">CPU Didática</span>
+        <span className="t-body shrink-0 select-none text-fg">{t.bar.topBar.appName}</span>
         <span className="h-5 w-px shrink-0 bg-line" />
         <span className="truncate font-mono text-small text-fg-faint">
-          {programName}
-          <span className="text-fg-muted"> · {lineCount} linhas</span>
+          {programName === DEFAULT_PROGRAM_BASENAME ? t.program.defaultName : programName}
+          <span className="text-fg-muted"> · {t.bar.topBar.lines(lineCount)}</span>
         </span>
       </div>
 
@@ -108,19 +113,19 @@ export default function TopBarProgram() {
         <Cluster>
           <ClusterButton
             onClick={() => fileRef.current?.click()}
-            title="Abrir um arquivo de texto com código assembly"
+            title={t.bar.topBar.openTitle}
           >
             <Upload size={14} strokeWidth={1.5} />
-            Abrir
+            {t.common.ui.open}
           </ClusterButton>
           <ClusterDivider />
-          <ClusterButton onClick={() => setSaveOpen(true)} title="Salvar o código em um arquivo">
+          <ClusterButton onClick={() => setSaveOpen(true)} title={t.bar.topBar.saveTitle}>
             <Download size={14} strokeWidth={1.5} />
-            Salvar
+            {t.common.ui.save}
           </ClusterButton>
         </Cluster>
 
-        <PanelButton tour="settings" label="Ajustes" active={panel === "settings"} onClick={() => togglePanel("settings")}>
+        <PanelButton tour="settings" label={t.common.ui.settings} active={panel === "settings"} onClick={() => togglePanel("settings")}>
           <Settings2 size={14} strokeWidth={1.5} />
         </PanelButton>
 
@@ -134,16 +139,16 @@ export default function TopBarProgram() {
             onClick={() => zoomOut?.()}
             disabled={!zoomOut || zoom <= ZOOM_MIN}
             className="flex h-8 w-8 items-center justify-center text-fg-muted transition-colors hover:text-fg disabled:opacity-30"
-            title="Diminuir zoom"
-            aria-label="Diminuir zoom"
+            title={t.bar.topBar.zoomOut}
+            aria-label={t.bar.topBar.zoomOut}
           >
             <Minus size={14} strokeWidth={1.5} />
           </button>
           <button
             onClick={() => fit?.()}
             className="num min-w-[3.5rem] text-center font-mono text-xs text-fg-muted transition-colors hover:text-fg"
-            title="Ajustar à tela"
-            aria-label="Ajustar à tela"
+            title={t.bar.topBar.fitToScreen}
+            aria-label={t.bar.topBar.fitToScreen}
           >
             {Math.round(zoom * 100)}%
           </button>
@@ -151,15 +156,15 @@ export default function TopBarProgram() {
             onClick={() => zoomIn?.()}
             disabled={!zoomIn || zoom >= ZOOM_MAX}
             className="flex h-8 w-8 items-center justify-center text-fg-muted transition-colors hover:text-fg disabled:opacity-30"
-            title="Aumentar zoom"
-            aria-label="Aumentar zoom"
+            title={t.bar.topBar.zoomIn}
+            aria-label={t.bar.topBar.zoomIn}
           >
             <Plus size={14} strokeWidth={1.5} />
           </button>
         </Cluster>
         </div>
 
-        <PanelButton tour="help" label="Ajuda" active={helpOpen} onClick={() => { setPanel(null); showHelp(); }}>
+        <PanelButton tour="help" label={t.common.ui.help} active={helpOpen} onClick={() => { setPanel(null); showHelp(); }}>
           <HelpCircle size={14} strokeWidth={1.5} />
         </PanelButton>
 
@@ -179,7 +184,7 @@ export default function TopBarProgram() {
         <div
           role="dialog"
           aria-modal="false"
-          aria-label="Ajustes da simulação"
+          aria-label={t.bar.topBar.settingsDialog}
           className="absolute right-4 top-full z-50 mt-2 max-h-[calc(100vh-120px)] overflow-y-auto rounded-2xl border border-line bg-surface p-4"
         >
           <SimulationSettings />
@@ -189,15 +194,11 @@ export default function TopBarProgram() {
       {/* Import failures used to go to console.error, so picking the wrong file
           looked like nothing happening at all. */}
       {importError && (
-        <div className="absolute left-1/2 top-full z-50 mt-2 w-[420px] max-w-[90vw] -translate-x-1/2 rounded-lg border border-st-error bg-surface px-3 py-2">
-          <p className="text-small leading-snug text-st-error">{importError}</p>
-          <button
-            onClick={() => setImportError(null)}
-            className="mt-1 text-small text-fg-muted underline-offset-2 hover:underline"
-          >
-            Fechar
-          </button>
-        </div>
+        <ErrorToast
+          message={importError}
+          onClose={() => setImportError(null)}
+          className="left-1/2 w-[420px] max-w-[90vw] -translate-x-1/2"
+        />
       )}
 
       {helpOpen && <HelpDialog onClose={hideHelp} />}

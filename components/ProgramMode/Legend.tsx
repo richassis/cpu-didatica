@@ -1,14 +1,16 @@
 "use client";
 
-import { Silhouette, ClockNotch, MemorySpine, GLYPHS } from "@/components/widgets/silhouettes";
+import { Silhouette, MemorySpine } from "@/components/widgets/silhouettes";
+import { useT } from "@/lib/i18n";
 
 /**
  * How to read the canvas.
  *
  * Two columns, and the point of the panel is the sentence between them: shape
- * and colour are independent channels. Nothing on this screen explained the
- * wire colours, the phase pills or the Z/C/N flags before, so a student had to
- * infer the whole vocabulary. Now it is written down.
+ * and colour are independent channels. Nothing on the canvas itself explains
+ * the shapes, the wire colours or the state colours (a flag Z/C/N/V lit, the
+ * UC halted), so a student had to infer the whole vocabulary. Now it is
+ * written down; the Ajuda's guide tab shows it.
  */
 
 /** A miniature of one component class, drawn with the real silhouette parts. */
@@ -50,91 +52,64 @@ function StateSample({ color, label, note }: { color: string; label: string; not
 }
 
 export default function Legend() {
-  const Register = GLYPHS.Register;
-  const Memory = GLYPHS.MemoryComponent;
-
+  const { shapeHeading, colorHeading, shapes, states } = useT().legend;
   return (
     <div className="w-[380px]">
       <div className="grid grid-cols-2 gap-x-4 gap-y-3">
             <div>
-              <div className="t-section mb-2">Forma — o que é</div>
+              <div className="t-section mb-2">{shapeHeading}</div>
               <div className="space-y-2">
-                <ShapeSample label="Registrador" note="guarda um único valor">
+                <ShapeSample {...shapes.register}>
                   <span className="node--boxed absolute inset-0 rounded-[6px]" />
-                  <ClockNotch />
-                  <span className="absolute left-0 top-0 flex h-4 w-4 items-center justify-center text-fg-faint">
-                    <Register size={10} strokeWidth={1.5} />
-                  </span>
                 </ShapeSample>
 
-                <ShapeSample label="Memória" note="lombada na borda esquerda">
+                <ShapeSample {...shapes.memory}>
                   <span className="node--boxed absolute inset-0 rounded-[6px]" />
                   <MemorySpine />
-                  <ClockNotch />
-                  <span className="absolute right-0.5 top-0.5 text-fg-faint">
-                    <Memory size={10} strokeWidth={1.5} />
-                  </span>
                 </ShapeSample>
 
-                <ShapeSample label="ULA" note="trapézio com entalhe">
+                <ShapeSample {...shapes.alu}>
                   <Silhouette kind="alu" />
                 </ShapeSample>
 
-                <ShapeSample label="Multiplexador" note="trapézio, sem entalhe">
+                <ShapeSample {...shapes.mux}>
                   <Silhouette kind="mux" />
                 </ShapeSample>
 
-                <ShapeSample label="Decodificador" note="barra vertical fina">
+                <ShapeSample {...shapes.decoder}>
                   <span className="node--boxed absolute inset-y-0 left-1/2 w-2 -translate-x-1/2 rounded-[3px]" />
                 </ShapeSample>
 
-                <ShapeSample label="Unidade de controle" note="tracejada — comanda o caminho de dados">
+                <ShapeSample {...shapes.control}>
                   <span className="node--boxed node--control absolute inset-0 rounded-[6px]" />
                 </ShapeSample>
               </div>
             </div>
 
             <div>
-              <div className="t-section mb-2">Cor — o que está acontecendo</div>
+              <div className="t-section mb-2">{colorHeading}</div>
               <div className="space-y-2">
                 <StateSample
                   color="var(--st-active)"
-                  label="Ativo"
-                  note="componente executando neste tick"
+                  {...states.active}
                 />
                 <StateSample
                   color="var(--st-data)"
-                  label="Fio de dado"
-                  note="azul em movimento; registrador com valor"
+                  {...states.dataWire}
                 />
                 <StateSample
                   color="var(--st-active)"
-                  label="Fio de controle"
-                  note="verde em movimento; sinal da UC"
+                  {...states.controlWire}
                 />
-                <StateSample color="var(--st-warn)" label="Atenção" note="flag ativada" />
-                <StateSample color="var(--st-error)" label="Erro" note="halt, overflow, endereço inválido" />
+                <StateSample color="var(--st-warn)" {...states.warning} />
+                <StateSample color="var(--st-error)" {...states.error} />
                 <StateSample
                   color="var(--border-strong)"
-                  label="Ocioso"
-                  note="fora deste tick"
+                  {...states.idle}
                 />
-              </div>
-
-              <div className="mt-4 border-t border-line pt-3">
-                <div className="t-section mb-1.5">Entalhe de clock ▷</div>
-                <p className="text-caption leading-snug text-fg-faint">
-                  Componentes com o entalhe são sequenciais — travam no clock.
-                  Os que não têm são combinacionais.
-                </p>
               </div>
             </div>
           </div>
-
-      <p className="mt-3 border-t border-line pt-3 text-caption leading-snug text-fg-faint">
-        As duas colunas são independentes. A forma nunca muda durante a execução, e
-        a cor nunca diz qual componente você está olhando.
-      </p>
     </div>
   );
 }

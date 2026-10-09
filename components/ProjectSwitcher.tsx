@@ -2,7 +2,6 @@
 
 import { useState, useRef } from "react";
 import { useProjectStore } from "@/lib/projectStore";
-import { isDefaultProject } from "@/lib/defaultProject";
 import { saveProjectToFile, loadProjectFromFile, CPUD_FILE_EXTENSION } from "@/lib/projectStore";
 import { 
   Star, 
@@ -16,9 +15,7 @@ import {
 } from "lucide-react";
 
 /**
- * ProjectSwitcher - Dropdown menu for project selection and management
- * 
- * Replaces the multi-tab interface with a simpler dropdown that allows:
+ * ProjectSwitcher - Edit-mode dropdown for project selection and management:
  * - Switching between projects
  * - Creating new projects
  * - Importing/exporting projects
@@ -107,12 +104,10 @@ export default function ProjectSwitcher() {
     setIsOpen(false);
   };
 
-  // Handle delete
+  // Handle delete. The button is only offered for non-default projects, and
+  // `closeTab` refuses the default one anyway.
   const handleDelete = () => {
-    if (!activeTabId || isDefaultProject(activeTabId)) {
-      alert("Cannot delete the default project");
-      return;
-    }
+    if (!activeTabId) return;
 
     const confirmed = confirm(`Delete project "${currentProjectName}"? This cannot be undone.`);
     if (confirmed) {
@@ -255,7 +250,7 @@ export default function ProjectSwitcher() {
               {!isDefault && (
                 <button
                   onClick={handleDelete}
-                  disabled={!activeTabId || isDefault}
+                  disabled={!activeTabId}
                   className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-st-error transition-colors hover:bg-raised disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Trash2 className="w-4 h-4" />

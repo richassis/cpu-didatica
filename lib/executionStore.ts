@@ -1,24 +1,18 @@
 import { create } from "zustand";
-import { CpuState, Memory, Register } from "@/lib/simulator";
+import { CONTROL_SIGNAL_DEFS, CpuState, Memory, Register, controlPortKey } from "@/lib/simulator";
 import type { WireDescriptor } from "@/lib/simulator";
 import type { ComponentState } from "@/lib/store";
-import { useSimulatorStore } from "@/lib/simulatorStore";
+import { inferComponentType, useSimulatorStore } from "@/lib/simulatorStore";
+import { portKind } from "@/lib/portKinds";
 import type { CPU, CpuInternalStateSnapshot } from "@/lib/simulator/Cpu";
 import { useDisplayMaskStore } from "@/lib/displayMaskStore";
 
-const DEFAULT_MAX_TICKS = 1000 as const;
+/** Safety cap for batch execution. */
+const MAX_TICKS = 1000;
 
 export interface TickSnapshot {
-  /** Index of the tick (0 = initial state before first tick). */
-  index: number;
   /** Full state of all simulator objects. */
   state: Map<string, ComponentState>;
-  /** CPU state at this tick for timeline display. */
-  cpuState: CpuState;
-  /** Opcode being executed at this tick. */
-  opcode: number;
-  /** Whether CPU was halted at this tick. */
-  halted: boolean;
   /** CPU internal fields not captured by serializeObjects(). */
   cpuInternalState: CpuInternalStateSnapshot;
   /**
@@ -45,11 +39,9 @@ export interface SubstepGroup {
  * wire animation plays.
  */
 export interface TickFrame {
-  /** Index of this tick (0 = initial, 1 = after first tick, etc.). */
-  index: number;
   /**
    * State BEFORE this tick's evaluate+commit runs.
-   * For index 0 this is the initial reset state; for index N>0 it equals
+   * For frame 0 this is the initial reset state; for frame N>0 it equals
    * postTick of frame N-1.
    */
   preTick: TickSnapshot;
@@ -82,17 +74,10 @@ export interface ExecutionState extends ExecutionDerivedState {
   frames: TickFrame[];
   /** Index currently displayed. */
   currentIndex: number;
-  /** True when a program has been executed and snapshots are ready. */
-  isLoaded: boolean;
-  /**
-   * True when a program has been loaded and the timeline is active.
-   * (Renamed from isProgramMode to avoid confusion with the UI mode in modeStore.)
-   */
+  /** True when a program has been loaded and the timeline is active. */
   isTimelineActive: boolean;
-  /** Safety cap for batch execution. */
-  MAX_TICKS: 1000;
-  /** Error message when execution stops due to max ticks. */
-  executionError: string | null;
+  /** Why execution stopped early (the run hit `MAX_TICKS`); the text is the interface's. */
+  executionError: { code: "tickLimit"; maxTicks: number } | null;
 
   loadAndExecute: (dataWords?: number[]) => void;
   goToTick: (index: number) => void;
@@ -100,7 +85,7 @@ export interface ExecutionState extends ExecutionDerivedState {
   stepBackward: () => void;
   goToStart: () => void;
   goToEnd: () => void;
-  /** Exit the timeline and reset to initial state. (Renamed from exitProgramMode.) */
+  /** Exit the timeline and reset to initial state. */
   exitTimeline: () => void;
 }
 
@@ -132,6 +117,9 @@ function toCpuInternalState(index: number): CpuInternalStateSnapshot {
       latchedFlagZero: false,
       latchedFlagCarry: false,
       latchedFlagNegative: false,
+      latchedFlagOverflow: false,
+      ulaFlags: { zero: false, carry: false, negative: false, overflow: false },
+      drivenSignals: [],
     };
   }
 
@@ -144,6 +132,9 @@ function toCpuInternalState(index: number): CpuInternalStateSnapshot {
     latchedFlagZero: cpu.latchedFlagZero,
     latchedFlagCarry: cpu.latchedFlagCarry,
     latchedFlagNegative: cpu.latchedFlagNegative,
+    latchedFlagOverflow: cpu.latchedFlagOverflow,
+    ulaFlags: { ...cpu.ulaFlags },
+    drivenSignals: cpu.getDrivenControlSignalPorts(),
   };
 }
 
@@ -186,64 +177,46 @@ function buildSubstepGroups(cpu: CPU | null, executedState: CpuState): SubstepGr
     .map(([order, componentIds]) => ({ order, componentIds }));
 }
 
-function arrChanged(x?: number[], y?: number[]): boolean {
-  if (x === y) return false;
-  if (!x || !y || x.length !== y.length) return true;
-  for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return true;
-  return false;
-}
-
 /**
  * Components that took part in this tick beyond sending a value from a substep
  * group — so the node lighting can also mark the ones that *received* something.
- * Two sources, both deliberately narrow so the whole datapath doesn't light
- * every tick from combinational ripple:
+ * A block lights because it *operated*, not because its value moved: writing
+ * the same value it already held is still a write. Two sources, both
+ * deliberately narrow so the whole datapath doesn't light every tick from
+ * combinational ripple:
  *
- *  1. Clocked storage that latched a NEW value — a register whose output moved,
- *     a GPR that was written, a memory cell that was written.
+ *  1. Clocked storage that performed a write this tick (`wroteLastCommit`) — a
+ *     register whose write-enable or CPU gate was open, a GPR or memory cell
+ *     that was written. Read from the live objects, so this must run right
+ *     after the tick.
  *  2. A component on the receiving end of a write-enable control signal that is
- *     ASSERTED this tick (a wire out of the CPU driven non-zero) — that signal
+ *     ASSERTED this tick (a wire out of the CPU at non-zero) — that signal
  *     means "you are latching now". "O recebimento de sinal de controle também
- *     deve acender o componente." The clearing edge doesn't count, and mux
- *     selects don't either — a mux lights from its own `tickSteps`.
+ *     deve acender o componente." Mux selects don't count — a mux lights from
+ *     its own `tickSteps`.
  */
-const ENABLE_SIGNAL_PORTS = new Set(["out_wrPC", "out_wrIR", "out_wrReg", "out_wrMem"]);
+const ENABLE_SIGNAL_PORTS: ReadonlySet<string> = new Set(
+  CONTROL_SIGNAL_DEFS.filter((d) => d.role === "writeEnable").map((d) => controlPortKey(d.name)),
+);
 function computeActivatedComponents(
   cpu: CPU | null,
   wires: WireDescriptor[],
-  pre: TickSnapshot,
   post: TickSnapshot,
 ): string[] {
   if (!cpu) return [];
   const ids = new Set<string>();
 
-  for (const comp of cpu.getRegisteredComponents()) {
-    const a = pre.state.get(comp.id);
-    const b = post.state.get(comp.id);
-    if (!a || !b) continue;
-
-    let latched = false;
-    switch (comp.type) {
-      case "Register":
-      case "PipelineRegister":
-        latched = a.ports.value !== b.ports.value;
-        break;
-      case "GprComponent":
-        latched = arrChanged(a.registers, b.registers);
-        break;
-      case "MemoryComponent":
-        latched = arrChanged(a.cells, b.cells);
-        break;
-    }
-    if (latched) ids.add(comp.id);
+  // A HALT tick doesn't tick the datapath, so the flags would be stale.
+  for (const comp of cpu.halted ? [] : cpu.getRegisteredComponents()) {
+    const storage = comp.component as unknown as { wroteLastCommit?: boolean };
+    if (storage.wroteLastCommit) ids.add(comp.id);
   }
 
   for (const w of wires) {
     if (w.sourceComponentId !== cpu.id) continue;
     if (!ENABLE_SIGNAL_PORTS.has(w.sourcePortName)) continue;
-    const before = pre.state.get(w.sourceComponentId)?.ports[w.sourcePortName];
     const after = post.state.get(w.sourceComponentId)?.ports[w.sourcePortName];
-    if (before !== after && after) ids.add(w.targetComponentId);
+    if (after) ids.add(w.targetComponentId);
   }
 
   return [...ids];
@@ -271,9 +244,11 @@ function registerFedWires(): WireDescriptor[] {
 function computeWireValues(frames: TickFrame[]): void {
   if (frames.length === 0) return;
   const sim = useSimulatorStore.getState();
-  const cpuId = sim.getPrimaryCpu()?.id;
   // Control-signal wires reflect the CPU's current state and never go stale.
-  const wires = sim.getWires().filter((w) => w.sourceComponentId !== cpuId);
+  const wires = sim.getWires().filter((w) => {
+    const source = sim.objects.get(w.sourceComponentId);
+    return !source || portKind(inferComponentType(source), w.sourcePortName) !== "control";
+  });
 
   const carried = new Map<string, number>();
   for (const w of wires) {
@@ -381,7 +356,7 @@ function resolvePcRegisterId(cpuId: string): string | null {
   const wire = useSimulatorStore
     .getState()
     .getWires()
-    .find((w) => w.sourceComponentId === cpuId && w.sourcePortName === "out_wrPC");
+    .find((w) => w.sourceComponentId === cpuId && w.sourcePortName === controlPortKey("wrPC"));
   return wire?.targetComponentId ?? null;
 }
 
@@ -397,15 +372,10 @@ function readPcRegister(pcRegisterId: string | null): number {
  */
 function captureSnapshot(index: number, instructionAddr: number): TickSnapshot {
   const sim = useSimulatorStore.getState();
-  const cpu = sim.getPrimaryCpu();
   const state = cloneStateMap(sim.serializeObjects());
 
   return {
-    index,
     state,
-    cpuState: cpu?.state ?? CpuState.FETCH,
-    opcode: Number(cpu?.in_opcode?.value ?? 0),
-    halted: cpu?.halted ?? false,
     cpuInternalState: toCpuInternalState(index),
     pc: instructionAddr,
   };
@@ -414,10 +384,8 @@ function captureSnapshot(index: number, instructionAddr: number): TickSnapshot {
 export const useExecutionStore = create<ExecutionState>()((set, get) => ({
   frames: [],
   currentIndex: 0,
-  isLoaded: false,
   isTimelineActive: false,
   executionError: null,
-  MAX_TICKS: DEFAULT_MAX_TICKS,
   totalTicks: 0,
   canGoForward: false,
   canGoBack: false,
@@ -452,7 +420,6 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
       // no substeps to reveal.
       const initialSnapshot = captureSnapshot(0, instructionAddr);
       frames.push({
-        index: 0,
         preTick: initialSnapshot,
         postTick: initialSnapshot,
         substepGroups: [],
@@ -460,7 +427,7 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
       });
 
       let tickCount = 0;
-      while (tickCount < get().MAX_TICKS) {
+      while (tickCount < MAX_TICKS) {
         const cpu = sim.getPrimaryCpu();
         if (cpu?.halted) break;
 
@@ -489,14 +456,12 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
         const substepGroups = buildSubstepGroups(sim.getPrimaryCpu(), executedState);
 
         frames.push({
-          index: tickCount,
           preTick: preSnapshot,
           postTick: postSnapshot,
           substepGroups,
           activatedComponentIds: computeActivatedComponents(
             sim.getPrimaryCpu(),
             wires,
-            preSnapshot,
             postSnapshot,
           ),
         });
@@ -507,10 +472,9 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
       }
 
       const halted = sim.getPrimaryCpu()?.halted ?? false;
-      if (!halted && tickCount >= get().MAX_TICKS) {
-        const message = `Execution stopped after ${get().MAX_TICKS} ticks (possible infinite loop).`;
-        console.warn(message);
-        set({ executionError: message });
+      if (!halted && tickCount >= MAX_TICKS) {
+        console.warn(`Execution stopped after ${MAX_TICKS} ticks (possible infinite loop).`);
+        set({ executionError: { code: "tickLimit", maxTicks: MAX_TICKS } });
       } else {
         set({ executionError: null });
       }
@@ -529,7 +493,6 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
     set({
       frames,
       currentIndex: 0,
-      isLoaded: frames.length > 0,
       isTimelineActive: true,
       ...toDerivedState(frames, 0),
     });
@@ -606,10 +569,8 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
     set({
       frames: [],
       currentIndex: 0,
-      isLoaded: false,
       isTimelineActive: false,
       executionError: null,
-      MAX_TICKS: DEFAULT_MAX_TICKS,
       totalTicks: 0,
       canGoForward: false,
       canGoBack: false,

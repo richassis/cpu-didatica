@@ -76,14 +76,4 @@ export class Wire {
       color: this.color,
     };
   }
-
-  /** Create a Wire instance from a persisted descriptor. */
-  static fromDescriptor(desc: WireDescriptor): Wire {
-    return new Wire(desc);
-  }
-
-  /** Human-readable string for debugging. */
-  toString(): string {
-    return `Wire[${this.id.slice(0, 8)}]: ${this.sourceComponentId}.${this.sourcePortName} → ${this.targetComponentId}.${this.targetPortName}`;
-  }
 }

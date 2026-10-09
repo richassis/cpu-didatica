@@ -5,7 +5,8 @@
  * OutputPorts can be wired to InputPorts; when an OutputPort's value changes,
  * all connected InputPorts receive the new value immediately.
  *
- * Type and bit-width mismatches throw at wire-creation time (fail fast).
+ * Data-type mismatches throw at wire-creation time (fail fast). Bit widths
+ * are not compared (see `assertPortsCompatible`).
  */
 
 // ── Port metadata ────────────────────────────────────────────────────────────
@@ -14,9 +15,10 @@
  * Describes the data type carried by a port.
  * - `"number"` – a numeric signal (with optional bitWidth constraint)
  * - `"opcode"` – an Opcode enum value (treated as number under the hood)
- * - `"boolean"` – a flag signal
+ *
+ * A one-bit signal (an enable, a flag) is a `"number"` of width 1 carrying 0/1.
  */
-export type PortDataType = "number" | "opcode" | "boolean";
+export type PortDataType = "number" | "opcode";
 
 export interface PortDescriptor {
   /** Unique name within the owning component, e.g. "result", "opcode", "a". */
@@ -27,8 +29,15 @@ export interface PortDescriptor {
   dataType: PortDataType;
   /** Bit width (only meaningful for numeric ports; null = unconstrained). */
   bitWidth: number | null;
-  /** Human-readable description for UI tooltips. */
+  /** Human-readable description of what the port carries (documentation only). */
   description?: string;
+}
+
+/** Clamp a numeric value into the port's bit width (no-op when unconstrained). */
+function clampToWidth<T>(value: T, bitWidth: number | null): T {
+  if (bitWidth === null || typeof value !== "number") return value;
+  const max = (1 << bitWidth) - 1;
+  return Math.max(0, Math.min(max, Math.floor(value))) as T;
 }
 
 // ── Base Port class ──────────────────────────────────────────────────────────
@@ -39,9 +48,6 @@ export abstract class Port<T = number> {
   readonly dataType: PortDataType;
   readonly bitWidth: number | null;
   readonly description: string;
-
-  /** Back-reference to owning component's ID (set when registering). */
-  componentId: string | null = null;
 
   protected _value: T;
 
@@ -58,24 +64,15 @@ export abstract class Port<T = number> {
   get value(): T {
     return this._value;
   }
-
-  /** Returns a serializable descriptor (no runtime references). */
-  toDescriptor(): PortDescriptor {
-    return {
-      name: this.name,
-      direction: this.direction,
-      dataType: this.dataType,
-      bitWidth: this.bitWidth,
-      description: this.description,
-    };
-  }
 }
 
 // ── InputPort ────────────────────────────────────────────────────────────────
 
 /**
  * An InputPort receives values from a connected OutputPort.
- * It is read-only from the component's perspective; only the Bus writes to it.
+ * Its owning component only reads it; the value arrives through the wire, or
+ * through `set()` when something outside the wiring (a reset, a snapshot
+ * restore, the editor) writes it directly.
  */
 export class InputPort<T = number> extends Port<T> {
   /** The OutputPort currently driving this input (null if unconnected). */
@@ -99,16 +96,9 @@ export class InputPort<T = number> extends Port<T> {
     return this._value;
   }
 
-  /**
-   * Set the value directly (for components that need to bypass wiring).
-   * This is useful for direct API access (e.g., Ula.setA()).
-   */
+  /** Set the value directly, bypassing the wire. */
   set(value: T): void {
-    // Clamp numeric values if bitWidth is defined
-    if ((this.dataType === "number" || this.dataType === "opcode") && this.bitWidth !== null && typeof value === "number") {
-      const max = (1 << this.bitWidth) - 1;
-      value = Math.max(0, Math.min(max, Math.floor(value))) as T;
-    }
+    value = clampToWidth(value, this.bitWidth);
     this._value = value;
     if (this.onChange) {
       this.onChange(value);
@@ -146,7 +136,7 @@ export class InputPort<T = number> extends Port<T> {
 
 /**
  * An OutputPort emits values to all connected InputPorts.
- * Writing to it can propagate immediately or be deferred until explicit propagation.
+ * `set()` propagates immediately; `setWithoutPropagate()` changes only this port.
  */
 export class OutputPort<T = number> extends Port<T> {
   /** All InputPorts currently connected to this output. */
@@ -166,14 +156,7 @@ export class OutputPort<T = number> extends Port<T> {
    * Set the output value and immediately propagate to all connected inputs.
    */
   set(value: T): void {
-    // Clamp numeric values if bitWidth is defined
-    if (this.dataType === "number" || this.dataType === "opcode") {
-      if (this.bitWidth !== null && typeof value === "number") {
-        const max = (1 << this.bitWidth) - 1;
-        value = Math.max(0, Math.min(max, Math.floor(value))) as T;
-      }
-    }
-
+    value = clampToWidth(value, this.bitWidth);
     this._value = value;
 
     // Immediate propagation to all targets
@@ -183,29 +166,13 @@ export class OutputPort<T = number> extends Port<T> {
   }
 
   /**
-   * Set the output value WITHOUT propagating to connected inputs.
-   * Use this when you want to batch updates and propagate later via `propagate()`.
+   * Set the output value WITHOUT propagating to connected inputs. The timeline
+   * uses it to reveal one component's outputs without pushing them into the
+   * components downstream (see `displayMaskStore`).
    */
   setWithoutPropagate(value: T): void {
-    // Clamp numeric values if bitWidth is defined
-    if (this.dataType === "number" || this.dataType === "opcode") {
-      if (this.bitWidth !== null && typeof value === "number") {
-        const max = (1 << this.bitWidth) - 1;
-        value = Math.max(0, Math.min(max, Math.floor(value))) as T;
-      }
-    }
-
+    value = clampToWidth(value, this.bitWidth);
     this._value = value;
-  }
-
-  /**
-   * Explicitly propagate the current value to all connected inputs.
-   * Call this after using `setWithoutPropagate()` to push the value downstream.
-   */
-  propagate(): void {
-    for (const target of this._targets) {
-      target._receive(this._value);
-    }
   }
 
   /** Called by Bus when wiring. */
@@ -217,22 +184,12 @@ export class OutputPort<T = number> extends Port<T> {
   _removeTarget(input: InputPort<T>): void {
     this._targets.delete(input);
   }
-
-  /** Number of connected inputs. */
-  get targetCount(): number {
-    return this._targets.size;
-  }
-
-  /** Iterate over connected inputs (for debugging / UI). */
-  get targets(): ReadonlySet<InputPort<T>> {
-    return this._targets;
-  }
 }
 
 // ── Utility: type/width compatibility check ──────────────────────────────────
 
 /**
- * Throws if the output and input ports are incompatible (type or bit-width).
+ * Throws if the output and input ports carry different data types.
  */
 export function assertPortsCompatible(
   output: OutputPort<unknown>,
@@ -245,19 +202,8 @@ export function assertPortsCompatible(
     );
   }
 
-  // Bit-width check: if both specify a width, they must match
-  // if (
-  //   output.bitWidth !== null &&
-  //   input.bitWidth !== null &&
-  //   output.bitWidth !== input.bitWidth
-  // ) {
-  //   throw new RangeError(
-  //     `Port bit-width mismatch: output "${output.name}" (${output.bitWidth} bits) ` +
-  //     `→ input "${input.name}" (${input.bitWidth} bits)`
-  //   );
-  // }
-
-  // If only one specifies a width, allow it (the constrained side will clamp)
+  // Bit widths are not compared: a wire delivers the source's value
+  // unchanged, whatever width the input declares.
 }
 
 // ── Connectable interface ────────────────────────────────────────────────────
@@ -273,40 +219,4 @@ export interface Connectable {
   readonly id: string;
   /** Returns the map of port name → Port instance. */
   getPorts(): PortMap;
-}
-
-/**
- * Helper to get a typed input port from a Connectable.
- */
-export function getInputPort<T>(
-  component: Connectable,
-  name: string,
-): InputPort<T> {
-  const ports = component.getPorts();
-  const port = ports[name];
-  if (!port) {
-    throw new RangeError(`Component "${component.id}" has no port named "${name}"`);
-  }
-  if (port.direction !== "input") {
-    throw new TypeError(`Port "${name}" on component "${component.id}" is not an input`);
-  }
-  return port as InputPort<T>;
-}
-
-/**
- * Helper to get a typed output port from a Connectable.
- */
-export function getOutputPort<T>(
-  component: Connectable,
-  name: string,
-): OutputPort<T> {
-  const ports = component.getPorts();
-  const port = ports[name];
-  if (!port) {
-    throw new RangeError(`Component "${component.id}" has no port named "${name}"`);
-  }
-  if (port.direction !== "output") {
-    throw new TypeError(`Port "${name}" on component "${component.id}" is not an output`);
-  }
-  return port as OutputPort<T>;
 }

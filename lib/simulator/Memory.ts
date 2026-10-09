@@ -2,9 +2,10 @@ import type { Clockable } from "./Clockable";
 import { type Connectable, type PortMap, InputPort, OutputPort } from "./Port";
 
 /**
- * Unified Memory data model.
+ * Data memory model.
  *
- * A word-addressable memory with configurable size and word width.
+ * A word-addressable memory with configurable size and word width. The CPU is
+ * Harvard: instructions live in a separate `InstructionMemory`.
  *
  * Port map:
  *  Inputs:
@@ -14,7 +15,7 @@ import { type Connectable, type PortMap, InputPort, OutputPort } from "./Port";
  *    wrMem   – write-enable (1 = write data input to mem[addr] on tick)
  *
  *  Output:
- *    out     – data read from mem[addr] (0 when rdMem = 0)
+ *    out     – data read from mem[addr]; holds the last value read while rdMem = 0
  *
  * Both rdMem and wrMem are evaluated on every clock tick.
  * In phased execution, reads happen in evaluate and writes happen in commit.
@@ -46,7 +47,7 @@ export class Memory implements Clockable, Connectable {
   /** Input: write-enable control signal (1 = write on tick). */
   readonly in_wrMem: InputPort<number>;
 
-  /** Output: data read from mem[addr] (only valid after rdMem tick). */
+  /** Output: the last word read (updated only on a tick with rdMem = 1). */
   readonly out_data: OutputPort<number>;
 
   constructor(id: string, name: string, wordCount = 256, bitWidth = 16) {
@@ -132,19 +133,27 @@ export class Memory implements Clockable, Connectable {
     }
   }
 
+  /** Whether the last `commit()` wrote a cell, whether or not its value changed. */
+  get wroteLastCommit(): boolean {
+    return this._wroteLastCommit;
+  }
+
+  private _wroteLastCommit = false;
+
   /**
    * Sequential phase: write to memory when enabled.
    */
   commit(): void {
     const addr  = this.clampAddr(this.in_addr.value);
     const wr    = this.in_wrMem.value !== 0;
+    this._wroteLastCommit = wr;
 
     if (wr) {
       this._cells[addr] = this.clampWord(this.in_data.value);
     }
   }
 
-  /** Called by the global Clock on each tick. */
+  /** Single-call tick: read, then write. */
   onTick(): void {
     this.evaluate();
     this.commit();

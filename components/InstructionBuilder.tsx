@@ -204,7 +204,7 @@ export default function InstructionBuilder({ imem, onClose, initialAddress = 0 }
                   className="w-20 bg-sunken border border-line rounded px-3 py-2 text-fg font-mono focus:outline-none focus:border-st-active"
                   placeholder="-5"
                 />
-                <span className="text-xs text-fg-muted">Range: 0x00-0xFF / -128..255</span>
+                <span className="text-xs text-fg-muted">0x00–0xFF / −128..127</span>
               </div>
             )}
           </>

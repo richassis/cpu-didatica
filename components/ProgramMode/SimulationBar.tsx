@@ -13,26 +13,18 @@ import {
   SkipForward,
   X,
 } from "lucide-react";
-import { Opcode, opcodeToMnemonic } from "@/lib/simulator";
 import { useExecutionStore } from "@/lib/executionStore";
 import { usePlaybackStore } from "@/lib/playbackStore";
 import { useProgramDataStore, mountStatus } from "@/lib/programDataStore";
+import { useT } from "@/lib/i18n";
 import TickDisplay from "@/components/ProgramMode/TickDisplay";
-
-function formatOpcode(opcode: number): string {
-  try {
-    return opcodeToMnemonic(opcode as Opcode);
-  } catch {
-    return `0x${opcode.toString(16).toUpperCase().padStart(2, "0")}`;
-  }
-}
 
 /**
  * The single simulation control bar, along the bottom.
  *
- * Everything you do to run a program is here, left to right: Montar, Simular,
- * the player, and the tick counter. Settings, legend, zoom and file actions
- * are in the top bar.
+ * Everything you do to run a program is here: Montar and Simular on the left,
+ * the player centred, the tick counter on the right. Settings, zoom, help and
+ * file actions are in the top bar.
  *
  * Montar produces the listing and Simular refuses to run anything that is not
  * a clean, up-to-date mount (`mountStatus`) — two separate steps, which is the
@@ -47,6 +39,7 @@ function formatOpcode(opcode: number): string {
  * that Montar and Simular are reachable before the first run.
  */
 export default function SimulationBar() {
+  const t = useT();
   const isTimelineActive = useExecutionStore((s) => s.isTimelineActive);
   const frames = useExecutionStore((s) => s.frames);
   const currentIndex = useExecutionStore((s) => s.currentIndex);
@@ -76,15 +69,8 @@ export default function SimulationBar() {
   const isLocked = isTimelineActive || isRunning;
   const status = mountStatus({ mountedSource, assemblySource, assembled, assemblyErrors });
   const canRun = status === "ok" && !isLocked;
-  const runTitle = isLocked
-    ? "Simulação em andamento"
-    : status === "none"
-      ? "Monte o programa primeiro"
-      : status === "stale"
-        ? "Montagem desatualizada — monte de novo"
-        : status === "errors"
-          ? "Corrija os erros de montagem"
-          : "Simular o programa até HLT";
+  const L = t.bar.simulation;
+  const runTitle = isLocked ? L.runTitle.locked : L.runTitle[status];
 
   /**
    * Every manual navigation stops playback first. It cannot live inside
@@ -95,11 +81,6 @@ export default function SimulationBar() {
     pause();
     action();
   };
-
-  const opcodeLabel = useMemo(() => {
-    const snapshot = frames[currentIndex]?.postTick;
-    return snapshot ? formatOpcode(snapshot.opcode) : "--";
-  }, [frames, currentIndex]);
 
   const progress = totalTicks > 0 ? (currentIndex / totalTicks) * 100 : 0;
 
@@ -127,128 +108,132 @@ export default function SimulationBar() {
     <div className="fixed bottom-0 left-0 right-0 z-50 px-4 pb-3">
       <div className="mx-auto w-full max-w-[1400px]">
         <div data-tour="bar" className="rounded-2xl border border-line bg-surface px-4 py-3">
-          <div className="flex items-center gap-2">
-            <button
-              data-tour="montar"
-              onClick={() => mountProgram()}
-              disabled={isLocked}
-              title="Montar (compilar) o código-fonte"
-              className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-                status === "ok"
-                  ? "border-line text-fg-muted hover:border-line-strong hover:text-fg"
-                  : "border-st-active bg-st-active/10 text-fg"
-              }`}
-            >
-              <Hammer size={14} strokeWidth={1.5} className={status === "ok" ? "" : "text-st-active"} />
-              Montar
-              {status === "stale" && (
-                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-st-warn" aria-hidden />
-              )}
-            </button>
-
-            <button
-              data-tour="simular"
-              onClick={() => runProgram()}
-              disabled={!canRun}
-              title={runTitle}
-              className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-                status === "ok"
-                  ? "border-st-active bg-st-active/10 text-fg"
-                  : "border-line text-fg-muted hover:border-line-strong hover:text-fg"
-              }`}
-            >
-              {isRunning ? (
-                <LoaderCircle size={14} strokeWidth={1.5} className="animate-spin text-st-active" />
-              ) : (
-                <Play size={14} strokeWidth={1.5} className={status === "ok" ? "text-st-active" : ""} />
-              )}
-              {isRunning ? "Simulando…" : "Simular"}
-            </button>
-
-            <span className="mx-1 h-5 w-px shrink-0 bg-line" />
-
-            {isTimelineActive ? (
-              <>
-                <TransportButton
-                  onClick={manual(goToStart)}
-                  disabled={!canGoBack}
-                  title="Ir para o início"
-                >
-                  <SkipBack size={14} strokeWidth={1.5} />
-                </TransportButton>
-                <TransportButton
-                  onClick={manual(stepBackward)}
-                  disabled={!canGoBack}
-                  title="Voltar um tick"
-                >
-                  <ChevronLeft size={16} strokeWidth={1.5} />
-                </TransportButton>
-
-                {/* Play walks the timeline tick by tick with the animations
-                    intact; the skip button beside it is the instant jump. Two
-                    buttons rather than one hidden mode. */}
-                <button
-                  onClick={togglePlay}
-                  title={isPlaying ? "Pausar" : "Percorrer todos os ticks"}
-                  aria-label={isPlaying ? "Pausar" : "Reproduzir"}
-                  className="flex h-8 items-center gap-1.5 rounded-lg border border-line-strong px-3 text-xs text-fg transition-colors hover:border-st-active"
-                >
-                  {isPlaying ? (
-                    <Pause size={14} strokeWidth={1.5} className="text-st-active" />
-                  ) : (
-                    <Play size={14} strokeWidth={1.5} className="text-st-active" />
-                  )}
-                  {isPlaying ? "Pausar" : "Reproduzir"}
-                </button>
-
-                <TransportButton
-                  onClick={manual(stepForward)}
-                  disabled={!canGoForward}
-                  title="Avançar um tick"
-                >
-                  <ChevronRight size={16} strokeWidth={1.5} />
-                </TransportButton>
-                <BoostButton />
-                <TransportButton
-                  onClick={manual(goToEnd)}
-                  disabled={!canGoForward}
-                  title="Ir para o fim, sem animar"
-                >
-                  <SkipForward size={14} strokeWidth={1.5} />
-                </TransportButton>
-
-                <span className="num ml-2 font-mono text-xs text-fg-muted">/ {totalTicks}</span>
-
-                <span className="rounded-md border border-line px-2 py-1 font-mono text-small text-fg-muted">
-                  {opcodeLabel}
-                </span>
-              </>
-            ) : (
-              <span
-                className={`min-w-0 truncate font-mono text-small ${
-                  status === "errors" ? "text-st-error" : "text-fg-faint"
+          {/* Three areas: build on the left, the player centred, the counter on
+              the right. The outer columns share the leftover width equally,
+              so the player stays centred whatever either side holds. */}
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+            <div className="flex min-w-0 items-center gap-2">
+              <button
+                data-tour="montar"
+                onClick={() => mountProgram()}
+                disabled={isLocked}
+                title={L.assembleTitle}
+                className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                  status === "ok"
+                    ? "border-line text-fg-muted hover:border-line-strong hover:text-fg"
+                    : "border-st-active bg-st-active/10 text-fg"
                 }`}
               >
-                {status === "errors"
-                  ? `${assemblyErrors.length} ${assemblyErrors.length === 1 ? "erro" : "erros"} de montagem`
-                  : status === "ok" && assembled
-                    ? `${assembled.listing.length} instruções — simule para percorrer tick a tick`
-                    : status === "stale"
-                      ? "código alterado — monte de novo"
-                      : "monte o programa para simular"}
-              </span>
-            )}
+                <Hammer size={14} strokeWidth={1.5} className={status === "ok" ? "" : "text-st-active"} />
+                {t.common.ui.assemble}
+                {status === "stale" && (
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-st-warn" aria-hidden />
+                )}
+              </button>
 
-            <div className="ml-auto flex items-center gap-2">
+              <button
+                data-tour="simular"
+                onClick={() => runProgram()}
+                disabled={!canRun}
+                title={runTitle}
+                className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                  status === "ok"
+                    ? "border-st-active bg-st-active/10 text-fg"
+                    : "border-line text-fg-muted hover:border-line-strong hover:text-fg"
+                }`}
+              >
+                {isRunning ? (
+                  <LoaderCircle size={14} strokeWidth={1.5} className="animate-spin text-st-active" />
+                ) : (
+                  <Play size={14} strokeWidth={1.5} className={status === "ok" ? "text-st-active" : ""} />
+                )}
+                {isRunning ? L.simulating : t.common.ui.simulate}
+              </button>
+
+              {!isTimelineActive && (
+                <span
+                  className={`min-w-0 truncate font-mono text-small ${
+                    status === "errors" ? "text-st-error" : "text-fg-faint"
+                  }`}
+                >
+                  {status === "errors"
+                    ? L.status.errors(assemblyErrors.length)
+                    : status === "ok" && assembled
+                      ? L.status.ready(assembled.listing.length)
+                      : status === "stale"
+                        ? L.status.stale
+                        : L.status.none}
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              {isTimelineActive && (
+                <>
+                  <TransportButton
+                    onClick={manual(goToStart)}
+                    disabled={!canGoBack}
+                    title={L.goToStart}
+                  >
+                    <SkipBack size={14} strokeWidth={1.5} />
+                  </TransportButton>
+                  <TransportButton
+                    onClick={manual(stepBackward)}
+                    disabled={!canGoBack}
+                    title={L.stepBack}
+                  >
+                    <ChevronLeft size={16} strokeWidth={1.5} />
+                  </TransportButton>
+
+                  {/* Play walks the timeline tick by tick with the animations
+                      intact; the skip button beside it is the instant jump. Two
+                      buttons rather than one hidden mode. */}
+                  <button
+                    onClick={togglePlay}
+                    title={isPlaying ? L.pause : L.playTitle}
+                    aria-label={isPlaying ? L.pause : L.play}
+                    className="flex h-8 items-center gap-1.5 rounded-lg border border-line-strong px-3 text-xs text-fg transition-colors hover:border-st-active"
+                  >
+                    {isPlaying ? (
+                      <Pause size={14} strokeWidth={1.5} className="text-st-active" />
+                    ) : (
+                      <Play size={14} strokeWidth={1.5} className="text-st-active" />
+                    )}
+                    {isPlaying ? L.pause : L.play}
+                  </button>
+
+                  <TransportButton
+                    onClick={manual(stepForward)}
+                    disabled={!canGoForward}
+                    title={L.stepForward}
+                  >
+                    <ChevronRight size={16} strokeWidth={1.5} />
+                  </TransportButton>
+                  <BoostButton />
+                  <TransportButton
+                    onClick={manual(goToEnd)}
+                    disabled={!canGoForward}
+                    title={L.goToEnd}
+                  >
+                    <SkipForward size={14} strokeWidth={1.5} />
+                  </TransportButton>
+
+                  <span className="num ml-2 font-mono text-xs text-fg-muted">/ {totalTicks}</span>
+
+                </>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2">
               <TickDisplay />
               {isTimelineActive && (
                 <button
                   onClick={manual(exitTimeline)}
-                  title="Encerrar a linha do tempo"
+                  title={L.stopTitle}
                   className="flex h-8 items-center gap-1.5 rounded-lg border border-st-error px-3 text-xs text-st-error transition-colors hover:bg-st-error/10"
                 >
                   <X size={13} strokeWidth={1.5} />
-                  Encerrar
+                  {t.common.ui.stop}
                 </button>
               )}
             </div>
@@ -256,7 +241,7 @@ export default function SimulationBar() {
 
           {executionError && (
             <div className="mt-3 rounded-lg border border-st-error px-3 py-2 text-xs text-st-error">
-              {executionError}
+              {t.errors.tickLimit(executionError.maxTicks)}
             </div>
           )}
 
@@ -286,7 +271,7 @@ export default function SimulationBar() {
                     pause();
                     goToTick(Number(event.target.value));
                   }}
-                  aria-label="Tick"
+                  aria-label={L.timeline}
                   className="timeline-slider absolute inset-0 w-full cursor-pointer appearance-none bg-transparent"
                 />
               </div>
@@ -329,6 +314,7 @@ function TransportButton({
  * by accident. The `F` key does the same (`useSimulationShortcuts`).
  */
 function BoostButton() {
+  const L = useT().bar.simulation;
   const boost = usePlaybackStore((s) => s.boost);
   const setBoost = usePlaybackStore((s) => s.setBoost);
 
@@ -352,8 +338,8 @@ function BoostButton() {
       onKeyUp={(e) => {
         if (e.key === "Enter" || e.key === " ") setBoost(false);
       }}
-      title="Segure para acelerar a animação (F)"
-      aria-label="Acelerar a animação"
+      title={L.boostTitle}
+      aria-label={L.boost}
       aria-pressed={boost}
       className={`flex h-8 w-8 items-center justify-center rounded-lg border transition-colors ${
         boost

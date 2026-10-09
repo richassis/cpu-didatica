@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Dúvidas e conversas
+    url: https://github.com/richassis/cpu-didatica/discussions
+    about: Dúvidas de uso, relatos de uso em aula e ideias ainda em aberto.
+  - name: Abrir o simulador
+    url: https://cpu-didatica.vercel.app
+    about: A versão publicada, direto no navegador.

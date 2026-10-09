@@ -29,7 +29,10 @@ export interface ComponentInstance {
   h: number;
   /** Optional per-type metadata (e.g. bitWidth for Register, numInputs for Mux) */
   meta?: Record<string, unknown>;
-  /** Persisted runtime state — port values, register bank, memory cells. */
+  /**
+   * Snapshot of runtime state — port values, register bank, memory cells.
+   * Written by `saveState`; the editor's autosave carries it into the project.
+   */
   state?: ComponentState;
   /** CPU states this component should tick on (overrides defaults) */
   tickSteps?: number[];

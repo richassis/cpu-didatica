@@ -10,7 +10,7 @@ import { useIsUnsignedPort } from "@/lib/portKinds";
 import { getWidgetDefinition } from "@/lib/widgetDefinitions";
 import { ConfigPanelForType, ComponentConfig } from "@/components/widgets/ConfigPanel";
 import { CpuState, CPU_STATE_LABELS, ALL_CPU_STATES, isClockable, Constant } from "@/lib/simulator";
-import { Opcode, INSTRUCTION_SET } from "@/lib/simulator/ISA";
+import { Opcode, INSTRUCTION_SET, formatOpcodeBits, lookupInstruction } from "@/lib/simulator/ISA";
 import { OPCODE_SEQUENCES } from "@/lib/simulator/Cpu";
 import type { CPU } from "@/lib/simulator/Cpu";
 
@@ -67,12 +67,9 @@ export default function ConfigModal({ component, onClose }: Props) {
   const isClockableObj = obj && isClockable(obj);
   const isCpu = component.type === "CpuComponent";
   const cpu = isCpu ? (obj as CPU | undefined) : undefined;
-  // There used to be an early return here swapping the whole modal for the
-  // InstructionBuilder. It compared against "InstructionMemory" while the
-  // registered type is "InstructionMemoryComponent", so it never fired. Rather
-  // than switch it on — which would make word count and bit width unreachable
-  // for instruction memory — it is gone: the builder is reached by clicking a
-  // row on the widget itself.
+  // Instruction memory gets the regular modal too, so word count and bit width
+  // stay editable; the InstructionBuilder is reached by clicking a row on the
+  // widget itself (edit mode only).
   
   // Animation step configuration (kept in tickSteps for backward compatibility)
   const currentTickSteps = useMemo(() => {
@@ -99,14 +96,13 @@ export default function ConfigModal({ component, onClose }: Props) {
   const ports = useMemo(() => {
     void revision;
     if (!isConnectable) return [];
-    const portMap = (obj as { getPorts: () => Record<string, { name: string; direction: string; value: unknown; dataType: string; bitWidth: number | null }> }).getPorts();
+    const portMap = (obj as { getPorts: () => Record<string, { name: string; direction: string; value: unknown; bitWidth: number | null }> }).getPorts();
     // Use the map KEY (not port.name) so lookups in applyPortValue and Bus stay consistent.
     // Read .value explicitly — it's a getter on the prototype, so spreading loses it.
     return Object.entries(portMap).map(([key, p]) => ({
       name:      key,
       direction: p.direction,
       value:     p.value,
-      dataType:  p.dataType,
       bitWidth:  p.bitWidth,
     }));
   }, [isConnectable, obj, revision]);
@@ -228,9 +224,8 @@ export default function ConfigModal({ component, onClose }: Props) {
     // Apply all pending port value changes (only if not recreated)
     if (!needsRecreate && isConnectable && Object.keys(portInputs).length > 0) {
       for (const [portName, rawText] of Object.entries(portInputs)) {
-        const port = ports.find(p => p.name === portName);
-        if (port) {
-          applyPortValue(portName, rawText, port.dataType);
+        if (ports.some(p => p.name === portName)) {
+          applyPortValue(portName, rawText);
         }
       }
     }
@@ -265,25 +260,19 @@ export default function ConfigModal({ component, onClose }: Props) {
   };
 
   /** Apply a typed value to the port directly */
-  const applyPortValue = (portName: string, rawText: string, dataType: string) => {
+  const applyPortValue = (portName: string, rawText: string) => {
     if (!isConnectable) return;
-    const portMap = (obj as unknown as { getPorts: () => Record<string, { set: (v: unknown) => void; direction: string; dataType: string }> }).getPorts();
+    const portMap = (obj as unknown as { getPorts: () => Record<string, { set: (v: number) => void }> }).getPorts();
     const port = portMap[portName];
     if (!port) return;
 
-    let parsed: unknown;
-    if (dataType === "boolean") {
-      parsed = rawText.trim() === "1" || rawText.trim().toLowerCase() === "true";
-    } else {
-      // Accept decimal or 0x hex
-      const n = rawText.trim().startsWith("0x")
-        ? parseInt(rawText.trim(), 16)
-        : parseInt(rawText.trim(), 10);
-      if (isNaN(n)) return;
-      parsed = n;
-    }
+    // Accept decimal or 0x hex
+    const n = rawText.trim().startsWith("0x")
+      ? parseInt(rawText.trim(), 16)
+      : parseInt(rawText.trim(), 10);
+    if (isNaN(n)) return;
 
-    port.set(parsed);
+    port.set(n);
     touch();
   };
 
@@ -292,7 +281,6 @@ export default function ConfigModal({ component, onClose }: Props) {
     if (typeof value === "number") {
       return formatPortValue(value, base, bitWidth ?? undefined, isUnsignedPort(component.id, portKey));
     }
-    if (typeof value === "boolean") return value ? "1" : "0";
     return String(value);
   };
 
@@ -347,7 +335,7 @@ export default function ConfigModal({ component, onClose }: Props) {
                           value={inputVal}
                           onChange={(e) => setPortInputs((prev) => ({ ...prev, [key]: e.target.value }))}
                           className="num h-9 flex-1 rounded-lg border border-line bg-sunken px-2 font-mono text-small text-fg focus:border-line-strong focus:outline-none"
-                          placeholder={port.dataType === "boolean" ? "0 / 1" : "0x0000"}
+                          placeholder="0x0000"
                         />
                       </div>
                     );
@@ -369,7 +357,7 @@ export default function ConfigModal({ component, onClose }: Props) {
                           value={inputVal}
                           onChange={(e) => setPortInputs((prev) => ({ ...prev, [key]: e.target.value }))}
                           className="num h-9 flex-1 rounded-lg border border-line bg-sunken px-2 font-mono text-small text-fg focus:border-line-strong focus:outline-none"
-                          placeholder={port.dataType === "boolean" ? "0 / 1" : "0x0000"}
+                          placeholder="0x0000"
                         />
                       </div>
                     );
@@ -404,7 +392,7 @@ export default function ConfigModal({ component, onClose }: Props) {
                 <option value="">Disable testing mode</option>
                 {Object.entries(INSTRUCTION_SET).map(([mnemonic, descriptor]) => (
                   <option key={mnemonic} value={descriptor.opcode}>
-                    {mnemonic} (0b{descriptor.opcode.toString(2).padStart(5, "0")})
+                    {mnemonic} (0b{formatOpcodeBits(descriptor.opcode)})
                   </option>
                 ))}
               </select>
@@ -413,10 +401,10 @@ export default function ConfigModal({ component, onClose }: Props) {
               {testingModeOpcode !== null && (
                 <div className="space-y-2 rounded-lg border border-line p-3">
                   {(() => {
-                    const selectedInstruction = Object.entries(INSTRUCTION_SET).find(([, descriptor]) => descriptor.opcode === testingModeOpcode);
-                    if (!selectedInstruction) return null;
+                    const descriptor = lookupInstruction(testingModeOpcode);
+                    if (!descriptor) return null;
 
-                    const [mnemonic, descriptor] = selectedInstruction;
+                    const { mnemonic } = descriptor;
                     const steps = OPCODE_SEQUENCES[testingModeOpcode] ?? [];
                     const isStandard = descriptor.format === "standard";
 

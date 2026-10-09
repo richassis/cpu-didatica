@@ -3,18 +3,7 @@
 import { Props } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import NodeShell from "@/components/widgets/NodeShell";
-import { Opcode, INSTRUCTION_SET } from "@/lib/simulator/ISA";
-import type { Decoder } from "@/lib/simulator/Decoder";
-
-function bin5(n: number) {
-  return n.toString(2).padStart(5, "0");
-}
-
-function getMnemonic(dec: Decoder): string {
-  const op = dec.opcode as Opcode;
-  const entry = Object.values(INSTRUCTION_SET).find((d) => d.opcode === op);
-  return entry ? entry.mnemonic : "???";
-}
+import { Opcode, formatOpcodeBits, lookupInstruction } from "@/lib/simulator/ISA";
 
 /**
  * The decoder, drawn as a thin vertical bar: the instruction word in on the
@@ -39,9 +28,9 @@ export default function DecoderComponent({ component, zoom }: Props) {
       value={
         <span className="flex flex-col items-center leading-none">
           <span className="font-mono text-cv-md font-medium">
-            {dec ? getMnemonic(dec) : "HLT"}
+            {dec ? (lookupInstruction(op)?.mnemonic ?? "???") : "HLT"}
           </span>
-          <span className="num mt-1 font-mono text-cv-xs text-fg-faint">{bin5(op)}</span>
+          <span className="num mt-1 font-mono text-cv-xs text-fg-faint">{formatOpcodeBits(op)}</span>
         </span>
       }
     />

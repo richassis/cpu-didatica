@@ -9,16 +9,11 @@ import DatapathTab from "@/components/Help/DatapathTab";
 import CreditsTab from "@/components/Help/CreditsTab";
 import FeedbackTab from "@/components/Help/FeedbackTab";
 import { CREDITS } from "@/lib/helpContent";
+import { useT } from "@/lib/i18n";
 
-type TabId = "guide" | "isa" | "datapath" | "feedback" | "credits";
+const TABS = ["guide", "isa", "datapath", "feedback", "credits"] as const;
 
-const TABS: Array<{ id: TabId; label: string }> = [
-  { id: "guide", label: "Guia" },
-  { id: "isa", label: "ISA" },
-  { id: "datapath", label: "Caminho de dados" },
-  { id: "feedback", label: "Feedback" },
-  { id: "credits", label: "Créditos" },
-];
+type TabId = (typeof TABS)[number];
 
 const FOCUSABLE = 'button:not([disabled]), input, [href], [tabindex]:not([tabindex="-1"])';
 
@@ -28,10 +23,11 @@ const FOCUSABLE = 'button:not([disabled]), input, [href], [tabindex]:not([tabind
  *
  * It opens over the simulator rather than replacing it, so nothing about a run
  * in progress is lost. Esc or a click outside closes it, focus stays inside
- * while it is open, and goes back to whatever opened it — the Ajuda button —
+ * while it is open, and goes back to whatever opened it — the Help button —
  * when it closes.
  */
 export default function HelpDialog({ onClose }: { onClose: () => void }) {
+  const t = useT().help.dialog;
   const [tab, setTab] = useState<TabId>("guide");
   const dialogRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -81,8 +77,8 @@ export default function HelpDialog({ onClose }: { onClose: () => void }) {
     if (!step) return;
     e.preventDefault();
     const next = TABS[(index + step + TABS.length) % TABS.length];
-    setTab(next.id);
-    tabRefs.current[next.id]?.focus();
+    setTab(next);
+    tabRefs.current[next]?.focus();
   };
 
   return createPortal(
@@ -97,37 +93,37 @@ export default function HelpDialog({ onClose }: { onClose: () => void }) {
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-label="Ajuda"
+        aria-label={t.aria}
         className="relative z-10 flex h-[min(88vh,820px)] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-line bg-surface"
       >
         <div className="flex shrink-0 items-center justify-between border-b border-line px-5 pt-3">
-          <div role="tablist" aria-label="Seções da ajuda" className="flex flex-wrap gap-1">
-            {TABS.map((t, i) => (
+          <div role="tablist" aria-label={t.tablistAria} className="flex flex-wrap gap-1">
+            {TABS.map((id, i) => (
               <button
-                key={t.id}
+                key={id}
                 ref={(el) => {
-                  tabRefs.current[t.id] = el;
+                  tabRefs.current[id] = el;
                 }}
                 role="tab"
-                id={`help-tab-${t.id}`}
-                aria-selected={tab === t.id}
+                id={`help-tab-${id}`}
+                aria-selected={tab === id}
                 aria-controls="help-panel"
-                tabIndex={tab === t.id ? 0 : -1}
-                onClick={() => setTab(t.id)}
+                tabIndex={tab === id ? 0 : -1}
+                onClick={() => setTab(id)}
                 onKeyDown={(e) => onTabKeyDown(e, i)}
                 className={`-mb-px whitespace-nowrap border-b-2 px-3 pb-2.5 pt-1 text-ui transition-colors ${
-                  tab === t.id
+                  tab === id
                     ? "border-st-active text-fg"
                     : "border-transparent text-fg-muted hover:text-fg"
                 }`}
               >
-                {t.label}
+                {t.tabs[id]}
               </button>
             ))}
           </div>
           <button
             onClick={onClose}
-            aria-label="Fechar a ajuda"
+            aria-label={t.close}
             className="mb-2 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-fg-muted transition-colors hover:text-fg"
           >
             <X size={14} strokeWidth={1.5} />

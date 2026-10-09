@@ -1,16 +1,13 @@
 "use client";
 
 import {
-  ISA_WORD_SIZE,
-  OPCODE_BITS,
-  OPCODE_SHIFT,
-  GPR_ADDR_BITS,
-  GPR_ADDR_SHIFT,
-  ULA_SRC_B_SHIFT,
-  ULA_DST_SHIFT,
-  OPERAND_BITS,
-  INSTRUCTION_SET,
+  FIELD_LAYOUT,
+  extractFields,
+  lookupInstruction,
+  type FieldSpec,
+  type InstructionFormat,
 } from "@/lib/simulator/ISA";
+import type { Messages } from "@/lib/i18n";
 
 export type FieldKind = "opcode" | "register" | "operand" | "pad";
 
@@ -22,54 +19,60 @@ export interface WordField {
   kind: FieldKind;
   /** What the field means for this instruction. */
   meaning?: string;
+  /** The instruction does not use the field. */
+  unused?: boolean;
 }
 
-/** Field layout of the two instruction formats, straight from the ISA constants. */
-export function formatFields(format: "standard" | "ula"): WordField[] {
-  const opcode: WordField = {
-    label: "Opcode", hi: ISA_WORD_SIZE - 1, lo: OPCODE_SHIFT, kind: "opcode",
-  };
-  if (format === "ula") {
-    return [
-      opcode,
-      { label: "Ra", hi: GPR_ADDR_SHIFT + GPR_ADDR_BITS - 1, lo: GPR_ADDR_SHIFT, kind: "register" },
-      { label: "Rb", hi: ULA_SRC_B_SHIFT + GPR_ADDR_BITS - 1, lo: ULA_SRC_B_SHIFT, kind: "register" },
-      { label: "—", hi: ULA_SRC_B_SHIFT - 1, lo: ULA_DST_SHIFT + GPR_ADDR_BITS, kind: "pad" },
-      { label: "Rd", hi: ULA_DST_SHIFT + GPR_ADDR_BITS - 1, lo: ULA_DST_SHIFT, kind: "register" },
-    ];
-  }
-  return [
-    opcode,
-    { label: "R", hi: GPR_ADDR_SHIFT + GPR_ADDR_BITS - 1, lo: GPR_ADDR_SHIFT, kind: "register" },
-    { label: "Operando (M ou N)", hi: OPERAND_BITS - 1, lo: 0, kind: "operand" },
-  ];
+/** How each field of the layout is drawn; its label comes from the catalog. */
+const FIELD_KIND: Record<FieldSpec["name"], FieldKind> = {
+  opcode:  "opcode",
+  gprAddr: "register",
+  operand: "operand",
+  srcA:    "register",
+  srcB:    "register",
+  pad:     "pad",
+  dst:     "register",
+};
+
+type BitFieldsText = Messages["reference"]["bitFields"];
+
+function toWordField(spec: FieldSpec, text: BitFieldsText): WordField {
+  return { label: text.labels[spec.name], hi: spec.shift + spec.bits - 1, lo: spec.shift, kind: FIELD_KIND[spec.name] };
 }
 
-/** The fields of a concrete word, with each one's meaning for that instruction. */
-export function wordFields(word: number): { mnemonic: string | null; format: "standard" | "ula"; fields: WordField[] } {
-  const opcode = (word >>> OPCODE_SHIFT) & ((1 << OPCODE_BITS) - 1);
-  const entry = Object.values(INSTRUCTION_SET).find((d) => d.opcode === opcode);
+/** Field layout of the two instruction formats, straight from the ISA. */
+export function formatFields(format: InstructionFormat, text: BitFieldsText): WordField[] {
+  return FIELD_LAYOUT[format].map((spec) => toWordField(spec, text));
+}
+
+/**
+ * The fields of a concrete word, with each one's meaning for that instruction,
+ * in the language of `text` (`t.reference.bitFields`).
+ */
+export function wordFields(
+  word: number,
+  text: BitFieldsText,
+): { mnemonic: string | null; format: InstructionFormat; fields: WordField[] } {
+  const entry = lookupInstruction(extractFields(word).opcode);
   const format = entry?.format ?? "standard";
-  const fields = formatFields(format).map((f): WordField => {
+  const m = text.meanings;
+  const fields = FIELD_LAYOUT[format].map((spec): WordField => {
+    const f = toWordField(spec, text);
     if (!entry) return f;
-    if (f.kind === "opcode") return { ...f, meaning: entry.mnemonic };
-    if (entry.format === "ula") {
-      if (f.label === "Ra") return { ...f, label: "Ra", meaning: "primeiro operando" };
-      if (f.label === "Rb") return { ...f, meaning: entry.usesSrcB ? "segundo operando" : "não usado (NOT)" };
-      if (f.label === "Rd") return { ...f, meaning: "destino do resultado" };
-      return { ...f, meaning: "não usado" };
+    const operand = entry.operands.find((o) => o.field === spec.name);
+    switch (spec.name) {
+      case "opcode":  return { ...f, meaning: entry.mnemonic };
+      case "srcA":    return { ...f, meaning: m.firstOperand };
+      case "srcB":    return operand ? { ...f, meaning: m.secondOperand } : { ...f, meaning: m.unusedByNot, unused: true };
+      case "dst":     return { ...f, meaning: m.resultDestination };
+      case "pad":     return { ...f, meaning: m.unused, unused: true };
+      case "gprAddr":
+        if (!operand) return { ...f, meaning: m.unused, unused: true };
+        return { ...f, meaning: operand.label === "Rs" ? m.sourceRegister : m.destinationRegister };
+      case "operand":
+        if (!operand) return { ...f, meaning: m.unused, unused: true };
+        return { ...f, meaning: operand.kind === "immediate" ? m.immediate : m.address };
     }
-    if (f.kind === "register") {
-      return { ...f, meaning: entry.usesGPR ? (entry.mnemonic === "STA" ? "registrador fonte" : "registrador destino") : "não usado" };
-    }
-    return {
-      ...f,
-      meaning: !entry.usesOperand
-        ? "não usado"
-        : entry.mnemonic === "LDAI"
-          ? "valor imediato N"
-          : "endereço M",
-    };
   });
   return { mnemonic: entry?.mnemonic ?? null, format, fields };
 }

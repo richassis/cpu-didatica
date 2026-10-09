@@ -102,23 +102,6 @@ export class Gpr implements Clockable, Connectable {
 
   // ── Accessors ────────────────────────────────────────────────
 
-  /** Number of registers in this bank. */
-  get count(): number {
-    return this._registers.length;
-  }
-
-  /** Read a register by index (direct access, bypasses ports). */
-  read(index: number): number {
-    this.assertIndex(index);
-    return this._registers[index];
-  }
-
-  /** Read a register and return its hex string. */
-  readHex(index: number): string {
-    this.assertIndex(index);
-    return this._registers[index].toString(16).toUpperCase().padStart(this.bitWidth / 4, "0");
-  }
-
   /** Write a value into a register by index (direct access, bypasses ports). */
   write(index: number, value: number): void {
     this.assertIndex(index);
@@ -133,34 +116,16 @@ export class Gpr implements Clockable, Connectable {
     }
   }
 
-  // ── Bulk operations ──────────────────────────────────────────
-
-  /** Reset every register to zero. */
-  resetAll(): void {
-    for (let i = 0; i < this._registers.length; i++) {
-      this._registers[i] = 0;
-    }
-    this.out_readDataA.set(0);
-    this.out_readDataB.set(0);
-  }
-
   /** Return a snapshot of all register values (useful for diffing / UI). */
   snapshot(): { name: string; value: number }[] {
     return this._registers.map((val, i) => ({ name: `R${i}`, value: val }));
   }
 
-  snapshotHex(): { name: string; value: string }[] {
-    return this._registers.map((val, i) => ({
-      name: `R${i}`,
-      value: val.toString(16).toUpperCase().padStart(this.bitWidth / 4, "0"),
-    }));
-  }
-
   // ── Clockable callback ───────────────────────────────────────
 
   /**
-   * Called by the global clock on each tick.
-   * Latches in_writeData into register at in_writeAddr if in_writeEnable is high.
+   * Single-call tick: refresh the outputs, then latch in_writeData into the
+   * register at in_writeAddr if in_writeEnable is high.
    */
   onTick(): void {
     this.evaluate();
@@ -197,10 +162,18 @@ export class Gpr implements Clockable, Connectable {
     return (1 << this.bitWidth) - 1;
   }
 
+  /** Whether the last `commit()` wrote a register, whether or not its value changed. */
+  get wroteLastCommit(): boolean {
+    return this._wroteLastCommit;
+  }
+
+  private _wroteLastCommit = false;
+
   /**
    * Sequential phase: apply pending write.
    */
   commit(): void {
+    this._wroteLastCommit = Boolean(this.in_writeEnable.get());
     if (this.in_writeEnable.get()) {
       const addr = this.clampIndex(this.in_writeAddr.get());
       const mask = (1 << this.bitWidth) - 1;

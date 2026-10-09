@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { ArrowRight } from "lucide-react";
 import { CREDITS } from "@/lib/helpContent";
+import { useT } from "@/lib/i18n";
 
 /**
  * Wires in the simulator's own right-angle style, running across the screen.
@@ -36,6 +37,7 @@ const NODES = [
  */
 export default function SplashScreen({ onContinue }: { onContinue: () => void }) {
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const t = useT().onboarding.splash;
 
   useEffect(() => {
     buttonRef.current?.focus();
@@ -45,7 +47,7 @@ export default function SplashScreen({ onContinue }: { onContinue: () => void })
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="CPU Didática"
+      aria-label={CREDITS.project}
       onClick={onContinue}
       className="fixed inset-0 z-[9998] flex cursor-pointer flex-col items-center justify-center overflow-hidden bg-canvas px-6 text-center"
     >
@@ -103,13 +105,13 @@ export default function SplashScreen({ onContinue }: { onContinue: () => void })
             "--d": "0.1s",
           } as React.CSSProperties}
         >
-          CPU Didática
+          {CREDITS.project}
         </h1>
         <p
           className="splash-rise mt-4 text-ui tracking-[0.18em] text-fg-muted uppercase"
           style={{ "--d": "0.45s" } as React.CSSProperties}
         >
-          Simulador de caminho de dados
+          {t.subtitle}
         </p>
 
         <div
@@ -122,10 +124,10 @@ export default function SplashScreen({ onContinue }: { onContinue: () => void })
           style={{ "--d": "1.05s" } as React.CSSProperties}
         >
           <p>
-            Projeto da <span className="text-fg">FURG</span> · {CREDITS.center} · {CREDITS.year}
+            {t.projectOf} <span className="text-fg">{CREDITS.universityShort}</span> · {CREDITS.center} · {CREDITS.year}
           </p>
           <p>
-            Professor <span className="text-fg">{CREDITS.professor}</span> · Aluno{" "}
+            {t.professor} <span className="text-fg">{CREDITS.professor}</span> · {t.student}{" "}
             <span className="text-fg">{CREDITS.student}</span>
           </p>
         </div>
@@ -139,14 +141,14 @@ export default function SplashScreen({ onContinue }: { onContinue: () => void })
           className="splash-rise mt-12 inline-flex h-10 items-center gap-2 rounded-full border border-st-active px-6 text-ui text-fg transition-colors hover:bg-st-active/10"
           style={{ "--d": "1.4s" } as React.CSSProperties}
         >
-          Continuar
+          {t.continue}
           <ArrowRight size={16} strokeWidth={1.5} className="text-st-active" />
         </button>
         <p
           className="splash-rise mt-3 text-micro text-fg-faint"
           style={{ "--d": "1.6s" } as React.CSSProperties}
         >
-          clique ou pressione Enter
+          {t.continueHint}
         </p>
       </div>
     </div>

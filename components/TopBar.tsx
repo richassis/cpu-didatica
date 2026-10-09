@@ -8,7 +8,7 @@ import TopBarEdit from "./TopBarEdit";
 /**
  * TopBar — Routes to the appropriate top bar based on the current mode.
  *
- * - Program Mode → TopBarProgram (app title, I/O controls, Run button)
+ * - Program Mode → TopBarProgram (app title, file controls, settings, zoom, help)
  * - Edit Mode    → TopBarEdit    (back button, ProjectSwitcher, mode badge)
  */
 export default function TopBar() {

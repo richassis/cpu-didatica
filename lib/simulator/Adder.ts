@@ -4,9 +4,9 @@ import { type Connectable, type PortMap, InputPort, OutputPort } from "./Port";
 /**
  * Data model for the hardware Adder (dedicated ADD unit).
  *
- * Always performs A + B.  Exposes the same port interface as Ula so it
- * can participate in the signal bus.  The UI AdderComponent reads from
- * this object.
+ * Always performs A + B: two operand inputs, a result and a carry output,
+ * no operation selector. Not part of the default datapath — PC+1 is done by
+ * the `Incrementer`.
  */
 export class Adder implements Clockable, Connectable {
   /** Unique ID matching the ComponentInstance id on the canvas */
@@ -34,11 +34,11 @@ export class Adder implements Clockable, Connectable {
     this.bitWidth = bitWidth;
 
     this.in_a = new InputPort<number>(
-      "operand_a", "number", bitWidth, 0,
+      "a", "number", bitWidth, 0,
       "Operand A"
     );
     this.in_b = new InputPort<number>(
-      "operand_b", "number", bitWidth, 0,
+      "b", "number", bitWidth, 0,
       "Operand B"
     );
     this.out_result = new OutputPort<number>(
@@ -46,7 +46,7 @@ export class Adder implements Clockable, Connectable {
       "A + B result"
     );
     this.out_carry = new OutputPort<number>(
-      "carry", "boolean", 1, 0,
+      "carry", "number", 1, 0,
       "Carry/overflow flag"
     );
   }
@@ -62,22 +62,6 @@ export class Adder implements Clockable, Connectable {
     };
   }
 
-  // ── Convenience accessors (read/write via ports) ─────────────
-
-  get a(): number { return this.in_a.value; }
-  set a(v: number) { this.in_a.set(this.clamp(v)); }
-
-  get b(): number { return this.in_b.value; }
-  set b(v: number) { this.in_b.set(this.clamp(v)); }
-
-  get result(): number { return this.out_result.value; }
-
-  /** Return the result as a zero-padded hex string. */
-  resultHex(): string {
-    const digits = Math.ceil(this.bitWidth / 4);
-    return this.out_result.value.toString(16).padStart(digits, "0").toUpperCase();
-  }
-
   // ── Core ─────────────────────────────────────────────────────
 
   /**
@@ -91,13 +75,6 @@ export class Adder implements Clockable, Connectable {
     this.out_result.set(result);
     this.out_carry.set(raw > max ? 1 : 0);
     return result;
-  }
-
-  /** Convenience: set operands, execute, return result. */
-  compute(a: number, b: number = 0): number {
-    this.in_a.set(this.clamp(a));
-    this.in_b.set(this.clamp(b));
-    return this.evaluate();
   }
 
   /** Reset to default state. */

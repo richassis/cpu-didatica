@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { CpuState, CPU_STATE_LABELS } from "@/lib/simulator/CpuState";
 import { OPCODE_SEQUENCES } from "@/lib/simulator/Cpu";
-import { Opcode, opcodeToMnemonic } from "@/lib/simulator/ISA";
+import { Opcode, lookupInstruction } from "@/lib/simulator/ISA";
+import { useT } from "@/lib/i18n";
 
 /**
  * The control unit's finite-state machine, drawn as the tree it actually is:
@@ -17,7 +18,7 @@ import { Opcode, opcodeToMnemonic } from "@/lib/simulator/ISA";
  * top-down (the longest, ULA, is 3 states). Every non-HLT branch drops to the
  * merge spine at the bottom, which loops back up the left rail into FETCH.
  *
- * The instruction badge (top-left) is the single readout that replaced a static
+ * The instruction badge (top-right) is the single readout that replaced a static
  * label over every branch. It stays off for the whole DECODE tick — the opcode
  * it reads isn't trustworthy until DECODE's wire animation resolves — and
  * appears the instant the branch's first state goes current.
@@ -55,7 +56,7 @@ const BRANCHES: Branch[] = [
   },
   {
     key: "JUMP",
-    opcodes: [Opcode.JZ, Opcode.JC, Opcode.JN, Opcode.JMP],
+    opcodes: [Opcode.JZ, Opcode.JN, Opcode.JMP],
     states: OPCODE_SEQUENCES[Opcode.JZ]!,
     col: 4,
   },
@@ -168,6 +169,7 @@ export interface CpuFsmGraphProps {
 }
 
 export default function CpuFsmGraph({ currentState, nextState, opcode }: CpuFsmGraphProps) {
+  const t = useT();
   const svgRef = useRef<SVGSVGElement>(null);
   const [vScale, setVScale] = useState(1);
 
@@ -211,9 +213,7 @@ export default function CpuFsmGraph({ currentState, nextState, opcode }: CpuFsmG
   const isFetchCurrent = currentState === CpuState.FETCH || currentState === CpuState.RESET;
   const isDecodeCurrent = currentState === CpuState.DECODE;
 
-  const currentMnemonic = activeBranch ? (() => {
-    try { return opcodeToMnemonic(opcode as Opcode); } catch { return null; }
-  })() : null;
+  const currentMnemonic = activeBranch ? (lookupInstruction(opcode)?.mnemonic ?? null) : null;
 
   const activeColX = activeBranch ? colX(activeBranch.col) : null;
 
@@ -227,7 +227,7 @@ export default function CpuFsmGraph({ currentState, nextState, opcode }: CpuFsmG
       viewBox={`0 0 ${GRAPH_W} ${GRAPH_H}`}
       preserveAspectRatio="xMidYMid meet"
       className="h-full w-full"
-      aria-label="Diagrama de estados da unidade de controle"
+      aria-label={t.canvas.fsm.diagram}
     >
       {/* FETCH → DECODE link, then DECODE → fan-out spine. */}
       <Edge x1={HEADER_X} y1={FETCH_Y + BOX_H / 2} x2={HEADER_X} y2={DECODE_Y - BOX_H / 2} active={isFetchCurrent || isDecodeCurrent} />
@@ -339,7 +339,7 @@ export default function CpuFsmGraph({ currentState, nextState, opcode }: CpuFsmG
           fontFamily="var(--font-mono, monospace)"
           fill="var(--text-faint)"
         >
-          próx.: {CPU_STATE_LABELS[nextState]}
+          {t.canvas.fsm.next(CPU_STATE_LABELS[nextState])}
         </text>
       )}
     </svg>

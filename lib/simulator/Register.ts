@@ -19,11 +19,18 @@ export class Register implements Clockable, Connectable {
 
   /**
    * When false, commit() is a no-op — the register holds its last value.
-   * Set by the CPU on pipeline registers (A, B) so they only latch during
-   * READREG states instead of on every tick.
+   * Set by the CPU on the pipeline registers (A, B), so they only latch during
+   * READREG states, and on a register fed by the ULA result (R), so it only
+   * latches on EXECUTE — instead of on every tick.
    * Defaults to true so all other registers work without change.
    */
   private _writeActive = true;
+
+  /** True once the CPU has taken over `_writeActive` (see `setWriteActive`). */
+  private _gated = false;
+
+  /** See `wroteLastCommit`. */
+  private _wroteLastCommit = false;
 
   // ── Ports ────────────────────────────────────────────────────
 
@@ -75,7 +82,19 @@ export class Register implements Clockable, Connectable {
   }
 
   setWriteActive(active: boolean): void {
+    this._gated = true;
     this._writeActive = active;
+  }
+
+  /**
+   * Whether the last `commit()` performed a *conditional* write — its
+   * write-enable was asserted, or the CPU opened its write gate — whether or
+   * not the stored value changed. A register that latches unconditionally on
+   * every tick (no write-enable, never gated) always reports false: it is
+   * always "writing", so that says nothing about this tick.
+   */
+  get wroteLastCommit(): boolean {
+    return this._wroteLastCommit;
   }
 
   // ── Connectable interface ────────────────────────────────────
@@ -99,17 +118,6 @@ export class Register implements Clockable, Connectable {
     return this.out_value.value;
   }
 
-  /** Set the register value directly (bypasses write-enable). */
-  set value(v: number) {
-    this.out_value.set(this.clamp(v));
-  }
-
-  /** Return the value as a zero-padded hex string, e.g. "0x00FF". */
-  toHex(): string {
-    const digits = Math.ceil(this.bitWidth / 4);
-    return "0x" + this.out_value.value.toString(16).padStart(digits, "0").toUpperCase();
-  }
-
   // ── Operations ───────────────────────────────────────────────
 
   /** Reset the register to zero. */
@@ -119,10 +127,7 @@ export class Register implements Clockable, Connectable {
 
   // ── Clockable callback ───────────────────────────────────────
 
-  /**
-   * Called by the global clock on each tick.
-   * If write-enable is high, latch the data input.
-   */
+  /** Single-call tick: latch the data input if write-enable is high. */
   onTick(): void {
     this.commit();
   }
@@ -140,9 +145,11 @@ export class Register implements Clockable, Connectable {
    * Sequential phase: latch data when write-enable is high and write is active.
    */
   commit(): void {
+    this._wroteLastCommit = false;
     if (!this._writeActive) return;
     if (!this.in_writeEnable || this.in_writeEnable.value !== 0) {
       this.out_value.set(this.clamp(this.in_data.value));
+      this._wroteLastCommit = this._gated || this.in_writeEnable !== undefined;
     }
   }
 

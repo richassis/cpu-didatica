@@ -1,44 +1,15 @@
 "use client";
 
-import { RotateCcw, Pause, Play } from "lucide-react";
 import { Props } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayStore, formatNum, type NumericBase } from "@/lib/displayStore";
 import NodeShell from "@/components/widgets/NodeShell";
 import CpuFsmGraph from "@/components/widgets/CpuFsmGraph";
-import FlagSquares from "@/components/widgets/FlagSquares";
-import { CpuState, CONTROL_SIGNAL_DEFS } from "@/lib/simulator/Cpu";
-import type { CPU } from "@/lib/simulator/Cpu";
+import FlagSquares, { flagSpecs } from "@/components/widgets/FlagSquares";
+import { CpuState, CONTROL_SIGNAL_DEFS, controlPortKey, type ControlSignalName } from "@/lib/simulator/Cpu";
+import { CPU_SIDE_INPUT_OFFSET } from "@/lib/widgetDefinitions";
 
-/**
- * The 10 control-signal outputs, in the order the CPU class declares them —
- * this is also the order `getPortOffset` walks when it auto-places the bottom
- * ports (nothing here overrides `offset` in the widget definition), so a
- * signal's index in this array is its index among the bottom ports too. The
- * strip below reuses that same `(i + 1) / (n + 1)` formula so its dots land
- * under the real port dots without having to measure anything.
- */
-const BOTTOM_SIGNAL_ORDER = [
-  "muxPC", "wrPC", "wrIR", "rdMem", "wrMem",
-  "muxAReg", "muxDReg", "wrReg", "opULA", 
-  // "muxAMem",
-] as const;
-
-const SIGNAL_BITS = Object.fromEntries(CONTROL_SIGNAL_DEFS.map((d) => [d.name, d.bitWidth]));
-
-/** Read every control-signal output port value from the CPU instance. */
-function readSignals(cpu: CPU): Record<string, number | boolean> {
-  const out: Record<string, number | boolean> = {};
-  const portMap = cpu.getPorts();
-  for (const def of CONTROL_SIGNAL_DEFS) {
-    const port = portMap[`out_${def.name}`];
-    out[def.name] = port ? (port.value as number | boolean) : 0;
-  }
-  return out;
-}
-
-function formatSignal(value: number | boolean, bits: number, base: NumericBase): string {
-  if (typeof value === "boolean") return value ? "1" : "0";
+function formatSignal(value: number, bits: number, base: NumericBase): string {
   if (bits <= 1) return String(Number(value));
   // Every control line is unsigned, whatever the base.
   return formatNum(Number(value), base === "decSigned" ? "dec" : base, bits);
@@ -48,8 +19,7 @@ function formatSignal(value: number | boolean, bits: number, base: NumericBase):
  * The control unit.
  *
  * The only component with a dashed outline, and the only one entitled to it:
- * it is not part of the datapath, it commands it. It carries no clock notch —
- * the notch marks datapath storage.
+ * it is not part of the datapath, it commands it.
  *
  * A wide, short block rather than the old tall one: the FSM graph reads left
  * to right (FETCH → DECODE → the chosen branch), so the shape follows the
@@ -63,8 +33,6 @@ export default function CpuComponent({ component, zoom }: Props) {
 
   const revision = useSimulatorStore((s) => s.revision);
   const cpu = useSimulatorStore((s) => s.getCpu(id));
-  const pauseCpu = useSimulatorStore((s) => s.pauseCpu);
-  const resetCpu = useSimulatorStore((s) => s.resetCpu);
   const base = useDisplayStore((s) => s.numericBase);
   void revision;
 
@@ -72,13 +40,11 @@ export default function CpuComponent({ component, zoom }: Props) {
   const currentState = cpu ? (cpu.previousState as CpuState) : CpuState.RESET;
   const opcode = cpu ? Number(cpu.in_opcode.value) : 0;
   const halted = cpu ? cpu.halted : false;
-  const paused = cpu ? cpu.paused : false;
-  const signals = cpu ? readSignals(cpu) : {};
+  // A dot lights when the executed state writes that signal — even to 0, and
+  // even when the value doesn't change. The value printed under it tells which.
+  const driven = new Set(cpu ? cpu.getDrivenControlSignalPorts() : []);
 
-  const isOn = (name: string) => {
-    const v = signals[name];
-    return (typeof v === "boolean" ? (v ? 1 : 0) : (v ?? 0)) !== 0;
-  };
+  const isOn = (name: ControlSignalName) => driven.has(controlPortKey(name));
 
   return (
     <NodeShell
@@ -87,46 +53,36 @@ export default function CpuComponent({ component, zoom }: Props) {
       control
       dense
       state={halted ? "error" : undefined}
-      actions={
+      // The two side inputs' names, just above their ports — not level with
+      // them, or the value tag a live wire draws at the port covers the name.
+      // In `frame` because it renders straight into the node's root — the same
+      // box the ports' `top: offset%` is measured against — not below the
+      // title like children.
+      frame={
         <>
-          {paused && (
-            <span className="shrink-0 rounded-md border border-st-warn px-1.5 py-0.5 font-mono text-cv-xs text-st-warn">
-              PAUSED
-            </span>
-          )}
-          <FlagSquares
-            flags={[
-              { label: "Z", on: !!cpu && cpu.latchedFlagZero, title: "Zero flag" },
-              { label: "C", on: !!cpu && cpu.latchedFlagCarry, title: "Carry flag" },
-              { label: "N", on: !!cpu && cpu.latchedFlagNegative, title: "Negative flag" },
-            ]}
-          />
-          <button
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              resetCpu(id);
-            }}
-            className="shrink-0 rounded p-0.5 text-fg-faint transition-colors hover:text-fg"
-            title="Reset CPU"
+          <span
+            className="absolute left-2 z-20 font-mono text-cv-sm leading-none text-fg-muted"
+            style={{ top: `${CPU_SIDE_INPUT_OFFSET}%`, transform: "translateY(calc(-100% - 10px))" }}
           >
-            <RotateCcw size={12} strokeWidth={1.5} />
-          </button>
-          <button
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              pauseCpu(id, !paused);
-            }}
-            disabled={halted}
-            className={`shrink-0 rounded p-0.5 transition-colors ${
-              paused ? "text-st-warn" : "text-fg-faint hover:text-fg"
-            } disabled:opacity-40`}
-            title={paused ? "Resume CPU" : "Pause CPU"}
+            OPCODE
+          </span>
+          <span
+            className="absolute right-2 z-20 font-mono text-cv-sm leading-none text-fg-muted"
+            style={{ top: `${CPU_SIDE_INPUT_OFFSET}%`, transform: "translateY(calc(-100% - 10px))" }}
           >
-            {paused ? <Play size={12} strokeWidth={1.5} /> : <Pause size={12} strokeWidth={1.5} />}
-          </button>
+            FLAGS
+          </span>
         </>
+      }
+      actions={
+        <FlagSquares
+          flags={flagSpecs({
+            zero: !!cpu && cpu.latchedFlagZero,
+            carry: !!cpu && cpu.latchedFlagCarry,
+            negative: !!cpu && cpu.latchedFlagNegative,
+            overflow: !!cpu && cpu.latchedFlagOverflow,
+          })}
+        />
       }
     >
       <div className="min-h-0 flex-1 px-2 pt-1">
@@ -137,13 +93,18 @@ export default function CpuComponent({ component, zoom }: Props) {
         />
       </div>
 
-      {/* Signal strip: one dot per bottom control port, positioned with the
-          same (i+1)/(n+1) formula the port itself is auto-placed with, so a
-          dot sits directly under its port regardless of the node's width. */}
-      <div className="relative h-11 shrink-0 border-t border-line">
-        {BOTTOM_SIGNAL_ORDER.map((name, i) => {
+      {/* Signal strip: one dot per bottom control port. The ports are the
+          control signals in `CONTROL_SIGNAL_DEFS` order, which is also the
+          order `getPortOffset` walks when it auto-places them, so the strip
+          reuses that same (i+1)/(n+1) formula and each dot sits directly under
+          its port regardless of the node's width — except `out_opULA`, whose
+          widget definition pins `offset: 91` instead of the computed 90, about
+          9px right of its dot. Tall enough that the value row ends clear of
+          the port squares straddling the bottom edge. */}
+      <div className="relative h-16 shrink-0 border-t border-line">
+        {CONTROL_SIGNAL_DEFS.map(({ name, bitWidth }, i) => {
           const active = isOn(name);
-          const left = ((i + 1) / (BOTTOM_SIGNAL_ORDER.length + 1)) * 100;
+          const left = ((i + 1) / (CONTROL_SIGNAL_DEFS.length + 1)) * 100;
           return (
             <div
               key={name}
@@ -161,7 +122,7 @@ export default function CpuComponent({ component, zoom }: Props) {
               <span
                 className={`num font-mono text-cv-md leading-none ${active ? "text-fg" : "text-fg-faint"}`}
               >
-                {formatSignal(signals[name] ?? 0, SIGNAL_BITS[name] ?? 1, base)}
+                {formatSignal(cpu ? cpu.controlPorts[name].value : 0, bitWidth, base)}
               </span>
             </div>
           );

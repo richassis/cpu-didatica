@@ -42,11 +42,6 @@ export default function MuxComponent({ component, zoom }: Props) {
       component={component}
       zoom={zoom}
       silhouette="custom"
-      actions={
-        <span className="shrink-0 font-mono text-cv-xs leading-none text-fg-faint">
-          s={clampedSel}
-        </span>
-      }
       /*
        * Both layers go in `frame`, not in children: their coordinates are in
        * node space, and an `absolute inset-0` inside the anatomy div would be

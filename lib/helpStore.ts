@@ -2,7 +2,7 @@
  * helpStore.ts
  *
  * Whether the Help window is open. The Ajuda button used to own this as local
- * state; the welcome screen and the tour open the Help too, so it lives here.
+ * state; the welcome screen opens the Help too, so it lives here.
  */
 
 import { create } from "zustand";

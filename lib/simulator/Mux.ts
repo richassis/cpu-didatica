@@ -51,9 +51,9 @@ export class Mux implements Clockable, Connectable {
 
     // sel bit width: 1 bit for 2 inputs, 2 bits for 3 inputs
     const selBits = numInputs === 3 ? 2 : 1;
-    this.in_sel = new InputPort<number>("in_sel", "number", selBits, 0, "Select signal");
+    this.in_sel = new InputPort<number>("sel", "number", selBits, 0, "Select signal");
 
-    this.out_result = new OutputPort<number>("out_result", "number", bitWidth, 0, "Selected output");
+    this.out_result = new OutputPort<number>("result", "number", bitWidth, 0, "Selected output");
   }
 
   // ── Connectable interface ────────────────────────────────────
@@ -74,13 +74,6 @@ export class Mux implements Clockable, Connectable {
   // ── Accessors ────────────────────────────────────────────────
 
   get sel(): number { return this.in_sel.value; }
-
-  get result(): number { return this.out_result.value; }
-
-  resultHex(): string {
-    const digits = Math.ceil(this.bitWidth / 4);
-    return this.out_result.value.toString(16).padStart(digits, "0").toUpperCase();
-  }
 
   // ── Core ─────────────────────────────────────────────────────
 
@@ -114,10 +107,6 @@ export class Mux implements Clockable, Connectable {
   }
 
   // ── Helpers ──────────────────────────────────────────────────
-
-  private get max(): number {
-    return (1 << this.bitWidth) - 1;
-  }
 
   private clamp(v: number, selMax: number): number {
     return Math.max(0, Math.min(selMax, Math.floor(v)));

@@ -13,6 +13,14 @@ export interface PortConfig {
   offset?: number;
   /** When true, the port dot is not rendered (wire connections still work). */
   hidden?: boolean;
+  /**
+   * How far the port sits inside the box, as a % of the dimension
+   * perpendicular to its side (the height for top/bottom, the width for
+   * left/right). For a non-rectangular node whose outline does not reach that
+   * side of its box — the ALU's slanted top edge — so the port lands on the
+   * drawing instead of floating above it.
+   */
+  inset?: number;
 }
 
 /**
@@ -79,28 +87,31 @@ export function resolvePortConfig(
 export function calculatePortPosition(
   component: { x: number; y: number; w: number; h: number },
   position: PortSide,
-  offset: number
+  offset: number,
+  inset = 0
 ): { x: number; y: number } {
+  const insetX = (component.w * inset) / 100;
+  const insetY = (component.h * inset) / 100;
   switch (position) {
     case "left":
       return {
-        x: component.x,
+        x: component.x + insetX,
         y: component.y + (component.h * offset) / 100,
       };
     case "right":
       return {
-        x: component.x + component.w,
+        x: component.x + component.w - insetX,
         y: component.y + (component.h * offset) / 100,
       };
     case "top":
       return {
         x: component.x + (component.w * offset) / 100,
-        y: component.y,
+        y: component.y + insetY,
       };
     case "bottom":
       return {
         x: component.x + (component.w * offset) / 100,
-        y: component.y + component.h,
+        y: component.y + component.h - insetY,
       };
   }
 }
@@ -122,17 +133,18 @@ export function getPortPlacement(
   direction: "input" | "output",
   allPorts: Array<{ name: string; direction: "input" | "output" }>,
   portConfig?: ComponentPortConfig
-): { side: PortSide; offset: number } {
+): { side: PortSide; offset: number; inset: number } {
   // Check if there's a specific config for this port
   const specificConfig = portConfig?.ports?.[portName];
 
   if (specificConfig) {
     // Use specific port configuration
     const side = specificConfig.side;
+    const inset = specificConfig.inset ?? 0;
 
     // If offset is specified, use it; otherwise auto-calculate
     if (specificConfig.offset !== undefined) {
-      return { side, offset: specificConfig.offset };
+      return { side, offset: specificConfig.offset, inset };
     }
 
     // Auto-calculate offset based on ports on the same side with same direction
@@ -147,7 +159,7 @@ export function getPortPlacement(
     const indexOnSide = portsOnSameSide.findIndex(p => p.name === portName);
     const offset = getPortOffset(indexOnSide !== -1 ? indexOnSide : 0, portsOnSameSide.length);
 
-    return { side, offset };
+    return { side, offset, inset };
   }
 
   // Use default side based on direction
@@ -166,7 +178,7 @@ export function getPortPlacement(
   const portIndex = portsOnDefaultSide.findIndex(p => p.name === portName);
   const offset = getPortOffset(portIndex !== -1 ? portIndex : 0, portsOnDefaultSide.length);
 
-  return { side: defaultSide, offset };
+  return { side: defaultSide, offset, inset: 0 };
 }
 
 /**
@@ -180,6 +192,6 @@ export function findPortPosition(
   allPorts: Array<{ name: string; direction: "input" | "output" }>,
   portConfig?: ComponentPortConfig
 ): { x: number; y: number } {
-  const { side, offset } = getPortPlacement(portName, direction, allPorts, portConfig);
-  return calculatePortPosition(component, side, offset);
+  const { side, offset, inset } = getPortPlacement(portName, direction, allPorts, portConfig);
+  return calculatePortPosition(component, side, offset, inset);
 }

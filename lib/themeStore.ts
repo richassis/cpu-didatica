@@ -22,7 +22,7 @@ interface ThemeState {
 }
 
 /** Reflect the active profile onto <html> so the CSS overrides apply. */
-export function applyThemeAttribute(theme: Theme): void {
+function applyThemeAttribute(theme: Theme): void {
   if (typeof document === "undefined") return;
   document.documentElement.dataset.theme = theme;
 }
@@ -32,20 +32,22 @@ export const useThemeStore = create<ThemeState>()(
     (set, get) => ({
       theme: "dark",
 
-      setTheme: (theme) => {
-        applyThemeAttribute(theme);
-        set({ theme });
-      },
+      setTheme: (theme) => set({ theme }),
 
       toggleTheme: () => {
         get().setTheme(get().theme === "dark" ? "light" : "dark");
       },
     }),
-    {
-      name: "simulator-theme",
-      onRehydrateStorage: () => (state) => {
-        if (state) applyThemeAttribute(state.theme);
-      },
-    },
+    { name: "simulator-theme" },
   ),
 );
+
+// The inline script in app/layout.tsx paints the stored profile before this
+// module loads; from here on the store owns the attribute. Applied once for the
+// state hydrated while the store was created, then on every change after.
+if (typeof window !== "undefined") {
+  applyThemeAttribute(useThemeStore.getState().theme);
+  useThemeStore.subscribe((state, prev) => {
+    if (state.theme !== prev.theme) applyThemeAttribute(state.theme);
+  });
+}

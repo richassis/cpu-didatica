@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { createPortal } from "react-dom";
 import { List } from "lucide-react";
 import { Props } from "@/lib/store";
@@ -8,23 +8,20 @@ import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useExecutingAddr } from "@/lib/useExecutingAddr";
 import { useMemoryPanelStore } from "@/lib/memoryPanelStore";
 import { useCanvasEditing } from "@/components/CanvasEditingContext";
-import { useDisplayStore, formatPortValue } from "@/lib/displayStore";
 import { EDITOR_ENABLED } from "@/lib/editorFlag";
 import NodeShell from "@/components/widgets/NodeShell";
 import MemoryViewer from "@/components/MemoryViewer";
+import AddressList from "@/components/AddressList";
 import InstructionBuilder from "@/components/InstructionBuilder";
 import { decodeMnemonic } from "@/lib/disassemble";
-
-function fmtAddr(addr: number, addrBits: number) {
-  return "0x" + addr.toString(16).toUpperCase().padStart(Math.ceil(addrBits / 4), "0");
-}
+import { useT } from "@/lib/i18n";
 
 /**
  * Instruction memory. Same shape family as data memory — a spine and a full,
  * scrollable address list — because they are the same class of thing.
  *
  * The list shows the raw stored word, not its mnemonic: the mnemonic already
- * lives in the source and in the Montagem panel, and a memory that displayed
+ * lives in the source and in the Ling. Máquina panel, and a memory that displayed
  * decoded meaning instead of stored bits would misrepresent what memory
  * actually holds. The mnemonic survives as a secondary column in the full
  * listing (`MemoryViewer`'s `decode` prop) and in the compact headline.
@@ -35,6 +32,7 @@ function fmtAddr(addr: number, addrBits: number) {
  */
 export default function InstructionMemoryComponent({ component, zoom }: Props) {
   const { id } = component;
+  const t = useT();
   const [builderOpen, setBuilderOpen] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState(0);
@@ -44,8 +42,6 @@ export default function InstructionMemoryComponent({ component, zoom }: Props) {
   // In program mode the full listing opens in the side panel (datapath stays
   // visible); in edit mode it stays a modal, since edit mode has no side panel.
   const openListing = () => (canEdit ? setViewerOpen(true) : openMemoryPanel(id));
-  const base = useDisplayStore((s) => s.numericBase);
-  const currentRowRef = useRef<HTMLDivElement>(null);
 
   const revision = useSimulatorStore((s) => s.revision);
   const imem = useSimulatorStore((s) => s.getInstructionMemory(id));
@@ -59,31 +55,22 @@ export default function InstructionMemoryComponent({ component, zoom }: Props) {
 
   const wordCount = imem?.wordCount ?? 256;
   const bitWidth = imem?.bitWidth ?? 16;
-  const addrBits = Math.max(1, Math.ceil(Math.log2(wordCount)));
   const currentAddr =
     executingAddr !== undefined ? executingAddr : imem?.in_addr.value ?? 0;
 
   const readWord = useCallback((addr: number) => imem?.peek(addr) ?? 0, [imem]);
-
-  useEffect(() => {
-    currentRowRef.current?.scrollIntoView({ block: "nearest" });
-  }, [currentAddr]);
 
   return (
     <>
       <NodeShell
         component={component}
         zoom={zoom}
-        sequential
         spine
         dense
         value={decodeMnemonic(imem?.peek(currentAddr) ?? 0)}
         compactValue
         actions={
           <>
-            <span className="num shrink-0 font-mono text-cv-xs text-fg-muted">
-              {fmtAddr(currentAddr, addrBits)}
-            </span>
             <button
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => {
@@ -92,57 +79,26 @@ export default function InstructionMemoryComponent({ component, zoom }: Props) {
               }}
               className="shrink-0 rounded p-0.5 text-fg-faint transition-colors hover:text-fg"
               data-tour="imem-list"
-              title="View the whole program"
+              title={t.canvas.instructionMemory.viewAll}
             >
               <List size={12} strokeWidth={1.5} />
             </button>
           </>
         }
       >
-        <div
-          className="flex min-h-0 flex-1 flex-col overflow-y-auto px-1.5 py-1 pl-3"
-          onPointerDown={(e) => e.stopPropagation()}
-        >
-          {Array.from({ length: wordCount }, (_, a) => a).map((a) => {
-            const isCurrent = a === currentAddr;
-            return (
-              <div
-                key={a}
-                ref={isCurrent ? currentRowRef : undefined}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedAddress(a);
-                  if (canEdit) setBuilderOpen(true);
-                  else openMemoryPanel(id);
-                }}
-                className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded px-1 py-[2px] transition-colors"
-                style={
-                  isCurrent
-                    ? { background: "color-mix(in srgb, var(--st-data) 8%, transparent)" }
-                    : undefined
-                }
-              >
-                <span
-                  className={`shrink-0 font-mono text-cv-xs leading-none ${
-                    isCurrent ? "text-fg" : "text-transparent"
-                  }`}
-                >
-                  ▶
-                </span>
-                <span className="num shrink-0 font-mono text-cv-sm text-fg-faint">
-                  {fmtAddr(a, addrBits)}
-                </span>
-                <span
-                  className={`num flex-1 text-right font-mono ${
-                    isCurrent ? "text-cv-md text-fg" : "text-cv-sm text-fg-muted"
-                  }`}
-                >
-                  {formatPortValue(imem?.peek(a) ?? 0, base, bitWidth, true)}
-                </span>
-              </div>
-            );
-          })}
-        </div>
+        <AddressList
+          density="canvas"
+          wordCount={wordCount}
+          bitWidth={bitWidth}
+          currentAddr={currentAddr}
+          read={readWord}
+          unsigned
+          onRowClick={(a) => {
+            setSelectedAddress(a);
+            if (canEdit) setBuilderOpen(true);
+            else openMemoryPanel(id);
+          }}
+        />
       </NodeShell>
 
       {viewerOpen && (
@@ -150,7 +106,6 @@ export default function InstructionMemoryComponent({ component, zoom }: Props) {
           title={component.label}
           wordCount={wordCount}
           bitWidth={bitWidth}
-          addrBits={addrBits}
           currentAddr={currentAddr}
           read={readWord}
           decode={decodeMnemonic}

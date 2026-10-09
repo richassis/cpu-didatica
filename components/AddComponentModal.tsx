@@ -84,8 +84,7 @@ function AddComponentModalContent({ onClose }: { onClose: () => void }) {
                     onClick={() => handlePick(def)}
                     className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-fg-muted transition-colors hover:bg-raised hover:text-fg"
                   >
-                    {/* Same glyph the node wears on the canvas, so the palette
-                        teaches the badge vocabulary rather than a second one. */}
+                    {/* A monochrome glyph per component type (see GLYPHS). */}
                     <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-line">
                       {(() => {
                         const Glyph = GLYPHS[def.type] ?? Square;

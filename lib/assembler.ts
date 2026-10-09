@@ -4,8 +4,8 @@
  * Pass 1: scan all lines, collect label→address mappings, record pending instructions.
  * Pass 2: resolve label references, validate operand ranges, encode to 16-bit words.
  *
- * Instruction syntax (from TEST_PROGRAM_SOURCE):
- *   LDAI Rdst, imm           — load immediate
+ * Instruction syntax:
+ *   LDAI Rdst, imm           — load immediate (-128..255; negatives are two's complement)
  *   LDA  Rdst, addr          — load from data memory
  *   STA  Rsrc, addr          — store to data memory
  *   ADD  Rsrc_a, Rsrc_b, Rdst — ULA: dst = a + b
@@ -13,8 +13,13 @@
  *   AND  Rsrc_a, Rsrc_b, Rdst — ULA: dst = a & b
  *   OR   Rsrc_a, Rsrc_b, Rdst — ULA: dst = a | b
  *   NOT  Rsrc_a, Rdst         — ULA: dst = ~a
- *   JZ/JC/JN/JMP  addr_or_label
+ *   JZ/JN/JMP  addr_or_label
  *   HLT
+ *
+ * Operands are separated by commas and/or whitespace. Each one is a register
+ * (`R0`..`R7`), a number (`0x1F` hex, `0b0101` binary, decimal, optionally
+ * negative) or a label. Operands are only range-checked: the R/number split
+ * above is the intended spelling, not something the assembler enforces.
  *
  * Labels:
  *   LOOP:            — code label → resolves to instruction address
@@ -22,22 +27,75 @@
  *
  * Data section (optional):
  *   .data
- *   VAR1:            — assigns data memory address 0
- *   VAR2:            — assigns data memory address 1
- *   .text / .code    — returns to code section
+ *   VAR1:            — assigns data memory address 0, initial value 0
+ *   VAR2: DB 05h     — assigns data memory address 1, initial value 5
+ *   .text / .code    — returns to code section (`.enddata`/`.endcode` too)
  *
- * Mnemonics, registers, and label names are case-insensitive.
+ * In `.data` the colon after the name and the `DB` keyword are both optional.
+ * Initial values accept everything an operand number does, plus Intel-style
+ * hex (`05h`, `FFh`), and are stored as 16-bit words. Code and data labels
+ * share one namespace.
+ *
+ * Mnemonics, registers, directives and label names are case-insensitive.
  * Comments start with `;` and extend to end of line.
  */
 
-import { Encoder } from "@/lib/simulator/Encoder";
-import { INSTRUCTION_SET } from "@/lib/simulator/ISA";
+import {
+  INSTRUCTION_SET,
+  encodeInstruction,
+  fieldSpec,
+  type InstructionDescriptor,
+  type InstructionFields,
+  type Mnemonic,
+  type OperandSpec,
+} from "@/lib/simulator/ISA";
+
+// ── Messages ─────────────────────────────────────────────────────────────────
+
+/**
+ * How a message names an operand. Keyed by the ISA's field and help label
+ * (`Rd` reads differently as a standard register and as the ULA's
+ * destination); a lone address operand is a jump target.
+ */
+export type OperandRole = "rd" | "rs" | "imm" | "addr" | "srcA" | "srcB" | "dst" | "jumpTarget";
+
+const OPERAND_ROLES: Readonly<Record<string, OperandRole>> = {
+  "gprAddr:Rd": "rd",
+  "gprAddr:Rs": "rs",
+  "operand:N":  "imm",
+  "operand:M":  "addr",
+  "srcA:Ra":    "srcA",
+  "srcB:Rb":    "srcB",
+  "dst:Rd":     "dst",
+};
+
+function operandRole(desc: InstructionDescriptor, spec: OperandSpec): OperandRole {
+  if (desc.operands.length === 1 && spec.kind === "address") return "jumpTarget";
+  const role = OPERAND_ROLES[`${spec.field}:${spec.label}`];
+  if (!role) throw new Error(`No message role for operand ${spec.field}:${spec.label}`);
+  return role;
+}
+
+/**
+ * Every message the assembler reports, as data: the text is written by the
+ * interface in the active language (`assembler.format` in lib/i18n), so a
+ * message already on screen follows a language switch.
+ */
+export type AssemblerMessage =
+  | { code: "invalidDataLine"; line: string }
+  | { code: "duplicateLabel"; name: string }
+  | { code: "invalidDbValue"; text: string }
+  | { code: "unknownMnemonic"; token: string }
+  | { code: "labelNotFound"; name: string }
+  | { code: "outOfRange"; role: OperandRole; min: number; max: number; value: number }
+  | { code: "noOperands"; mnemonic: string }
+  | { code: "wrongArity"; mnemonic: string; roles: OperandRole[]; got: number };
 
 // ── Public types ─────────────────────────────────────────────────────────────
 
 export interface AssemblyError {
   line: number;
-  message: string;
+  message: AssemblerMessage;
 }
 
 /** One assembled instruction, for the bytecode listing. */
@@ -67,10 +125,6 @@ export interface AssembleResult {
   listing: AssembledLine[];
   /** Instruction address → source line, sparse (index only where an instruction was assembled). */
   lineForAddress: number[];
-  /** Source line → instruction address. */
-  addressForLine: Map<number, number>;
-  /** Code label name → instruction address. */
-  codeLabels: Record<string, number>;
   /** .data section entries in declaration order. */
   dataSymbols: DataSymbol[];
 }
@@ -95,17 +149,18 @@ function parseRegister(token: string): number | null {
   return m ? parseInt(m[1], 10) : null;
 }
 
-/** Parse a numeric literal: `0xNN` hex or plain (optionally negative) decimal → number, or null. */
+/** Parse a numeric literal: `0xNN` hex, `0b0101` binary or plain (optionally negative) decimal → number, or null. */
 function parseNumber(token: string): number | null {
   if (/^0[xX][0-9a-fA-F]+$/.test(token)) return parseInt(token, 16);
+  if (/^0[bB][01]+$/.test(token)) return parseInt(token.slice(2), 2);
   if (/^-?\d+$/.test(token)) return parseInt(token, 10);
   return null;
 }
 
 /**
  * Parse a data value for DB declarations.
- * Accepts: Intel hex `00h`/`FFh`, our format `0xFF`, or plain (optionally
- * negative) decimal `5` / `-5`.
+ * Accepts: Intel hex `00h`/`FFh`, our format `0xFF`, binary `0b0101`, or
+ * plain (optionally negative) decimal `5` / `-5`.
  */
 function parseDataValue(token: string): number | null {
   const intelHex = token.match(/^([0-9A-Fa-f]+)[hH]$/);
@@ -116,8 +171,7 @@ function parseDataValue(token: string): number | null {
 /**
  * Parse a generic operand token that may be:
  *   - A register literal  →  number (0–7)
- *   - A hex literal       →  number
- *   - A decimal literal   →  number
+ *   - A numeric literal   →  number (see `parseNumber`)
  *   - A label reference   →  string (UPPERCASED, to be resolved in pass 2)
  */
 function parseOperandToken(token: string): Operand {
@@ -138,7 +192,6 @@ interface Pass1Result {
   pending: PendingInstruction[];
   errors: AssemblyError[];
   dataWords: number[];
-  codeLabels: Record<string, number>;
   dataSymbols: DataSymbol[];
 }
 
@@ -147,7 +200,6 @@ function pass1(lines: string[]): Pass1Result {
   const pending: PendingInstruction[] = [];
   const errors: AssemblyError[] = [];
   const dataWords: number[] = [];
-  const codeLabels: Record<string, number> = {};
   const dataSymbols: DataSymbol[] = [];
 
   let codeAddr = 0;
@@ -175,12 +227,12 @@ function pass1(lines: string[]): Pass1Result {
       // Match: LABEL or LABEL: optionally followed by DB value
       const m = line.match(/^([A-Za-z_][A-Za-z0-9_]*):?\s*(.*)/);
       if (!m) {
-        errors.push({ line: lineNum, message: `Declaração inválida na seção .data: "${line}"` });
+        errors.push({ line: lineNum, message: { code: "invalidDataLine", line } });
         continue;
       }
       const name = m[1].toUpperCase();
       if (labels.has(name)) {
-        errors.push({ line: lineNum, message: `Label duplicado: "${name}"` });
+        errors.push({ line: lineNum, message: { code: "duplicateLabel", name } });
       } else {
         labels.set(name, dataAddr);
       }
@@ -194,7 +246,7 @@ function pass1(lines: string[]): Pass1Result {
         if (val !== null) {
           initialValue = val & 0xFFFF;
         } else if (rest) {
-          errors.push({ line: lineNum, message: `Valor inválido na declaração DB: "${rest}"` });
+          errors.push({ line: lineNum, message: { code: "invalidDbValue", text: rest } });
         }
       }
       dataWords[dataAddr] = initialValue;
@@ -211,10 +263,9 @@ function pass1(lines: string[]): Pass1Result {
     if (labelMatch) {
       const name = labelMatch[1].toUpperCase();
       if (labels.has(name)) {
-        errors.push({ line: lineNum, message: `Label duplicado: "${name}"` });
+        errors.push({ line: lineNum, message: { code: "duplicateLabel", name } });
       } else {
         labels.set(name, codeAddr);
-        codeLabels[name] = codeAddr;
       }
       rest = labelMatch[2].trim();
       if (!rest) continue; // label-only line, no instruction
@@ -228,7 +279,7 @@ function pass1(lines: string[]): Pass1Result {
 
     // Validate mnemonic
     if (!(mnemonic in INSTRUCTION_SET)) {
-      errors.push({ line: lineNum, message: `Mnemônico desconhecido: "${tokens[0]}"` });
+      errors.push({ line: lineNum, message: { code: "unknownMnemonic", token: tokens[0] } });
       codeAddr++; // still reserve an address slot
       continue;
     }
@@ -238,7 +289,7 @@ function pass1(lines: string[]): Pass1Result {
     codeAddr++;
   }
 
-  return { labels, pending, errors, dataWords, codeLabels, dataSymbols };
+  return { labels, pending, errors, dataWords, dataSymbols };
 }
 
 // ── Pass 2 ───────────────────────────────────────────────────────────────────
@@ -253,7 +304,7 @@ function resolveOperand(
   if (typeof op === "number") return op;
   const addr = labels.get(op);
   if (addr === undefined) {
-    errors.push({ line: lineNum, message: `Label não encontrado: "${op}"` });
+    errors.push({ line: lineNum, message: { code: "labelNotFound", name: op } });
     return null;
   }
   return addr;
@@ -269,7 +320,7 @@ function resolveOperand(
 function checkRange(
   value: number,
   bits: number,
-  fieldName: string,
+  role: OperandRole,
   lineNum: number,
   errors: AssemblyError[],
   allowNegative = false,
@@ -277,10 +328,50 @@ function checkRange(
   const max = (1 << bits) - 1;
   const min = allowNegative ? -(1 << (bits - 1)) : 0;
   if (value < min || value > max) {
-    errors.push({ line: lineNum, message: `${fieldName} fora do range ${min}–${max}: ${value}` });
+    errors.push({ line: lineNum, message: { code: "outOfRange", role, min, max, value } });
     return false;
   }
   return true;
+}
+
+/**
+ * Check and encode one instruction's operands against its ISA descriptor:
+ * operand count, then label resolution (all operands, so every missing label
+ * is reported), then each value's range in order, stopping at the first bad one.
+ * @returns the encoded word, or `null` after pushing the error.
+ */
+function encodeOperands(
+  desc: InstructionDescriptor,
+  operands: Operand[],
+  lineNum: number,
+  errors: AssemblyError[],
+  resolve: (op: Operand) => number | null,
+): number | null {
+  const specs = desc.operands;
+  if (operands.length !== specs.length) {
+    const message: AssemblerMessage = specs.length === 0
+      ? { code: "noOperands", mnemonic: desc.mnemonic }
+      : { code: "wrongArity", mnemonic: desc.mnemonic, roles: specs.map((spec) => operandRole(desc, spec)), got: operands.length };
+    errors.push({ line: lineNum, message });
+    return null;
+  }
+
+  const values = operands.map(resolve);
+  const fields: InstructionFields = {};
+  for (let i = 0; i < specs.length; i++) {
+    const value = values[i];
+    if (value === null) return null;
+    fields[specs[i].field] = value;
+  }
+
+  for (const spec of specs) {
+    const { bits } = fieldSpec(desc.format, spec.field);
+    if (!checkRange(fields[spec.field]!, bits, operandRole(desc, spec), lineNum, errors, spec.signed)) {
+      return null;
+    }
+  }
+
+  return encodeInstruction(desc.mnemonic, fields);
 }
 
 function pass2(
@@ -301,119 +392,8 @@ function pass2(
 
     const resolve = (op: Operand) => resolveOperand(op, labels, lineNum, errors);
 
-    let word: number | null = null;
-
-    switch (mnemonic) {
-      // ── Standard: LDAI Rdst, imm ──────────────────────────────────────────
-      case "LDAI": {
-        if (operands.length !== 2) {
-          errors.push({ line: lineNum, message: `LDAI: esperado 2 operandos (Rdst, imm), recebeu ${operands.length}` });
-          break;
-        }
-        const dst = resolve(operands[0]);
-        const imm = resolve(operands[1]);
-        if (dst === null || imm === null) break;
-        if (!checkRange(dst, 3, "Registrador", lineNum, errors)) break;
-        if (!checkRange(imm, 8, "Imediato", lineNum, errors, /* allowNegative */ true)) break;
-        word = Encoder.assemble("LDAI", { gprAddr: dst, operand: imm });
-        break;
-      }
-
-      // ── Standard: LDA Rdst, addr ──────────────────────────────────────────
-      case "LDA": {
-        if (operands.length !== 2) {
-          errors.push({ line: lineNum, message: `LDA: esperado 2 operandos (Rdst, addr), recebeu ${operands.length}` });
-          break;
-        }
-        const dst = resolve(operands[0]);
-        const addr = resolve(operands[1]);
-        if (dst === null || addr === null) break;
-        if (!checkRange(dst, 3, "Registrador", lineNum, errors)) break;
-        if (!checkRange(addr, 8, "Endereço", lineNum, errors)) break;
-        word = Encoder.assemble("LDA", { gprAddr: dst, operand: addr });
-        break;
-      }
-
-      // ── Standard: STA Rsrc, addr ──────────────────────────────────────────
-      case "STA": {
-        if (operands.length !== 2) {
-          errors.push({ line: lineNum, message: `STA: esperado 2 operandos (Rsrc, addr), recebeu ${operands.length}` });
-          break;
-        }
-        const src = resolve(operands[0]);
-        const addr = resolve(operands[1]);
-        if (src === null || addr === null) break;
-        if (!checkRange(src, 3, "Registrador", lineNum, errors)) break;
-        if (!checkRange(addr, 8, "Endereço", lineNum, errors)) break;
-        word = Encoder.assemble("STA", { gprAddr: src, operand: addr });
-        break;
-      }
-
-      // ── ULA: ADD/SUB/AND/OR  Rsrc_a, Rsrc_b, Rdst ────────────────────────
-      case "ADD":
-      case "SUB":
-      case "AND":
-      case "OR": {
-        if (operands.length !== 3) {
-          errors.push({ line: lineNum, message: `${mnemonic}: esperado 3 operandos (Rsrc_a, Rsrc_b, Rdst), recebeu ${operands.length}` });
-          break;
-        }
-        const srcA = resolve(operands[0]);
-        const srcB = resolve(operands[1]);
-        const dst  = resolve(operands[2]);
-        if (srcA === null || srcB === null || dst === null) break;
-        if (!checkRange(srcA, 3, "SrcA", lineNum, errors)) break;
-        if (!checkRange(srcB, 3, "SrcB", lineNum, errors)) break;
-        if (!checkRange(dst,  3, "Dst",  lineNum, errors)) break;
-        word = Encoder.assemble(mnemonic as "ADD" | "SUB" | "AND" | "OR", { srcA, srcB, dst });
-        break;
-      }
-
-      // ── ULA: NOT Rsrc_a, Rdst ─────────────────────────────────────────────
-      case "NOT": {
-        if (operands.length !== 2) {
-          errors.push({ line: lineNum, message: `NOT: esperado 2 operandos (Rsrc_a, Rdst), recebeu ${operands.length}` });
-          break;
-        }
-        const srcA = resolve(operands[0]);
-        const dst  = resolve(operands[1]);
-        if (srcA === null || dst === null) break;
-        if (!checkRange(srcA, 3, "SrcA", lineNum, errors)) break;
-        if (!checkRange(dst,  3, "Dst",  lineNum, errors)) break;
-        // srcB is unused for NOT (pass 0)
-        word = Encoder.assemble("NOT", { srcA, srcB: 0, dst });
-        break;
-      }
-
-      // ── Jumps: JZ/JC/JN/JMP  addr_or_label ───────────────────────────────
-      case "JZ":
-      case "JC":
-      case "JN":
-      case "JMP": {
-        if (operands.length !== 1) {
-          errors.push({ line: lineNum, message: `${mnemonic}: esperado 1 operando (endereço ou label), recebeu ${operands.length}` });
-          break;
-        }
-        const target = resolve(operands[0]);
-        if (target === null) break;
-        if (!checkRange(target, 8, "Endereço de jump", lineNum, errors)) break;
-        word = Encoder.assemble(mnemonic as "JZ" | "JC" | "JN" | "JMP", { operand: target });
-        break;
-      }
-
-      // ── HLT ───────────────────────────────────────────────────────────────
-      case "HLT": {
-        if (operands.length !== 0) {
-          errors.push({ line: lineNum, message: `HLT: não aceita operandos` });
-          break;
-        }
-        word = Encoder.assemble("HLT");
-        break;
-      }
-
-      default:
-        errors.push({ line: lineNum, message: `Mnemônico desconhecido: "${mnemonic}"` });
-    }
+    const desc = INSTRUCTION_SET[mnemonic as Mnemonic];
+    const word = encodeOperands(desc, operands, lineNum, errors, resolve);
 
     if (word !== null) {
       words[codeAddr] = word;
@@ -428,12 +408,12 @@ function pass2(
 // ── Public entry point ────────────────────────────────────────────────────────
 
 /**
- * Assemble the given source string into an array of 16-bit instruction words.
+ * Assemble the given source string into instruction words, initial data and
+ * the listing the UI shows.
  *
- * @returns `null` if source is empty/whitespace-only.
- *          Otherwise returns `{ words, errors }`.
- *          When `errors` is empty the assembly succeeded.
- *          When `errors` is non-empty the words array may be partially filled.
+ * @returns `null` if source is empty/whitespace-only, otherwise an
+ *          `AssembleResult`. When `errors` is empty the assembly succeeded;
+ *          when it is non-empty the other fields may be partially filled.
  */
 export function assemble(source: string): AssembleResult | null {
   if (!source.trim()) return null;
@@ -444,10 +424,8 @@ export function assemble(source: string): AssembleResult | null {
   const p2 = pass2(p1.pending, p1.labels);
 
   const lineForAddress: number[] = [];
-  const addressForLine = new Map<number, number>();
   for (const entry of p2.listing) {
     lineForAddress[entry.addr] = entry.line;
-    addressForLine.set(entry.line, entry.addr);
   }
 
   return {
@@ -456,8 +434,6 @@ export function assemble(source: string): AssembleResult | null {
     errors: [...p1.errors, ...p2.errors],
     listing: p2.listing,
     lineForAddress,
-    addressForLine,
-    codeLabels: p1.codeLabels,
     dataSymbols: p1.dataSymbols,
   };
 }

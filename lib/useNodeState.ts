@@ -6,8 +6,8 @@
  *
  * The design system spends colour on state, never on identity, so this hook is
  * the only source of colour a node has. A node in `idle` is chromatically
- * neutral and still identifiable — its identity lives in its silhouette, its
- * corner glyph and its internal anatomy.
+ * neutral and still identifiable — its identity lives in its silhouette and
+ * its internal anatomy.
  */
 
 import { useDisplayMaskStore } from "./displayMaskStore";
@@ -19,7 +19,7 @@ import { useDisplayMaskStore } from "./displayMaskStore";
  * - "pending": participates in this tick but has not acted or received yet.
  * - "active":  executing this tick — its substep has started, or its value is
  *              already latched. Accent + glow.
- * - "error":   unexpected HLT, overflow, bad address. Set explicitly by a widget.
+ * - "error":   set explicitly by a widget; today only the UC, once the CPU halts.
  */
 export type NodeState = "idle" | "pending" | "active" | "error";
 

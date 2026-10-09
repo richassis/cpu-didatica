@@ -6,6 +6,7 @@ import { useModeStore } from "@/lib/modeStore";
 import { saveDefaultProjectFile } from "@/lib/defaultProjectFile";
 import ProjectSwitcher from "./ProjectSwitcher";
 import ThemeToggle from "./ThemeToggle";
+import ErrorToast from "./ErrorToast";
 
 /**
  * Top bar for Edit Mode (developer / instructor view).
@@ -80,15 +81,11 @@ export default function TopBarEdit() {
       </div>
 
       {saveError && (
-        <div className="absolute right-4 top-full z-50 mt-2 w-[340px] rounded-lg border border-st-error bg-surface px-3 py-2">
-          <p className="text-small leading-snug text-st-error">{saveError}</p>
-          <button
-            onClick={() => setSaveError(null)}
-            className="mt-1 text-small text-fg-muted underline-offset-2 hover:underline"
-          >
-            Fechar
-          </button>
-        </div>
+        <ErrorToast
+          message={saveError}
+          onClose={() => setSaveError(null)}
+          className="right-4 w-[340px]"
+        />
       )}
     </div>
   );

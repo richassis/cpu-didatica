@@ -48,7 +48,7 @@ export class Incrementer implements Clockable, Connectable {
       `Input + ${step}`,
     );
     this.out_carry = new OutputPort<number>(
-      "carry", "boolean", 1, 0,
+      "carry", "number", 1, 0,
       "Carry/overflow flag",
     );
   }
@@ -61,19 +61,6 @@ export class Incrementer implements Clockable, Connectable {
       result: this.out_result,
       carry: this.out_carry,
     };
-  }
-
-  // ── Convenience accessors ────────────────────────────────────
-
-  get value(): number { return this.in_value.value; }
-  set value(v: number) { this.in_value.set(this.clamp(v)); }
-
-  get result(): number { return this.out_result.value; }
-
-  /** Return the result as a zero-padded hex string. */
-  resultHex(): string {
-    const digits = Math.ceil(this.bitWidth / 4);
-    return this.out_result.value.toString(16).padStart(digits, "0").toUpperCase();
   }
 
   // ── Core ─────────────────────────────────────────────────────

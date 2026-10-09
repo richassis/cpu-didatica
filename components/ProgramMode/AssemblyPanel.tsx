@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { useProgramDataStore } from "@/lib/programDataStore";
 import { useExecutionStore } from "@/lib/executionStore";
-import { PRESET_PROGRAMS } from "@/lib/presetPrograms";
+import { PRESET_PROGRAMS, findPresetBySource } from "@/lib/presetPrograms";
+import { useLocale, useT } from "@/lib/i18n";
 
 // ── Syntax tokenizer ──────────────────────────────────────────────────────────
 // Splits a source line into segments, preserving every character so that the
@@ -129,13 +130,12 @@ const PAD_CLASS   = "px-2 pt-1 pb-4";
 const GUTTER_W    = "2.75rem";
 
 export default function AssemblyPanel({ onToggleCollapse }: { onToggleCollapse: () => void }) {
+  const t = useT();
   const assemblySource    = useProgramDataStore((s) => s.assemblySource);
   const setAssemblySource = useProgramDataStore((s) => s.setAssemblySource);
   const assemblyErrors    = useProgramDataStore((s) => s.assemblyErrors);
   const assembled         = useProgramDataStore((s) => s.assembled);
 
-  const isLoaded          = useExecutionStore((s) => s.isLoaded);
-  const totalTicks        = useExecutionStore((s) => s.totalTicks);
   const isTimelineActive  = useExecutionStore((s) => s.isTimelineActive);
   const frames            = useExecutionStore((s) => s.frames);
   const currentIndex      = useExecutionStore((s) => s.currentIndex);
@@ -149,7 +149,8 @@ export default function AssemblyPanel({ onToggleCollapse }: { onToggleCollapse: 
   const currentLine =
     assembled && currentPc !== undefined ? assembled.lineForAddress[currentPc] : undefined;
 
-  const activePreset = PRESET_PROGRAMS.find((p) => p.source === assemblySource) ?? null;
+  const locale = useLocale();
+  const activePreset = findPresetBySource(assemblySource) ?? null;
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const overlayRef  = useRef<HTMLDivElement>(null);
@@ -175,7 +176,7 @@ export default function AssemblyPanel({ onToggleCollapse }: { onToggleCollapse: 
 
   function handlePresetChange(id: string) {
     const p = PRESET_PROGRAMS.find((x) => x.id === id);
-    if (p) setAssemblySource(p.source);
+    if (p) setAssemblySource(p.source[locale]);
   }
 
   const lines = assemblySource.split("\n");
@@ -188,14 +189,14 @@ export default function AssemblyPanel({ onToggleCollapse }: { onToggleCollapse: 
       <button
         onClick={onToggleCollapse}
         aria-expanded="true"
-        title="Recolher Ling. Montagem"
+        title={t.program.assembly.collapse}
         className="flex shrink-0 items-center justify-between border-b border-line px-4 py-2 text-left transition-colors hover:bg-raised"
       >
         <span className="flex items-center gap-2">
-          <h2 className="t-panel text-fg">Ling. Montagem</h2>
+          <h2 className="t-panel text-fg">{t.common.ui.assemblyPanel}</h2>
           {isLocked && (
             <span className="rounded-md border border-st-warn px-1.5 py-0.5 font-mono text-caption text-st-warn">
-              travado
+              {t.program.assembly.locked}
             </span>
           )}
         </span>
@@ -205,7 +206,7 @@ export default function AssemblyPanel({ onToggleCollapse }: { onToggleCollapse: 
       {/* ── Preset selector ── */}
       <div className="shrink-0 border-b border-line px-3 py-2">
         <div className="flex items-center gap-2">
-          <label className="t-section shrink-0">Programa</label>
+          <label className="t-section shrink-0">{t.common.ui.program}</label>
           <select
             value={activePreset?.id ?? "__custom"}
             onChange={(e) => {
@@ -215,10 +216,10 @@ export default function AssemblyPanel({ onToggleCollapse }: { onToggleCollapse: 
             className="h-9 flex-1 cursor-pointer rounded-lg border border-line bg-sunken px-2 font-mono text-small text-fg focus:border-line-strong focus:outline-none disabled:cursor-not-allowed disabled:opacity-40"
           >
             {!activePreset && (
-              <option value="__custom" disabled>Personalizado</option>
+              <option value="__custom" disabled>{t.program.assembly.custom}</option>
             )}
             {PRESET_PROGRAMS.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
+              <option key={p.id} value={p.id}>{p.name[locale]}</option>
             ))}
           </select>
         </div>
@@ -290,34 +291,29 @@ export default function AssemblyPanel({ onToggleCollapse }: { onToggleCollapse: 
               caret-st-active overflow-auto whitespace-pre ${FONT_CLASS} ${PAD_CLASS}
               ${isLocked ? "cursor-not-allowed" : ""}`}
             style={{ color: "transparent" }}
-            aria-label="Código-fonte assembly"
+            aria-label={t.program.assembly.source}
           />
         </div>
       </div>
 
       {/* ── Status / errors ── */}
-      {(assemblyErrors.length > 0 || isLoaded || !assemblySource.trim()) && (
+      {(assemblyErrors.length > 0 || !assemblySource.trim()) && (
         <div className="shrink-0 space-y-1.5 border-t border-line px-3 py-2">
           {assemblyErrors.length > 0 && (
             <div className="space-y-0.5 rounded-lg border border-st-error px-2 py-1.5">
               <p className="font-mono text-small text-st-error">
-                Erros de montagem ({assemblyErrors.length})
+                {t.program.assembly.errors(assemblyErrors.length)}
               </p>
               {assemblyErrors.map((err, i) => (
                 <div key={i} className="font-mono text-small text-fg-muted">
-                  <span className="text-st-error">L{err.line}:</span> {err.message}
+                  <span className="text-st-error">L{err.line}:</span> {t.assembler.format(err.message)}
                 </div>
               ))}
             </div>
           )}
-          {isLoaded && assemblyErrors.length === 0 && (
-            <div className="rounded-lg border border-st-active px-2 py-1 font-mono text-small text-st-active">
-              {totalTicks} ticks capturados
-            </div>
-          )}
           {!assemblySource.trim() && (
             <div className="rounded-lg border border-st-warn px-2 py-1 font-mono text-small text-st-warn">
-              Código vazio — nada a montar
+              {t.program.assembly.empty}
             </div>
           )}
         </div>

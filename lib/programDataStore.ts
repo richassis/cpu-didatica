@@ -20,7 +20,9 @@ import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useExecutionStore } from "@/lib/executionStore";
 import { InstructionMemory } from "@/lib/simulator";
 import { assemble, type AssembleResult, type AssemblyError } from "@/lib/assembler";
-import { PRESET_PROGRAMS } from "@/lib/presetPrograms";
+import { PRESET_PROGRAMS, findPresetBySource } from "@/lib/presetPrograms";
+import { getMessages } from "@/lib/i18n";
+import { useLocaleStore } from "@/lib/localeStore";
 import { triggerDownload } from "@/lib/download";
 import {
   CODE_FILE_MIME,
@@ -93,7 +95,7 @@ function computeAssembled(source: string): AssembleResult | null {
 export const useProgramDataStore = create<ProgramDataState>()(
   persist(
     (set, get) => ({
-      assemblySource: PRESET_PROGRAMS[0].source,
+      assemblySource: PRESET_PROGRAMS[0].source[useLocaleStore.getState().locale],
       programName: DEFAULT_PROGRAM_BASENAME,
       isRunning: false,
       assemblyErrors: [],
@@ -110,16 +112,11 @@ export const useProgramDataStore = create<ProgramDataState>()(
           reader.onload = (e) => {
             const text = e.target?.result;
             if (typeof text !== "string") {
-              reject(new Error("Não foi possível ler o arquivo como texto."));
+              reject(new Error(getMessages().errors.fileUnreadable));
               return;
             }
             if (looksBinary(text)) {
-              reject(
-                new Error(
-                  `"${file.name}" não parece ser um arquivo de texto. ` +
-                    "Escolha um arquivo com o código-fonte."
-                )
-              );
+              reject(new Error(getMessages().errors.fileNotText(file.name)));
               return;
             }
             // Opened desmontado — pressing Montar is the same next step as
@@ -209,7 +206,7 @@ export const useProgramDataStore = create<ProgramDataState>()(
       // kept the old copy, and the fixed preset never reached anyone who had
       // opened the app before. Only code the student wrote is stored as text.
       partialize: (state) => {
-        const preset = PRESET_PROGRAMS.find((p) => p.source === state.assemblySource);
+        const preset = findPresetBySource(state.assemblySource);
         return {
           presetId: preset?.id ?? null,
           assemblySource: preset ? undefined : state.assemblySource,
@@ -240,7 +237,8 @@ export const useProgramDataStore = create<ProgramDataState>()(
           : undefined;
         return {
           ...current,
-          assemblySource: preset?.source ?? stored.assemblySource ?? current.assemblySource,
+          assemblySource:
+            preset?.source[useLocaleStore.getState().locale] ?? stored.assemblySource ?? current.assemblySource,
           programName: stored.programName ?? current.programName,
         };
       },
@@ -265,4 +263,42 @@ export function mountStatus(
   if (s.mountedSource !== s.assemblySource) return "stale";
   if (s.assembled === null || s.assemblyErrors.length > 0) return "errors";
   return "ok";
+}
+
+/**
+ * An example left untouched follows the interface language: its text is
+ * swapped for the same example in the new language. Every version assembles to
+ * the same words, so a mounted example stays mounted. Never while the code is
+ * locked (a run, or the timeline): the swap waits for the run to end.
+ */
+function followLocale(): void {
+  const state = useProgramDataStore.getState();
+  if (state.isRunning || useExecutionStore.getState().isTimelineActive) return;
+  const preset = findPresetBySource(state.assemblySource);
+  if (!preset) return;
+  const source = preset.source[useLocaleStore.getState().locale];
+  if (source === state.assemblySource) return;
+  if (state.mountedSource === state.assemblySource) {
+    const assembled = computeAssembled(source);
+    useProgramDataStore.setState({
+      assemblySource: source,
+      mountedSource: source,
+      assembled,
+      assemblyErrors: assembled?.errors ?? [],
+    });
+  } else {
+    useProgramDataStore.setState({ assemblySource: source });
+  }
+}
+
+if (typeof window !== "undefined") {
+  useLocaleStore.subscribe((s, prev) => {
+    if (s.locale !== prev.locale) followLocale();
+  });
+  useExecutionStore.subscribe((s, prev) => {
+    if (prev.isTimelineActive && !s.isTimelineActive) followLocale();
+  });
+  useProgramDataStore.subscribe((s, prev) => {
+    if (prev.isRunning && !s.isRunning) followLocale();
+  });
 }

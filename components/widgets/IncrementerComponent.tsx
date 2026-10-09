@@ -21,7 +21,7 @@ export default function IncrementerComponent({ component, zoom }: Props) {
     <NodeShell
       component={component}
       zoom={zoom}
-      silhouette="adder"
+      silhouette="incrementer"
       value={`+${incrementer?.step ?? 1}`}
     />
   );

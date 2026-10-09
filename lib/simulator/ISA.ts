@@ -31,46 +31,42 @@ export const OPCODE_BITS     = 5;  // bits [15:11]
 export const GPR_ADDR_BITS   = 3;
 export const OPERAND_BITS    = 8;  // bits [7:0]
 
-// Standard format fields
 export const OPCODE_SHIFT    = ISA_WORD_SIZE - OPCODE_BITS;       // 11
-export const GPR_ADDR_SHIFT  = OPCODE_SHIFT - GPR_ADDR_BITS;      // 8  – bits [10:8]
-export const OPERAND_SHIFT   = 0;
 
-export const OPCODE_MASK     = ((1 << OPCODE_BITS)   - 1) << OPCODE_SHIFT;   // 0b1111100000000000
-export const GPR_ADDR_MASK   = ((1 << GPR_ADDR_BITS) - 1) << GPR_ADDR_SHIFT; // 0b0000011100000000
-export const OPERAND_MASK    = ((1 << OPERAND_BITS)  - 1) << OPERAND_SHIFT;  // 0b0000000011111111
+// Standard format fields
+const GPR_ADDR_SHIFT  = OPCODE_SHIFT - GPR_ADDR_BITS;             // 8  – bits [10:8]
+const OPERAND_SHIFT   = 0;
 
 // ULA format fields
-export const ULA_SRC_A_SHIFT = OPCODE_SHIFT - GPR_ADDR_BITS;      // 8  – bits [10:8]
-export const ULA_SRC_B_SHIFT = ULA_SRC_A_SHIFT - GPR_ADDR_BITS;   // 5  – bits [7:5]
-export const ULA_DST_SHIFT   = 0;                                  //      bits [2:0]
-
-export const ULA_SRC_A_MASK  = ((1 << GPR_ADDR_BITS) - 1) << ULA_SRC_A_SHIFT; // 0b0000011100000000
-export const ULA_SRC_B_MASK  = ((1 << GPR_ADDR_BITS) - 1) << ULA_SRC_B_SHIFT; // 0b0000000011100000
-export const ULA_DST_MASK    = ((1 << GPR_ADDR_BITS) - 1) << ULA_DST_SHIFT;   // 0b0000000000000111
+const ULA_SRC_A_SHIFT = OPCODE_SHIFT - GPR_ADDR_BITS;             // 8  – bits [10:8]
+const ULA_SRC_B_SHIFT = ULA_SRC_A_SHIFT - GPR_ADDR_BITS;          // 5  – bits [7:5]
+const ULA_DST_SHIFT   = 0;                                         //      bits [2:0]
+const ULA_PAD_SHIFT   = ULA_DST_SHIFT + GPR_ADDR_BITS;             // 3  – bits [4:3]
 
 // ── Opcode enumeration ───────────────────────────────────────────────────────
 
 /**
  * Numeric opcodes occupying bits [15:11].
- * Values 0–12 are assigned sequentially; the remaining 19 encodings are
- * reserved for future extensions.
+ * The ISA defines 12 instructions. 0b01010 is unassigned (it once held JC,
+ * which the ISA does not define); the gap is kept so JN/JMP/HLT keep their
+ * encodings. Every other unassigned encoding is reserved.
  */
 export enum Opcode {
-  LDA  = 0b00001, // Load register from memory address
-  LDAI = 0b00010, // Load register with immediate value
-  STA  = 0b00011, // Store register to memory address
-  ADD  = 0b00100, // GPR[dst] = GPR[dst] + mem[addr]
-  SUB  = 0b00101, // GPR[dst] = GPR[dst] - mem[addr]
-  AND  = 0b00110, // GPR[dst] = GPR[dst] & mem[addr]
-  OR   = 0b00111, // GPR[dst] = GPR[dst] | mem[addr]
-  NOT  = 0b01000, // GPR[dst] = ~GPR[dst]
+  LDA  = 0b00001, // Rd ← mem[addr]
+  LDAI = 0b00010, // Rd ← sign-extended 8-bit immediate
+  STA  = 0b00011, // mem[addr] ← Rs
+  ADD  = 0b00100, // Rd ← Ra + Rb
+  SUB  = 0b00101, // Rd ← Ra - Rb
+  AND  = 0b00110, // Rd ← Ra & Rb
+  OR   = 0b00111, // Rd ← Ra | Rb
+  NOT  = 0b01000, // Rd ← ~Ra
   JZ   = 0b01001, // Jump if zero flag
-  JC   = 0b01010, // Jump if carry flag
   JN   = 0b01011, // Jump if negative flag
   JMP  = 0b01100, // Unconditional jump
   HLT  = 0b01101, // Halt execution
 }
+
+export type Mnemonic = keyof typeof Opcode;
 
 // ── Instruction format ───────────────────────────────────────────────────────
 
@@ -81,13 +77,92 @@ export enum Opcode {
  */
 export type InstructionFormat = "standard" | "ula";
 
+/** The operand fields of both formats (`gprAddr` and `srcA` share bits [10:8]). */
+export type InstructionField = "gprAddr" | "operand" | "srcA" | "srcB" | "dst";
+
+/** One bit field of an instruction word. */
+export interface FieldSpec {
+  name : "opcode" | InstructionField | "pad";
+  shift: number;
+  bits : number;
+}
+
+/** Bit layout of each format, most significant field first. */
+export const FIELD_LAYOUT: Readonly<Record<InstructionFormat, readonly FieldSpec[]>> = {
+  standard: [
+    { name: "opcode",  shift: OPCODE_SHIFT,   bits: OPCODE_BITS   },
+    { name: "gprAddr", shift: GPR_ADDR_SHIFT, bits: GPR_ADDR_BITS },
+    { name: "operand", shift: OPERAND_SHIFT,  bits: OPERAND_BITS  },
+  ],
+  ula: [
+    { name: "opcode",  shift: OPCODE_SHIFT,    bits: OPCODE_BITS   },
+    { name: "srcA",    shift: ULA_SRC_A_SHIFT, bits: GPR_ADDR_BITS },
+    { name: "srcB",    shift: ULA_SRC_B_SHIFT, bits: GPR_ADDR_BITS },
+    { name: "pad",     shift: ULA_PAD_SHIFT,   bits: ULA_SRC_B_SHIFT - ULA_PAD_SHIFT },
+    { name: "dst",     shift: ULA_DST_SHIFT,   bits: GPR_ADDR_BITS },
+  ],
+};
+
+const fieldMask = (bits: number) => (1 << bits) - 1;
+
+/** The layout entry of `field` in `format`. */
+export function fieldSpec(format: InstructionFormat, field: FieldSpec["name"]): FieldSpec {
+  const spec = FIELD_LAYOUT[format].find((f) => f.name === field);
+  if (!spec) throw new RangeError(`Field "${field}" is not part of the ${format} format`);
+  return spec;
+}
+
+/** Every named field of a word, read under both formats (they overlap). */
+export type DecodedFields = Record<"opcode" | InstructionField, number>;
+
+const NAMED_FIELDS = [...FIELD_LAYOUT.standard, ...FIELD_LAYOUT.ula].filter(
+  (f): f is FieldSpec & { name: keyof DecodedFields } => f.name !== "pad",
+);
+
+/**
+ * Slice a word into its fields. Both formats are read at once — which ones
+ * mean something depends on the opcode, and the caller knows that.
+ */
+export function extractFields(word: number): DecodedFields {
+  const out = {} as DecodedFields;
+  for (const spec of NAMED_FIELDS) {
+    out[spec.name] = (word >>> spec.shift) & fieldMask(spec.bits);
+  }
+  return out;
+}
+
+/** Read the low `bits` of `value` as a two's-complement number. */
+export function signExtend(value: number, bits: number): number {
+  const v = value & fieldMask(bits);
+  return v & (1 << (bits - 1)) ? v - (1 << bits) : v;
+}
+
+/** An opcode as the binary digits of its field, e.g. `00100`. */
+export function formatOpcodeBits(opcode: number): string {
+  return opcode.toString(2).padStart(OPCODE_BITS, "0");
+}
+
 // ── Instruction descriptor ───────────────────────────────────────────────────
+
+/**
+ * One assembly operand. `label` is the notation the help uses (Rd destination,
+ * Rs/Ra/Rb sources, M address, N immediate); `signed` widens the accepted
+ * range to the field's two's-complement values as well.
+ */
+export interface OperandSpec {
+  field : InstructionField;
+  label : "Rd" | "Rs" | "Ra" | "Rb" | "M" | "N";
+  kind  : "register" | "address" | "immediate";
+  signed?: boolean;
+}
 
 /** Base fields shared by all instruction descriptors. */
 interface BaseDescriptor {
-  mnemonic   : keyof typeof Opcode;
+  mnemonic   : Mnemonic;
   opcode     : Opcode;
   format     : InstructionFormat;
+  /** Operands in assembly order — the source the flags below are derived from. */
+  operands   : readonly OperandSpec[];
   description: string;
 }
 
@@ -109,76 +184,93 @@ export interface ULADescriptor extends BaseDescriptor {
 
 export type InstructionDescriptor = StandardDescriptor | ULADescriptor;
 
+const RD : OperandSpec = { field: "gprAddr", label: "Rd", kind: "register" };
+const RS : OperandSpec = { field: "gprAddr", label: "Rs", kind: "register" };
+const M  : OperandSpec = { field: "operand", label: "M",  kind: "address" };
+const N  : OperandSpec = { field: "operand", label: "N",  kind: "immediate", signed: true };
+const RA : OperandSpec = { field: "srcA",    label: "Ra", kind: "register" };
+const RB : OperandSpec = { field: "srcB",    label: "Rb", kind: "register" };
+const RDU: OperandSpec = { field: "dst",     label: "Rd", kind: "register" };
+
+const uses = (operands: readonly OperandSpec[], field: InstructionField) => operands.some((o) => o.field === field);
+
+function standard(mnemonic: Mnemonic, operands: OperandSpec[], description: string): StandardDescriptor {
+  return {
+    mnemonic, opcode: Opcode[mnemonic], format: "standard", operands, description,
+    usesGPR: uses(operands, "gprAddr"),
+    usesOperand: uses(operands, "operand"),
+  };
+}
+
+function ula(mnemonic: Mnemonic, operands: OperandSpec[], description: string): ULADescriptor {
+  return {
+    mnemonic, opcode: Opcode[mnemonic], format: "ula", operands, description,
+    usesSrcB: uses(operands, "srcB"),
+  };
+}
+
 /** Full descriptor table, one entry per mnemonic. */
-export const INSTRUCTION_SET: Readonly<Record<keyof typeof Opcode, InstructionDescriptor>> = {
-  LDA  : { mnemonic: "LDA",  opcode: Opcode.LDA,  format: "standard", usesGPR: true,  usesOperand: true,  description: "Load GPR from memory address"           },
-  LDAI : { mnemonic: "LDAI", opcode: Opcode.LDAI, format: "standard", usesGPR: true,  usesOperand: true,  description: "Load GPR with 8-bit immediate value"     },
-  STA  : { mnemonic: "STA",  opcode: Opcode.STA,  format: "standard", usesGPR: true,  usesOperand: true,  description: "Store GPR to memory address"             },
-  ADD  : { mnemonic: "ADD",  opcode: Opcode.ADD,  format: "ula",      usesSrcB: true,                     description: "DST = SRC_A + SRC_B"                    },
-  SUB  : { mnemonic: "SUB",  opcode: Opcode.SUB,  format: "ula",      usesSrcB: true,                     description: "DST = SRC_A - SRC_B"                    },
-  AND  : { mnemonic: "AND",  opcode: Opcode.AND,  format: "ula",      usesSrcB: true,                     description: "DST = SRC_A & SRC_B"                    },
-  OR   : { mnemonic: "OR",   opcode: Opcode.OR,   format: "ula",      usesSrcB: true,                     description: "DST = SRC_A | SRC_B"                    },
-  NOT  : { mnemonic: "NOT",  opcode: Opcode.NOT,  format: "ula",      usesSrcB: false,                    description: "DST = ~SRC_A"                           },
-  JZ   : { mnemonic: "JZ",   opcode: Opcode.JZ,   format: "standard", usesGPR: false, usesOperand: true,  description: "Jump to address if zero flag is set"     },
-  JC   : { mnemonic: "JC",   opcode: Opcode.JC,   format: "standard", usesGPR: false, usesOperand: true,  description: "Jump to address if carry flag is set"    },
-  JN   : { mnemonic: "JN",   opcode: Opcode.JN,   format: "standard", usesGPR: false, usesOperand: true,  description: "Jump to address if negative flag is set" },
-  JMP  : { mnemonic: "JMP",  opcode: Opcode.JMP,  format: "standard", usesGPR: false, usesOperand: true,  description: "Unconditional jump to address"           },
-  HLT  : { mnemonic: "HLT",  opcode: Opcode.HLT,  format: "standard", usesGPR: false, usesOperand: false, description: "Halt the CPU"                           },
+export const INSTRUCTION_SET: Readonly<Record<Mnemonic, InstructionDescriptor>> = {
+  LDA  : standard("LDA",  [RD, M],       "Load GPR from memory address"),
+  LDAI : standard("LDAI", [RD, N],       "Load GPR with sign-extended 8-bit immediate"),
+  STA  : standard("STA",  [RS, M],       "Store GPR to memory address"),
+  ADD  : ula     ("ADD",  [RA, RB, RDU], "DST = SRC_A + SRC_B"),
+  SUB  : ula     ("SUB",  [RA, RB, RDU], "DST = SRC_A - SRC_B"),
+  AND  : ula     ("AND",  [RA, RB, RDU], "DST = SRC_A & SRC_B"),
+  OR   : ula     ("OR",   [RA, RB, RDU], "DST = SRC_A | SRC_B"),
+  NOT  : ula     ("NOT",  [RA, RDU],     "DST = ~SRC_A"),
+  JZ   : standard("JZ",   [M],           "Jump to address if zero flag is set"),
+  JN   : standard("JN",   [M],           "Jump to address if negative flag is set"),
+  JMP  : standard("JMP",  [M],           "Unconditional jump to address"),
+  HLT  : standard("HLT",  [],            "Halt the CPU"),
 };
-
-// ── Decoded instruction ───────────────────────────────────────────────────────
-
-/** Decoded standard-format instruction. */
-export interface DecodedStandardInstruction {
-  format  : "standard";
-  raw     : number;
-  opcode  : Opcode;
-  mnemonic: keyof typeof Opcode;
-  /** GPR address (bits [10:8]); only valid when descriptor.usesGPR === true */
-  gprAddr : number;
-  /** 8-bit operand (bits [7:0]); only valid when descriptor.usesOperand === true */
-  operand : number;
-}
-
-/** Decoded ULA-format instruction. */
-export interface DecodedULAInstruction {
-  format  : "ula";
-  raw     : number;
-  opcode  : Opcode;
-  mnemonic: keyof typeof Opcode;
-  /** First source GPR address (bits [10:8]) */
-  srcA    : number;
-  /** Second source GPR address (bits [7:5]); only valid when descriptor.usesSrcB === true */
-  srcB    : number;
-  /** Destination GPR address (bits [2:0]) */
-  dst     : number;
-}
-
-export type DecodedInstruction = DecodedStandardInstruction | DecodedULAInstruction;
 
 // ── ISA helpers ──────────────────────────────────────────────────────────────
 
 /** Maximum unsigned value that fits in a word. */
 export const ISA_WORD_MAX = (1 << ISA_WORD_SIZE) - 1; // 65535
 
+/** Every instruction, ordered by opcode. */
+export const INSTRUCTIONS_BY_OPCODE: readonly InstructionDescriptor[] =
+  Object.values(INSTRUCTION_SET).sort((a, b) => a.opcode - b.opcode);
+
+const BY_OPCODE = new Map<number, InstructionDescriptor>(INSTRUCTIONS_BY_OPCODE.map((d) => [d.opcode, d]));
+
+/**
+ * The instruction an opcode encodes, or `undefined` for an unassigned one —
+ * memory full of zeros and reserved encodings are normal, not errors.
+ */
+export function lookupInstruction(opcode: number): InstructionDescriptor | undefined {
+  return BY_OPCODE.get(opcode);
+}
+
 /**
  * Resolve an opcode number to its mnemonic.
  * @throws {RangeError} for unknown opcodes.
  */
-export function opcodeToMnemonic(opcode: Opcode): keyof typeof Opcode {
-  const entry = Object.values(INSTRUCTION_SET).find(d => d.opcode === opcode);
-  if (!entry) throw new RangeError(`Unknown opcode: 0b${opcode.toString(2).padStart(OPCODE_BITS, "0")} (${opcode})`);
+export function opcodeToMnemonic(opcode: Opcode): Mnemonic {
+  const entry = lookupInstruction(opcode);
+  if (!entry) throw new RangeError(`Unknown opcode: 0b${formatOpcodeBits(opcode)} (${opcode})`);
   return entry.mnemonic;
 }
 
 /** Return the {@link InstructionDescriptor} for a given mnemonic. */
-export function getDescriptor(mnemonic: keyof typeof Opcode): InstructionDescriptor {
+export function getDescriptor(mnemonic: Mnemonic): InstructionDescriptor {
   const desc = INSTRUCTION_SET[mnemonic];
   if (!desc) throw new RangeError(`Unknown mnemonic: "${mnemonic}"`);
   return desc;
 }
 
+/** How an instruction is written in assembly, e.g. `ADD Ra, Rb, Rd`. */
+export function instructionSyntax(mnemonic: Mnemonic): string {
+  const labels = INSTRUCTION_SET[mnemonic].operands.map((o) => o.label).join(", ");
+  return labels ? `${mnemonic} ${labels}` : mnemonic;
+}
+
 // ── ULA operation encoding ───────────────────────────────────────────────────
+
+/** Width of the ULA's operation selector (`opULA` / `in_operation`). */
+export const ULA_OP_BITS = 3;
 
 /**
  * Numeric operation codes understood by the ULA.
@@ -189,9 +281,28 @@ export enum UlaOperation {
   ADD = 0,
   SUB = 1,
   AND = 4,
-  OR  = 5,
-  NOT = 6,
+  OR  = 6,
+  NOT = 7,
 }
+
+/** Every ULA operation, by code. */
+export const ULA_OPERATIONS: readonly UlaOperation[] = (Object.values(UlaOperation)
+  .filter((v) => typeof v === "number") as UlaOperation[])
+  .sort((a, b) => a - b);
+
+/** The operation's name (`ADD`…), or `?` for a code the ULA doesn't define. */
+export function ulaOpName(op: number): string {
+  return ULA_OPERATIONS.includes(op) ? UlaOperation[op] : "?";
+}
+
+/**
+ * Bit positions in the ULA's 4-bit flags bus (`Ula.out_flags` → CPU
+ * `in_flags`): Z C N V, most significant first.
+ */
+export const FLAG_BITS = { zero: 3, carry: 2, negative: 1, overflow: 0 } as const;
+
+/** Width of the flags bus. */
+export const FLAG_COUNT = Object.keys(FLAG_BITS).length;
 
 /**
  * Maps each ALU-class opcode to the corresponding {@link UlaOperation}.
@@ -205,59 +316,26 @@ export const OPCODE_TO_ULA_OP: Readonly<Partial<Record<Opcode, UlaOperation>>> =
   [Opcode.NOT]: UlaOperation.NOT,
 };
 
-// ── Instruction encoding helpers ─────────────────────────────────────────────
+// ── Instruction encoding ─────────────────────────────────────────────────────
+
+/** Field values for {@link encodeInstruction}; a missing one encodes as 0. */
+export type InstructionFields = Partial<Record<InstructionField, number>>;
 
 /**
- * Encode a standard-format instruction into a 16-bit word.
- * @param opcode - The instruction opcode (5 bits)
- * @param gprAddr - GPR address (3 bits, bits [10:8])
- * @param operand - Operand value (8 bits, bits [7:0])
- * @returns Encoded 16-bit instruction word
+ * Encode an instruction into a 16-bit word. Each value is truncated to its
+ * field's width (so a negative immediate lands as its two's-complement byte),
+ * and fields the instruction doesn't use are left zero whatever is passed.
+ *
+ * @example
+ * encodeInstruction("LDAI", { gprAddr: 2, operand: 0x42 }) // → 0x1242
+ * encodeInstruction("HLT")                                  // → 0x6800
  */
-export function encodeStandard(opcode: Opcode, gprAddr: number, operand: number): number {
-  const opcodeField = (opcode & 0b11111) << OPCODE_SHIFT;
-  const gprField = (gprAddr & 0b111) << GPR_ADDR_SHIFT;
-  const operandField = (operand & 0xFF) << OPERAND_SHIFT;
-  return opcodeField | gprField | operandField;
-}
-
-/**
- * Encode a ULA-format instruction into a 16-bit word.
- * @param opcode - The instruction opcode (5 bits)
- * @param srcA - Source A register address (3 bits, bits [10:8])
- * @param srcB - Source B register address (3 bits, bits [7:5])
- * @param dst - Destination register address (3 bits, bits [2:0])
- * @returns Encoded 16-bit instruction word
- */
-export function encodeULA(opcode: Opcode, srcA: number, srcB: number, dst: number): number {
-  const opcodeField = (opcode & 0b11111) << OPCODE_SHIFT;
-  const srcAField = (srcA & 0b111) << ULA_SRC_A_SHIFT;
-  const srcBField = (srcB & 0b111) << ULA_SRC_B_SHIFT;
-  const dstField = (dst & 0b111) << ULA_DST_SHIFT;
-  return opcodeField | srcAField | srcBField | dstField;
-}
-
-/**
- * Encode an instruction based on its descriptor and field values.
- * @param mnemonic - Instruction mnemonic (e.g., "LDA", "ADD")
- * @param fields - Object with field values based on format
- * @returns Encoded 16-bit instruction word
- */
-export function encodeInstruction(
-  mnemonic: keyof typeof Opcode,
-  fields: { gprAddr?: number; operand?: number; srcA?: number; srcB?: number; dst?: number }
-): number {
-  const descriptor = getDescriptor(mnemonic);
-  
-  if (descriptor.format === "standard") {
-    const gprAddr = descriptor.usesGPR ? (fields.gprAddr ?? 0) : 0;
-    const operand = descriptor.usesOperand ? (fields.operand ?? 0) : 0;
-    return encodeStandard(descriptor.opcode, gprAddr, operand);
-  } else {
-    // ULA format
-    const srcA = fields.srcA ?? 0;
-    const srcB = descriptor.usesSrcB ? (fields.srcB ?? 0) : 0;
-    const dst = fields.dst ?? 0;
-    return encodeULA(descriptor.opcode, srcA, srcB, dst);
+export function encodeInstruction(mnemonic: Mnemonic, fields: InstructionFields = {}): number {
+  const desc = getDescriptor(mnemonic);
+  let word = (desc.opcode & fieldMask(OPCODE_BITS)) << OPCODE_SHIFT;
+  for (const { field } of desc.operands) {
+    const spec = fieldSpec(desc.format, field);
+    word |= ((fields[field] ?? 0) & fieldMask(spec.bits)) << spec.shift;
   }
+  return word;
 }

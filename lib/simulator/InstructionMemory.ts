@@ -71,11 +71,6 @@ export class InstructionMemory implements Clockable, Connectable {
 
   // ── Accessors ────────────────────────────────────────────────
 
-  /** Current output value (instruction at current address). */
-  get output(): number {
-    return this.out_data.value;
-  }
-
   /** Read a word directly by address. */
   peek(addr: number): number {
     const a = this.clampAddr(addr);
@@ -112,7 +107,7 @@ export class InstructionMemory implements Clockable, Connectable {
     this.out_data.set(this._cells[addr]);
   }
 
-  /** Called by the global Clock on each tick. */
+  /** Single-call tick: same as `evaluate()`. */
   onTick(): void {
     this.evaluate();
   }

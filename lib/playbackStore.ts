@@ -10,9 +10,10 @@
  *
  * Playback advances one tick at a time, chained to the *completion of the
  * previous tick's animation* rather than to a fixed interval. That matters
- * because a tick is not a constant length: it costs
- * `(control signals changed ? D : 0) + D × number of substeps`, so a FETCH and a
- * HALT take very different amounts of time. Pacing on a timer would either cut
+ * because a tick is not a constant length: the control-signal phase and then
+ * each substep last as long as their longest wire, and a wire takes
+ * `D × (length / 400)^0.5` (see `animationSchedule.ts`), so a FETCH and a HALT
+ * take very different amounts of time. Pacing on a timer would either cut
  * animations short or leave dead air between them.
  *
  * The completion signal comes from EnhancedBusOverlay, which owns the animation
@@ -105,9 +106,11 @@ let lastPassMs = 0;
 
 /**
  * Longest a single tick can reasonably animate: twice the last scheduled pass
- * plus a second of slack, with a floor for the short ones. A tick's length
- * depends on the wires it animates, so a fixed multiple of the step duration
- * no longer bounds it.
+ * plus a second of slack, never under 2 s. A tick's length depends on the wires
+ * it animates, so a fixed multiple of the step duration no longer bounds it.
+ * The `perStep × 12` term is the estimate used before any pass has reported;
+ * it dates from when a tick cost one step duration per substep and is kept as
+ * a generous floor, not derived from the current schedule.
  */
 function watchdogDelay(): number {
   const perStep = useDisplayStore.getState().animationDurationMs;

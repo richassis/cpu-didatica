@@ -3,10 +3,9 @@
 import { useState, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useSimulatorStore } from "@/lib/simulatorStore";
-import { useLayoutStore } from "@/lib/store";
 import { useWireCreationStore } from "@/lib/wireCreationStore";
 import { useDisplayStore, formatPortValue } from "@/lib/displayStore";
-import { useIsUnsignedPort } from "@/lib/portKinds";
+import { usePortKind } from "@/lib/portKinds";
 import type { PortSide } from "@/lib/portPositioning";
 
 const DRAG_THRESHOLD = 4; // px of movement before we consider it a drag
@@ -17,6 +16,8 @@ interface Props {
   componentId: string;
   position: PortSide;
   offset?: number;
+  /** How far inside the box the port sits, % of the perpendicular dimension (see `PortConfig.inset`). */
+  inset?: number;
   /** Port side for routing (same as position) */
   portSide: PortSide;
   /** Whether this port is a valid drop target during wire creation */
@@ -39,46 +40,13 @@ interface Props {
   onPortHoverEnd?: () => void;
 }
 
-/**
- * Determine if a port is a control signal based on component type and port name
- */
-function isControlSignalPort(componentType: string, portName: string, direction: "input" | "output"): boolean {
-  // CPU outputs are all control signals
-  if (componentType === "CpuComponent" && direction === "output") {
-    return true;
-  }
-  
-  // Mux/Multiplexer select signals are control
-  if (portName === "select" || portName === "sel" || portName.includes("select")) {
-    return true;
-  }
-  
-  // Write enables and read enables are control signals
-  if (portName.includes("writeEnable") || portName.includes("wrEnable") || 
-      portName.includes("rdMem") || portName.includes("wrMem") ||
-      portName.includes("wrReg") || portName.includes("wrPC") || portName.includes("wrIR")) {
-    return true;
-  }
-  
-  // Operation selectors are control signals
-  if (portName.includes("operation") || portName.includes("opULA")) {
-    return true;
-  }
-  
-  // Mux selectors are control signals
-  if (portName.includes("mux")) {
-    return true;
-  }
-  
-  return false;
-}
-
 export default function PortIndicator({ 
   portName, 
   direction, 
   componentId, 
   position,
   offset = 50,
+  inset = 0,
   portSide,
   isDropTarget = false,
   isHoveredTarget = false,
@@ -89,11 +57,9 @@ export default function PortIndicator({
   const [hover, setHover] = useState(false);
   const [tooltipAnchor, setTooltipAnchor] = useState<{ x: number; y: number } | null>(null);
   const base = useDisplayStore((s) => s.numericBase);
-  const showPortValues = useDisplayStore((s) => s.showPortValues);
   const dotRef = useRef<HTMLDivElement>(null);
   const objects = useSimulatorStore((s) => s.objects);
   const revision = useSimulatorStore((s) => s.revision);
-  const components = useLayoutStore((s) => s.components);
   const phase = useWireCreationStore((s) => s.phase);
   const isCreating = phase === "dragging";
 
@@ -101,12 +67,9 @@ export default function PortIndicator({
   const pointerDownPos = useRef<{ x: number; y: number } | null>(null);
   const isDragging = useRef(false);
 
-  // Get component type for control signal detection
-  const component = components.find(c => c.id === componentId);
-  const componentType = component?.type ?? "";
-  const isControlSignal = isControlSignalPort(componentType, portName, direction);
-  const isUnsignedPort = useIsUnsignedPort();
-  const unsigned = isUnsignedPort(componentId, portName);
+  const kind = usePortKind()(componentId, portName);
+  const isControlSignal = kind === "control";
+  const unsigned = kind !== "data";
 
   const portValue = useMemo(() => {
     void revision;
@@ -120,9 +83,6 @@ export default function PortIndicator({
     const val = port.value;
     if (typeof val === "number") {
       return formatPortValue(val, base, port.bitWidth ?? undefined, unsigned);
-    }
-    if (typeof val === "boolean") {
-      return val ? "1" : "0";
     }
     return String(val);
   }, [componentId, portName, objects, revision, base, unsigned]);
@@ -189,13 +149,15 @@ export default function PortIndicator({
   }, [isCreating, onPortHoverEnd]);
 
   // Position the port based on side. Half the 6px dot, so it straddles the
-  // node's border rather than floating beside it.
+  // node's border rather than floating beside it — or, with an inset, the
+  // node's outline inside its box.
+  const edge = inset ? `calc(${inset}% - 3px)` : -3;
   const positionStyles: React.CSSProperties = {
     position: "absolute",
-    ...(position === "left" && { left: -3, top: `${offset}%`, transform: "translateY(-50%)" }),
-    ...(position === "right" && { right: -3, top: `${offset}%`, transform: "translateY(-50%)" }),
-    ...(position === "top" && { top: -3, left: `${offset}%`, transform: "translateX(-50%)" }),
-    ...(position === "bottom" && { bottom: -3, left: `${offset}%`, transform: "translateX(-50%)" }),
+    ...(position === "left" && { left: edge, top: `${offset}%`, transform: "translateY(-50%)" }),
+    ...(position === "right" && { right: edge, top: `${offset}%`, transform: "translateY(-50%)" }),
+    ...(position === "top" && { top: edge, left: `${offset}%`, transform: "translateX(-50%)" }),
+    ...(position === "bottom" && { bottom: edge, left: `${offset}%`, transform: "translateX(-50%)" }),
   };
 
   const isInput = direction === "input";
@@ -218,6 +180,7 @@ export default function PortIndicator({
       data-port-direction={direction}
       data-port-side={portSide}
       data-port-offset={offset}
+      data-port-inset={inset}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
@@ -233,7 +196,7 @@ export default function PortIndicator({
 
       {/* Tooltip portalled into #portal-root — a fixed div at (0,0) with z-index 999999
           rendered as the last child of <body>, guaranteed above every stacking context. */}
-      {hover && showPortValues && !isCreating && tooltipAnchor && typeof document !== "undefined" &&
+      {hover && !isCreating && tooltipAnchor && typeof document !== "undefined" &&
         (() => {
           const root = document.getElementById("portal-root");
           if (!root) return null;
