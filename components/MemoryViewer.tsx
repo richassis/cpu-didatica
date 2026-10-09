@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
-import MemoryTable from "@/components/MemoryTable";
+import AddressList from "@/components/AddressList";
 
 /**
  * Read-only view of a whole memory, as a modal.
@@ -17,7 +17,6 @@ export default function MemoryViewer({
   title,
   wordCount,
   bitWidth,
-  addrBits,
   currentAddr,
   read,
   decode,
@@ -26,7 +25,6 @@ export default function MemoryViewer({
   title: string;
   wordCount: number;
   bitWidth: number;
-  addrBits: number;
   currentAddr: number;
   read: (addr: number) => number;
   decode?: (word: number) => string;
@@ -71,13 +69,17 @@ export default function MemoryViewer({
           </button>
         </div>
 
-        <MemoryTable
+        <AddressList
+          density="panel"
+          scrollBlock="center"
           wordCount={wordCount}
           bitWidth={bitWidth}
-          addrBits={addrBits}
           currentAddr={currentAddr}
           read={read}
           decode={decode}
+          // A listing with a decoded column is instruction memory: its words
+          // are encodings, never signed data.
+          unsigned={decode !== undefined}
         />
       </div>
     </div>,

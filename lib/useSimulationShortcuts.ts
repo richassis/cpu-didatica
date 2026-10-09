@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useExecutionStore } from "./executionStore";
 import { usePlaybackStore } from "./playbackStore";
+import { useMemoryPanelStore } from "./memoryPanelStore";
 
 /**
  * Keyboard transport for program mode.
@@ -84,11 +85,23 @@ export default function useSimulationShortcuts() {
     };
     const onBlur = () => usePlaybackStore.getState().setBoost(false);
 
+    // Esc closes the memory panel, with or without the timeline. Listened to in
+    // the capture phase so it runs before any window's own Esc handler has
+    // closed that window: while a dialog (Ajuda, Ajustes, Salvar, the tour) is
+    // open, this Esc is the dialog's, and the panel waits for the next one.
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || isTypingTarget(event.target)) return;
+      if (document.querySelector('[role="dialog"]')) return;
+      useMemoryPanelStore.getState().closeMemoryPanel();
+    };
+
     window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onEscape, true);
     window.addEventListener("keyup", onKeyUp);
     window.addEventListener("blur", onBlur);
     return () => {
       window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keydown", onEscape, true);
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("blur", onBlur);
     };

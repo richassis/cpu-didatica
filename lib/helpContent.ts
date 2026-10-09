@@ -113,6 +113,11 @@ export const SHORTCUTS: Array<{ keys: string; note: string }> = [
   { keys: "Esc", note: "fechar janelas e painéis" },
 ];
 
+/** Shown under `SHORTCUTS`: when they apply. */
+export const SHORTCUTS_NOTE =
+  "Os atalhos de reprodução (Espaço, setas, Home, End e F) valem com a linha do tempo ativa, " +
+  "depois de Simular. Os atalhos de teclado ficam desligados enquanto você digita no editor.";
+
 export const CREDITS = {
   project: "CPU Didática",
   institution: "Universidade Federal do Rio Grande — FURG",

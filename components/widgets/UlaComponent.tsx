@@ -4,7 +4,7 @@ import { Props } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { UlaOperation, ulaOpName } from "@/lib/simulator/ISA";
 import NodeShell from "@/components/widgets/NodeShell";
-import FlagSquares from "@/components/widgets/FlagSquares";
+import FlagSquares, { flagSpecs } from "@/components/widgets/FlagSquares";
 
 /**
  * The ALU keeps its trapezoid — it is the signature shape of the screen and
@@ -34,12 +34,12 @@ export default function UlaComponent({ component, zoom }: Props) {
 
         <div>
           <FlagSquares
-            flags={[
-              { label: "Z", on: cpu?.ulaFlags.zero ?? false, title: "Zero" },
-              { label: "C", on: cpu?.ulaFlags.carry ?? false, title: "Carry" },
-              { label: "N", on: cpu?.ulaFlags.negative ?? false, title: "Negative" },
-              { label: "V", on: cpu?.ulaFlags.overflow ?? false, title: "Overflow" },
-            ]}
+            flags={flagSpecs({
+              zero: cpu?.ulaFlags.zero ?? false,
+              carry: cpu?.ulaFlags.carry ?? false,
+              negative: cpu?.ulaFlags.negative ?? false,
+              overflow: cpu?.ulaFlags.overflow ?? false,
+            })}
           />
         </div>
       </div>

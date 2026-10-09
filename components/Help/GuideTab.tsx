@@ -2,7 +2,7 @@
 
 import Legend from "@/components/ProgramMode/Legend";
 import { PRESET_PROGRAMS } from "@/lib/presetPrograms";
-import { SHORTCUTS } from "@/lib/helpContent";
+import { SHORTCUTS, SHORTCUTS_NOTE } from "@/lib/helpContent";
 import { useProgramDataStore } from "@/lib/programDataStore";
 import { useExecutionStore } from "@/lib/executionStore";
 import { useOnboardingStore } from "@/lib/onboardingStore";
@@ -166,9 +166,7 @@ export default function GuideTab({ onClose }: { onClose: () => void }) {
             </div>
           ))}
         </div>
-        <p className="mt-2 text-caption text-fg-faint">
-          Os atalhos de teclado ficam desligados enquanto você digita no editor.
-        </p>
+        <p className="mt-2 text-caption text-fg-faint">{SHORTCUTS_NOTE}</p>
       </section>
 
       <section>

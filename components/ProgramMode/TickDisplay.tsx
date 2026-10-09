@@ -51,6 +51,13 @@ const SEGMENT_PATHS: Record<string, string> = {
 
 const ALL_SEGMENTS = Object.keys(SEGMENT_PATHS);
 
+/** Student-visible text of the counter, in one place for translation. */
+const LABELS = {
+  tick: "tick",
+  halted: "parado",
+  of: "de",
+} as const;
+
 function Digit({ char, lit }: { char: string; lit: string }) {
   const on = DIGIT_SEGMENTS[char] ?? "";
   return (
@@ -101,8 +108,10 @@ export default function TickDisplay() {
         ))}
       </div>
       <div className="flex flex-col items-start leading-none">
-        <span className="t-section leading-none">{halted ? "halted" : "tick"}</span>
-        <span className="num mt-1 font-mono text-caption text-fg-faint">de {totalTicks}</span>
+        <span className="t-section leading-none">{halted ? LABELS.halted : LABELS.tick}</span>
+        <span className="num mt-1 font-mono text-caption text-fg-faint">
+          {LABELS.of} {totalTicks}
+        </span>
       </div>
 
       {/*
@@ -110,7 +119,7 @@ export default function TickDisplay() {
         hundred ticks would otherwise queue three hundred announcements.
       */}
       <span className="sr-only" role="status" aria-live={isPlaying ? "off" : "polite"}>
-        {`Tick ${currentIndex} of ${totalTicks}${halted ? ", halted" : ""}`}
+        {`Tick ${currentIndex} ${LABELS.of} ${totalTicks}${halted ? `, ${LABELS.halted}` : ""}`}
       </span>
     </div>
   );

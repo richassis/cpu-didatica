@@ -5,10 +5,13 @@ import { useProgramDataStore, mountStatus } from "@/lib/programDataStore";
 import { useExecutionStore } from "@/lib/executionStore";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayStore, formatNum, formatPortValue } from "@/lib/displayStore";
+import { fmtAddr } from "@/lib/memoryFormat";
 
-function fmtAddr(addr: number) {
-  return "0x" + addr.toString(16).toUpperCase().padStart(2, "0");
-}
+/** Width of the panel expanded — in rem, so it grows with the text size. */
+export const MAQUINA_W_REM = 13.5;
+
+/** Both tables list 8-bit addresses (256-word memories): two hex digits. */
+const LISTING_ADDR_BITS = 8;
 
 /**
  * The bytecode view: what the assembler produced the last time the student
@@ -48,7 +51,11 @@ export default function AssembledPanel({ onToggleCollapse }: { onToggleCollapse:
   const status = mountStatus({ mountedSource, assemblySource, assembled, assemblyErrors });
 
   return (
-    <aside data-tour="machine" className="flex h-full w-[13.5rem] shrink-0 flex-col overflow-hidden border-r border-line bg-surface">
+    <aside
+      data-tour="machine"
+      className="flex h-full shrink-0 flex-col overflow-hidden border-r border-line bg-surface"
+      style={{ width: `${MAQUINA_W_REM}rem` }}
+    >
       <button
         onClick={onToggleCollapse}
         aria-expanded="true"
@@ -110,7 +117,7 @@ export default function AssembledPanel({ onToggleCollapse }: { onToggleCollapse:
                             : undefined
                         }
                       >
-                        <td className="num px-1.5 py-0.5 text-fg-faint">{fmtAddr(line.addr)}</td>
+                        <td className="num px-1.5 py-0.5 text-fg-faint">{fmtAddr(line.addr, LISTING_ADDR_BITS)}</td>
                         <td className="num px-1.5 py-0.5 text-fg-muted">
                           {formatPortValue(line.word, base, 16, true)}
                         </td>
@@ -140,7 +147,7 @@ export default function AssembledPanel({ onToggleCollapse }: { onToggleCollapse:
                   <tbody>
                     {assembled.dataSymbols.map((sym) => (
                       <tr key={sym.name}>
-                        <td className="num px-1.5 py-0.5 text-fg-faint">{fmtAddr(sym.addr)}</td>
+                        <td className="num px-1.5 py-0.5 text-fg-faint">{fmtAddr(sym.addr, LISTING_ADDR_BITS)}</td>
                         <td className="num px-1.5 py-0.5 text-fg-muted">
                           {formatNum(dataValueFor(sym.addr, sym.value), base, 16)}
                         </td>

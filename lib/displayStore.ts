@@ -7,10 +7,9 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { DEFAULT_TEXT_SIZE, applyTextSizeAttribute, type TextSize } from "./textSize";
 
-/** "Tamanho do texto": a factor on the root font size (see `--fs` in globals.css). */
-export type TextSize = "small" | "medium" | "large";
-export const TEXT_SIZE_SCALE: Record<TextSize, number> = { small: 0.875, medium: 1, large: 1.15 };
+export type { TextSize };
 
 export type NumericBase = "hex" | "dec" | "decSigned" | "bin";
 
@@ -99,7 +98,7 @@ export const useDisplayStore = create<DisplayState>()(
       showDataSignalWires: true,
       setShowDataSignalWires: (show) => set({ showDataSignalWires: show }),
 
-      textSize: "small",
+      textSize: DEFAULT_TEXT_SIZE,
       setTextSize: (size) => set({ textSize: size }),
 
       animationDurationMs: prefersReducedMotion() ? ANIMATION_INSTANT_MS : ANIMATION_DEFAULT_MS,
@@ -111,52 +110,75 @@ export const useDisplayStore = create<DisplayState>()(
     {
       name: "simulator-display",
       version: 10,
-      migrate: (persistedState) => {
+      // Each step runs only for state saved before the version that introduced
+      // it, so a later version bump does not replay them on current state.
+      migrate: (persistedState, version) => {
         const state = { ...(persistedState as Partial<DisplayState>) };
 
         // v6 removed the wire-dot, animation and port-value switches (they are
         // now always on), so their stored values are dropped.
-        for (const key of [
-          "showWireDots",
-          "animationEnabled",
-          "animateCpuSignals",
-          "animateDataSignals",
-          "showPortValues",
-        ]) {
-          delete (state as Record<string, unknown>)[key];
+        if (version < 6) {
+          for (const key of [
+            "showWireDots",
+            "animationEnabled",
+            "animateCpuSignals",
+            "animateDataSignals",
+            "showPortValues",
+          ]) {
+            delete (state as Record<string, unknown>)[key];
+          }
         }
 
         // v7: octal is no longer a base at all, so a stored "oct" (or anything
-        // else unknown) falls back to hex.
+        // else unknown) falls back to hex. Checked at every version: a base
+        // the app does not offer would leave no button pressed.
         const offeredBases: readonly string[] = ["hex", "dec", "decSigned", "bin"];
         const storedBase = state.numericBase as string | undefined;
-        const numericBase: NumericBase =
+        state.numericBase =
           storedBase && offeredBases.includes(storedBase) ? (storedBase as NumericBase) : "hex";
 
-        return {
-          ...state,
-          numericBase,
-          // v9 added the text size and v10 moved its scale down a step: what
-          // was "normal" is now "medium", and the two larger sizes are "large".
-          textSize: ((): TextSize => {
-            const stored = state.textSize as string | undefined;
-            if (stored === "small" || stored === "medium" || stored === "large") return stored;
-            return stored === "xlarge" ? "large" : "medium";
-          })(),
-          // v8 moved the whole speed scale toward the slow end. A stored value
-          // from the old scale would land far too fast on the new one, so it
-          // is replaced by the new default — except the "instant" a
-          // reduced-motion preference chose.
-          animationDurationMs:
+        // v8 moved the whole speed scale toward the slow end. A stored value
+        // from the old scale would land far too fast on the new one, so it
+        // is replaced by the new default — except the "instant" a
+        // reduced-motion preference chose.
+        if (version < 8) {
+          state.animationDurationMs =
             typeof state.animationDurationMs === "number" &&
             state.animationDurationMs <= ANIMATION_INSTANT_MS
               ? state.animationDurationMs
-              : ANIMATION_DEFAULT_MS,
-        };
+              : ANIMATION_DEFAULT_MS;
+        }
+
+        // v9 added the text size and v10 moved its scale down a step: what
+        // was "normal" is now "medium", and the two larger sizes are "large".
+        // State from before v9 has none and gets the default, which is also
+        // what the inline script in app/layout.tsx painted it with.
+        if (version < 10) {
+          const stored = state.textSize as string | undefined;
+          state.textSize =
+            stored === undefined
+              ? DEFAULT_TEXT_SIZE
+              : stored === "small" || stored === "medium" || stored === "large"
+                ? stored
+                : stored === "xlarge"
+                  ? "large"
+                  : "medium";
+        }
+
+        return state;
       },
     }
   )
 );
+
+// <html> carries the text size (see `textSize.ts`). Applied once for the state
+// hydrated while the store was created, then on every change after.
+if (typeof window !== "undefined") {
+  applyTextSizeAttribute(useDisplayStore.getState().textSize);
+  useDisplayStore.subscribe((state, prev) => {
+    if (state.textSize !== prev.textSize) applyTextSizeAttribute(state.textSize);
+  });
+}
 
 /**
  * `formatNum` for a port value. `unsigned` marks values that are not data —

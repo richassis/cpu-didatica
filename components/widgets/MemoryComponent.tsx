@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback } from "react";
 import { List, Pencil } from "lucide-react";
 import { Props } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
@@ -8,12 +8,15 @@ import { useMemoryPanelStore } from "@/lib/memoryPanelStore";
 import { useCanvasEditing } from "@/components/CanvasEditingContext";
 import { useDisplayMaskStore } from "@/lib/displayMaskStore";
 import { useDisplayStore, formatNum, type NumericBase } from "@/lib/displayStore";
+import { addrBitsFor, fmtAddr, ADDRESS_HIGHLIGHT_BG } from "@/lib/memoryFormat";
 import NodeShell from "@/components/widgets/NodeShell";
 import MemoryViewer from "@/components/MemoryViewer";
+import AddressList from "@/components/AddressList";
 
-function fmtAddr(addr: number, addrBits: number) {
-  return "0x" + addr.toString(16).toUpperCase().padStart(Math.ceil(addrBits / 4), "0");
-}
+/** Student-visible text of this widget, in one place for translation. */
+const LABELS = {
+  viewAll: "Ver toda a memória",
+} as const;
 
 /**
  * Data memory.
@@ -35,7 +38,6 @@ export default function MemoryComponent({ component, zoom }: Props) {
   // Program mode: the full listing opens in the side panel so the datapath
   // stays visible. Edit mode has no side panel, so it stays a modal.
   const openListing = () => (canEdit ? setViewerOpen(true) : openMemoryPanel(id));
-  const currentRowRef = useRef<HTMLDivElement>(null);
 
   const revision = useSimulatorStore((s) => s.revision);
   const mem = useSimulatorStore((s) => s.getMemory(id));
@@ -45,7 +47,7 @@ export default function MemoryComponent({ component, zoom }: Props) {
 
   const wordCount = mem?.wordCount ?? 256;
   const bitWidth = mem?.bitWidth ?? 16;
-  const addrBits = Math.max(1, Math.ceil(Math.log2(wordCount)));
+  const addrBits = addrBitsFor(wordCount);
   const addr = mem?.in_addr.value ?? 0;
   // Enables land with the control signals, ahead of the address and data wires;
   // the headline waits for the component to be revealed so it never pairs the
@@ -55,10 +57,6 @@ export default function MemoryComponent({ component, zoom }: Props) {
   const wrMem = revealed && (mem?.in_wrMem.value ?? 0) !== 0;
   const dataIn = mem?.in_data.value ?? 0;
   const dataOut = mem?.output ?? 0;
-
-  useEffect(() => {
-    currentRowRef.current?.scrollIntoView({ block: "nearest" });
-  }, [addr]);
 
   const readCell = useCallback((addr: number) => mem?.peek(addr) ?? 0, [mem]);
 
@@ -81,7 +79,7 @@ export default function MemoryComponent({ component, zoom }: Props) {
               openListing();
             }}
             className="shrink-0 rounded p-0.5 text-fg-faint transition-colors hover:text-fg"
-            title="View all memory contents"
+            title={LABELS.viewAll}
           >
             <List size={12} strokeWidth={1.5} />
           </button>
@@ -108,65 +106,28 @@ export default function MemoryComponent({ component, zoom }: Props) {
         </>
       }
     >
-      {canEdit && editMode ? (
-        <div
-          className="flex-1 overflow-y-auto px-1.5 py-1"
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {Array.from({ length: wordCount }).map((_, a) => (
-            <EditRow
-              key={a}
-              addr={a}
-              value={mem?.peek(a) ?? 0}
-              bitWidth={bitWidth}
-              addrBits={addrBits}
-              base={base}
-              isActive={a === addr}
-              onPoke={(a2, v) => pokeMemory(id, a2, v)}
-            />
-          ))}
-        </div>
-      ) : (
-        <div
-          className="flex min-h-0 flex-1 flex-col overflow-y-auto px-1.5 py-1 pl-3"
-          onPointerDown={(e) => e.stopPropagation()}
-        >
-          {Array.from({ length: wordCount }, (_, a) => a).map((a) => {
-            const isActive = a === addr;
-            return (
-              <div
-                key={a}
-                ref={isActive ? currentRowRef : undefined}
-                className="flex shrink-0 items-center gap-1.5 rounded px-1 py-[2px] transition-colors"
-                style={
-                  isActive
-                    ? { background: "color-mix(in srgb, var(--st-data) 8%, transparent)" }
-                    : undefined
-                }
-              >
-                <span
-                  className={`shrink-0 font-mono text-cv-xs leading-none ${
-                    isActive ? "text-fg" : "text-transparent"
-                  }`}
-                >
-                  ▶
-                </span>
-                <span className="num shrink-0 font-mono text-cv-sm text-fg-faint">
-                  {fmtAddr(a, addrBits)}
-                </span>
-                <span
-                  className={`num flex-1 text-right font-mono ${
-                    isActive ? "text-cv-md text-fg" : "text-cv-sm text-fg-muted"
-                  }`}
-                >
-                  {formatNum(mem?.peek(a) ?? 0, base, bitWidth)}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      <AddressList
+        density="canvas"
+        wordCount={wordCount}
+        bitWidth={bitWidth}
+        currentAddr={addr}
+        read={readCell}
+        renderEditor={
+          canEdit && editMode
+            ? (a, value, isActive) => (
+                <EditRow
+                  addr={a}
+                  value={value}
+                  bitWidth={bitWidth}
+                  addrBits={addrBits}
+                  base={base}
+                  isActive={isActive}
+                  onPoke={(a2, v) => pokeMemory(id, a2, v)}
+                />
+              )
+            : undefined
+        }
+      />
     </NodeShell>
 
     {viewerOpen && (
@@ -174,7 +135,6 @@ export default function MemoryComponent({ component, zoom }: Props) {
         title={component.label}
         wordCount={wordCount}
         bitWidth={bitWidth}
-        addrBits={addrBits}
         currentAddr={addr}
         read={readCell}
         onClose={() => setViewerOpen(false)}
@@ -221,9 +181,7 @@ function EditRow({
   return (
     <div
       className="flex items-center gap-1 rounded px-0.5 py-px"
-      style={
-        isActive ? { background: "color-mix(in srgb, var(--st-data) 8%, transparent)" } : undefined
-      }
+      style={isActive ? { background: ADDRESS_HIGHLIGHT_BG } : undefined}
     >
       <span className="num w-10 shrink-0 font-mono text-cv-xs text-fg-faint">
         {fmtAddr(addr, addrBits)}

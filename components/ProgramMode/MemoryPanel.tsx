@@ -8,7 +8,7 @@ import { useExecutingAddr } from "@/lib/useExecutingAddr";
 import { useLayoutStore, type ComponentInstance } from "@/lib/store";
 import { useProgramDataStore, mountStatus } from "@/lib/programDataStore";
 import { decodeMnemonic } from "@/lib/disassemble";
-import MemoryTable from "@/components/MemoryTable";
+import AddressList from "@/components/AddressList";
 
 /**
  * Both memories, side by side, where the code panels are — instruction memory
@@ -86,7 +86,6 @@ function MemoryColumn({
 
   const wordCount = obj?.wordCount ?? 256;
   const bitWidth = obj?.bitWidth ?? 16;
-  const addrBits = Math.max(1, Math.ceil(Math.log2(wordCount)));
   const currentAddr =
     instruction && executingAddr !== undefined ? executingAddr : (obj?.in_addr.value ?? 0);
 
@@ -95,16 +94,16 @@ function MemoryColumn({
       <div className="flex shrink-0 items-baseline justify-between border-b border-line px-3 py-2">
         <h2 className="t-panel truncate text-fg">{component.label}</h2>
       </div>
-      <MemoryTable
+      <AddressList
+        density="compact"
+        scrollBlock="nearest"
         wordCount={wordCount}
         bitWidth={bitWidth}
-        addrBits={addrBits}
         currentAddr={currentAddr}
         read={read}
+        unsigned={instruction}
         decode={instruction ? decodeMnemonic : undefined}
         name={instruction ? undefined : name}
-        scrollBlock="nearest"
-        compact
         headers={{ addr: "End", word: "Palavra", decode: "Opcode", name: "Nome" }}
       />
     </section>

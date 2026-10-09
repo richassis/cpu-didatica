@@ -5,7 +5,7 @@ import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayStore, formatNum, type NumericBase } from "@/lib/displayStore";
 import NodeShell from "@/components/widgets/NodeShell";
 import CpuFsmGraph from "@/components/widgets/CpuFsmGraph";
-import FlagSquares from "@/components/widgets/FlagSquares";
+import FlagSquares, { flagSpecs } from "@/components/widgets/FlagSquares";
 import { CpuState, CONTROL_SIGNAL_DEFS } from "@/lib/simulator/Cpu";
 import { CPU_SIDE_INPUT_OFFSET } from "@/lib/widgetDefinitions";
 
@@ -76,12 +76,12 @@ export default function CpuComponent({ component, zoom }: Props) {
       }
       actions={
         <FlagSquares
-          flags={[
-            { label: "Z", on: !!cpu && cpu.latchedFlagZero, title: "Zero flag" },
-            { label: "C", on: !!cpu && cpu.latchedFlagCarry, title: "Carry flag" },
-            { label: "N", on: !!cpu && cpu.latchedFlagNegative, title: "Negative flag" },
-            { label: "V", on: !!cpu && cpu.latchedFlagOverflow, title: "Overflow flag" },
-          ]}
+          flags={flagSpecs({
+            zero: !!cpu && cpu.latchedFlagZero,
+            carry: !!cpu && cpu.latchedFlagCarry,
+            negative: !!cpu && cpu.latchedFlagNegative,
+            overflow: !!cpu && cpu.latchedFlagOverflow,
+          })}
         />
       }
     >

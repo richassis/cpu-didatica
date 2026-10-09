@@ -5,7 +5,8 @@ import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayMaskStore } from "@/lib/displayMaskStore";
 import { useExecutionStore } from "@/lib/executionStore";
 import { usePlaybackStore, BOOST_RATE } from "@/lib/playbackStore";
-import { useDisplayStore, formatPortValue, isInstantSpeed, ANIMATION_REFERENCE_PX, TEXT_SIZE_SCALE } from "@/lib/displayStore";
+import { useDisplayStore, formatPortValue, isInstantSpeed, ANIMATION_REFERENCE_PX } from "@/lib/displayStore";
+import { CANVAS_TEXT_SCALE } from "@/lib/textSize";
 import { buildSchedule, wireProgress } from "@/lib/animationSchedule";
 import { findInstructionRegisterIds, isUnsignedPort } from "@/lib/portKinds";
 import { useWireCreationStore } from "@/lib/wireCreationStore";
@@ -75,6 +76,42 @@ function pathLength(path: Point[]): number {
   return total;
 }
 
+/**
+ * Whether a wire is drawn under the signal switches. Takes them as arguments
+ * because the animation pass reads them from a ref, not from the render.
+ */
+function isWireShown(wireData: WireRenderData, showCpuSignalWires: boolean, showDataSignalWires: boolean): boolean {
+  if (wireData.wire.visible === false) return false;
+  return wireData.isCpuControlSignal ? showCpuSignalWires : showDataSignalWires;
+}
+
+/**
+ * The point `progress` (0..1) of the way along a polyline whose total length
+ * (`pathLength`) is already known — the wire's stored `length`.
+ */
+function pointAlongPath(path: Point[], totalLength: number, progress: number): Point {
+  if (path.length < 2) return path[0] ?? { x: 0, y: 0 };
+
+  const targetLength = totalLength * progress;
+  let consumed = 0;
+
+  for (let i = 0; i < path.length - 1; i++) {
+    const start = path[i];
+    const end = path[i + 1];
+    const length = Math.hypot(end.x - start.x, end.y - start.y);
+    if (consumed + length >= targetLength) {
+      const localT = length === 0 ? 0 : (targetLength - consumed) / length;
+      return {
+        x: start.x + (end.x - start.x) * localT,
+        y: start.y + (end.y - start.y) * localT,
+      };
+    }
+    consumed += length;
+  }
+
+  return path[path.length - 1];
+}
+
 /** A step made only of very short wires still lasts this long, so it can be seen. */
 const MIN_STEP_MS = 80;
 
@@ -118,8 +155,7 @@ export default function EnhancedBusOverlay({
   const base = useDisplayStore((s) => s.numericBase);
   const showCpuSignalWires = useDisplayStore((s) => s.showCpuSignalWires);
   const showDataSignalWires = useDisplayStore((s) => s.showDataSignalWires);
-  // The canvas follows the text size at 40% of the rate (`--fs-cv` in globals.css).
-  const textScale = 1 + (TEXT_SIZE_SCALE[useDisplayStore((s) => s.textSize)] - 1) * 0.4;
+  const textScale = CANVAS_TEXT_SCALE[useDisplayStore((s) => s.textSize)];
   const animationDurationMs = useDisplayStore((s) => s.animationDurationMs);
 
   const removeSimulatorWire = useSimulatorStore((s) => s.removeWire);
@@ -409,9 +445,7 @@ export default function EnhancedBusOverlay({
 
     const visibleWireIds = currentWireData
       .filter((wireData) => {
-        if (wireData.wire.visible === false) return false;
-        if (wireData.isCpuControlSignal && !showCpuSignalWires) return false;
-        if (!wireData.isCpuControlSignal && !showDataSignalWires) return false;
+        if (!isWireShown(wireData, showCpuSignalWires, showDataSignalWires)) return false;
 
         // Keep per-state configuration as animation-only masking.
         if (!wireData.isCpuControlSignal && executedState !== undefined) {
@@ -701,37 +735,6 @@ export default function EnhancedBusOverlay({
     // change abort the pass.
   }, [animationCycle, getPrimaryCpu, getComponentTickSteps, getComponentTickOrderByState]);
 
-  const getPointAlongPath = useCallback((path: Point[], progress: number): Point => {
-    if (path.length < 2) return path[0] ?? { x: 0, y: 0 };
-
-    const segments: Array<{ start: Point; end: Point; length: number }> = [];
-    let totalLength = 0;
-
-    for (let i = 0; i < path.length - 1; i++) {
-      const start = path[i];
-      const end = path[i + 1];
-      const length = Math.hypot(end.x - start.x, end.y - start.y);
-      segments.push({ start, end, length });
-      totalLength += length;
-    }
-
-    const targetLength = totalLength * progress;
-    let consumed = 0;
-
-    for (const segment of segments) {
-      if (consumed + segment.length >= targetLength) {
-        const localT = segment.length === 0 ? 0 : (targetLength - consumed) / segment.length;
-        return {
-          x: segment.start.x + (segment.end.x - segment.start.x) * localT,
-          y: segment.start.y + (segment.end.y - segment.start.y) * localT,
-        };
-      }
-      consumed += segment.length;
-    }
-
-    return path[path.length - 1];
-  }, []);
-
   const commitWireNodes = useCallback(
     (wireId: string, nodes: Point[]) => {
       // The only writer into the project's wire geometry. Guarding here means
@@ -892,12 +895,9 @@ export default function EnhancedBusOverlay({
 
   if (!visible) return null;
 
-  const visibleWires = wireRenderData.filter((wireData) => {
-    if (wireData.wire.visible === false) return false;
-    if (wireData.isCpuControlSignal && !showCpuSignalWires) return false;
-    if (!wireData.isCpuControlSignal && !showDataSignalWires) return false;
-    return true;
-  });
+  const visibleWires = wireRenderData.filter((wireData) =>
+    isWireShown(wireData, showCpuSignalWires, showDataSignalWires)
+  );
 
   /**
    * Where the travelling value marker sits on each wire, or null when that wire
@@ -922,7 +922,7 @@ export default function EnhancedBusOverlay({
 
     return [{
       id: wireData.wire.id,
-      point: getPointAlongPath(wireData.path, progress),
+      point: pointAlongPath(wireData.path, wireData.length, progress),
       // At rest, the value the wire delivered — not its source, which may have
       // moved on since (a register that updated later, logic re-evaluated).
       value: progress >= 1 ? (wireData.restingValue ?? wireData.value) : wireData.value,

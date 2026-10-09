@@ -15,6 +15,7 @@ import SimulationSettings from "@/components/SimulationSettings";
 import HelpDialog from "@/components/Help/HelpDialog";
 import { useHelpStore } from "@/lib/helpStore";
 import ThemeToggle from "./ThemeToggle";
+import ErrorToast from "./ErrorToast";
 
 /**
  * Top bar for Program Mode (the default, end-user view).
@@ -191,15 +192,11 @@ export default function TopBarProgram() {
       {/* Import failures used to go to console.error, so picking the wrong file
           looked like nothing happening at all. */}
       {importError && (
-        <div className="absolute left-1/2 top-full z-50 mt-2 w-[420px] max-w-[90vw] -translate-x-1/2 rounded-lg border border-st-error bg-surface px-3 py-2">
-          <p className="text-small leading-snug text-st-error">{importError}</p>
-          <button
-            onClick={() => setImportError(null)}
-            className="mt-1 text-small text-fg-muted underline-offset-2 hover:underline"
-          >
-            Fechar
-          </button>
-        </div>
+        <ErrorToast
+          message={importError}
+          onClose={() => setImportError(null)}
+          className="left-1/2 w-[420px] max-w-[90vw] -translate-x-1/2"
+        />
       )}
 
       {helpOpen && <HelpDialog onClose={hideHelp} />}

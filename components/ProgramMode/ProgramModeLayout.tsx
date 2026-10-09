@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import AssemblyPanel from "@/components/ProgramMode/AssemblyPanel";
-import AssembledPanel from "@/components/ProgramMode/AssembledPanel";
+import AssembledPanel, { MAQUINA_W_REM } from "@/components/ProgramMode/AssembledPanel";
 import WelcomeDialog from "@/components/Onboarding/WelcomeDialog";
 import TourOverlay from "@/components/Onboarding/TourOverlay";
 import DatapathViewer from "@/components/ProgramMode/DatapathViewer";
@@ -18,10 +18,11 @@ const WIDTH_BEFORE_RUN = "60%";
 /** Share once the timeline is active — the datapath is the point now. */
 const WIDTH_DURING_RUN = "max(26%, 28rem)";
 
-/** Width of a panel collapsed to its rail. */
-const RAIL_W = 36;
-/** Width of the Ling. Máquina panel expanded — in rem, so it grows with the text size. */
-const MONTAGEM_W_REM = 13.5;
+/**
+ * Width of a panel collapsed to its rail. In rem like the rail's own text, so
+ * the width this layout reserves matches the rail at every text size.
+ */
+const RAIL_W = "2.25rem";
 
 /** Width the code region takes while the memories are open — two columns. */
 const MEMORY_PANEL_W = 480;
@@ -57,7 +58,7 @@ export default function ProgramModeLayout() {
   const [manualWidth, setManualWidth] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [asmCollapsed, setAsmCollapsed] = useState(false);
-  const [mountCollapsed, setMountCollapsed] = useState(false);
+  const [machineCollapsed, setMachineCollapsed] = useState(false);
   const dragStateRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -115,9 +116,9 @@ export default function ProgramModeLayout() {
   const codeRegionWidth = memoryOpen
     ? `${manualWidth ?? MEMORY_PANEL_W}px`
     : asmCollapsed
-      ? `calc(${RAIL_W}px + ${mountCollapsed ? `${RAIL_W}px` : `${MONTAGEM_W_REM}rem`})`
-      : mountCollapsed
-        ? `calc(${baseWidth} - ${MONTAGEM_W_REM}rem + ${RAIL_W}px)`
+      ? `calc(${RAIL_W} + ${machineCollapsed ? RAIL_W : `${MAQUINA_W_REM}rem`})`
+      : machineCollapsed
+        ? `calc(${baseWidth} - ${MAQUINA_W_REM}rem + ${RAIL_W})`
         : baseWidth;
 
   return (
@@ -148,10 +149,10 @@ export default function ProgramModeLayout() {
                 </div>
               )}
 
-              {mountCollapsed ? (
-                <CollapsedRail label="Ling. Máquina" onExpand={() => setMountCollapsed(false)} />
+              {machineCollapsed ? (
+                <CollapsedRail label="Ling. Máquina" onExpand={() => setMachineCollapsed(false)} />
               ) : (
-                <AssembledPanel onToggleCollapse={() => setMountCollapsed(true)} />
+                <AssembledPanel onToggleCollapse={() => setMachineCollapsed(true)} />
               )}
             </div>
           )}
@@ -193,7 +194,8 @@ function CollapsedRail({ label, onExpand }: { label: string; onExpand: () => voi
       onClick={onExpand}
       aria-expanded="false"
       title={`Expandir ${label}`}
-      className="flex w-9 shrink-0 flex-col items-center gap-2 border-r border-line bg-surface py-3 transition-colors hover:bg-raised"
+      className="flex shrink-0 flex-col items-center gap-2 border-r border-line bg-surface py-3 transition-colors hover:bg-raised"
+      style={{ width: RAIL_W }}
     >
       <ChevronRight size={14} strokeWidth={1.5} className="shrink-0 text-fg-faint" />
       <span

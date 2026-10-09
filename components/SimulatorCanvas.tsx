@@ -15,7 +15,7 @@ import {
   Trash2,
   RotateCcw,
 } from "lucide-react";
-import { useLayoutStore, ZOOM_STEP, ZOOM_MIN, ZOOM_MAX, CANVAS_WIDTH, CANVAS_HEIGHT } from "@/lib/store";
+import { useLayoutStore, ZOOM_STEP, ZOOM_MIN, ZOOM_MAX, CANVAS_WIDTH, CANVAS_HEIGHT, type ComponentInstance } from "@/lib/store";
 import { useSimulatorStore } from "@/lib/simulatorStore";
 import { useDisplayStore } from "@/lib/displayStore";
 import { useWireCreationStore } from "@/lib/wireCreationStore";
@@ -37,6 +37,18 @@ import { useEffect, useRef, useState, useCallback } from "react";
 
 interface SimulatorCanvasProps {
   isReadOnly?: boolean;
+}
+
+/** Bounding box of every component, in canvas units. */
+function componentBounds(components: ComponentInstance[]) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const c of components) {
+    minX = Math.min(minX, c.x);
+    minY = Math.min(minY, c.y);
+    maxX = Math.max(maxX, c.x + c.w);
+    maxY = Math.max(maxY, c.y + c.h);
+  }
+  return { minX, minY, maxX, maxY };
 }
 
 export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasProps) {
@@ -311,6 +323,20 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
   };
 
   /**
+   * Scroll so canvas point (`centerX`, `centerY`) sits mid-viewport at
+   * `atZoom`. Waits a frame, so the canvas has been laid out at the new zoom.
+   */
+  const scrollToCentre = useCallback((centerX: number, centerY: number, atZoom: number) => {
+    requestAnimationFrame(() => {
+      const el = scrollRef.current;
+      if (!el) return;
+      el.scrollLeft = centerX * atZoom - el.clientWidth / 2;
+      el.scrollTop = centerY * atZoom - el.clientHeight / 2;
+      syncViewport();
+    });
+  }, [syncViewport]);
+
+  /**
    * Zoom and centre so the whole datapath fits the viewport.
    *
    * There is no wheel zoom or drag-to-pan, and the program-mode canvas does
@@ -322,15 +348,7 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
     const el = scrollRef.current;
     if (!el || components.length === 0) return;
 
-    let minX = Infinity, minY = Infinity;
-    let maxX = -Infinity, maxY = -Infinity;
-
-    for (const c of components) {
-      minX = Math.min(minX, c.x);
-      minY = Math.min(minY, c.y);
-      maxX = Math.max(maxX, c.x + c.w);
-      maxY = Math.max(maxY, c.y + c.h);
-    }
+    let { minX, minY, maxX, maxY } = componentBounds(components);
 
     const padding = 48;
     minX -= padding;
@@ -349,40 +367,18 @@ export default function SimulatorCanvas({ isReadOnly = false }: SimulatorCanvasP
     const clampedZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, fitZoom));
 
     setZoom(clampedZoom);
-
-    requestAnimationFrame(() => {
-      const newEl = scrollRef.current;
-      if (!newEl) return;
-      newEl.scrollLeft = centerX * clampedZoom - newEl.clientWidth / 2;
-      newEl.scrollTop = centerY * clampedZoom - newEl.clientHeight / 2;
-      syncViewport();
-    });
-  }, [components, setZoom, syncViewport]);
+    scrollToCentre(centerX, centerY, clampedZoom);
+  }, [components, setZoom, scrollToCentre]);
 
   /** Re-centre at the current zoom, used by the +/- buttons. */
   const recentre = useCallback((nextZoom: number) => {
     const el = scrollRef.current;
     if (!el || components.length === 0) return;
 
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const c of components) {
-      minX = Math.min(minX, c.x);
-      minY = Math.min(minY, c.y);
-      maxX = Math.max(maxX, c.x + c.w);
-      maxY = Math.max(maxY, c.y + c.h);
-    }
-    const centerX = (minX + maxX) / 2;
-    const centerY = (minY + maxY) / 2;
-
+    const { minX, minY, maxX, maxY } = componentBounds(components);
     setZoom(nextZoom);
-    requestAnimationFrame(() => {
-      const newEl = scrollRef.current;
-      if (!newEl) return;
-      newEl.scrollLeft = centerX * nextZoom - newEl.clientWidth / 2;
-      newEl.scrollTop = centerY * nextZoom - newEl.clientHeight / 2;
-      syncViewport();
-    });
-  }, [components, setZoom, syncViewport]);
+    scrollToCentre((minX + maxX) / 2, (minY + maxY) / 2, nextZoom);
+  }, [components, setZoom, scrollToCentre]);
 
   // Fit on mount and whenever the datapath changes (e.g. switching projects).
   const componentSignature = components.map((c) => c.id).join("|");
