@@ -1,6 +1,6 @@
 {
   "name": "cpu-didatica",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Simulador didático de CPU: escreva assembly e acompanhe, tick a tick, o caminho de dados que o executa.",
   "license": "MIT",
