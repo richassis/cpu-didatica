@@ -52,48 +52,50 @@ import {
 
 // ── Messages ─────────────────────────────────────────────────────────────────
 
-/** Every message the assembler reports, in one place. */
-const MSG = {
-  invalidDataLine: (line: string) => `Declaração inválida na seção .data: "${line}"`,
-  duplicateLabel:  (name: string) => `Label duplicado: "${name}"`,
-  invalidDbValue:  (text: string) => `Valor inválido na declaração DB: "${text}"`,
-  unknownMnemonic: (token: string) => `Mnemônico desconhecido: "${token}"`,
-  labelNotFound:   (name: string) => `Label não encontrado: "${name}"`,
-  outOfRange: (field: string, min: number, max: number, value: number) =>
-    `${field} fora do range ${min}–${max}: ${value}`,
-  noOperands: (mnemonic: string) => `${mnemonic}: não aceita operandos`,
-  wrongArity: (mnemonic: string, usage: string[], got: number) =>
-    `${mnemonic}: esperado ${usage.length} ${usage.length === 1 ? "operando" : "operandos"} (${usage.join(", ")}), recebeu ${got}`,
+/**
+ * How a message names an operand. Keyed by the ISA's field and help label
+ * (`Rd` reads differently as a standard register and as the ULA's
+ * destination); a lone address operand is a jump target.
+ */
+export type OperandRole = "rd" | "rs" | "imm" | "addr" | "srcA" | "srcB" | "dst" | "jumpTarget";
+
+const OPERAND_ROLES: Readonly<Record<string, OperandRole>> = {
+  "gprAddr:Rd": "rd",
+  "gprAddr:Rs": "rs",
+  "operand:N":  "imm",
+  "operand:M":  "addr",
+  "srcA:Ra":    "srcA",
+  "srcB:Rb":    "srcB",
+  "dst:Rd":     "dst",
 };
+
+function operandRole(desc: InstructionDescriptor, spec: OperandSpec): OperandRole {
+  if (desc.operands.length === 1 && spec.kind === "address") return "jumpTarget";
+  const role = OPERAND_ROLES[`${spec.field}:${spec.label}`];
+  if (!role) throw new Error(`No message role for operand ${spec.field}:${spec.label}`);
+  return role;
+}
 
 /**
- * How the messages name each operand: `usage` in the operand-count message,
- * `range` in the out-of-range one. Keyed by the ISA's field and help label
- * (`Rd` reads differently as a standard register and as the ULA's destination).
+ * Every message the assembler reports, as data: the text is written by the
+ * interface in the active language (`assembler.format` in lib/i18n), so a
+ * message already on screen follows a language switch.
  */
-const OPERAND_TERMS: Readonly<Record<string, { usage: string; range: string }>> = {
-  "gprAddr:Rd": { usage: "Rdst",   range: "Registrador" },
-  "gprAddr:Rs": { usage: "Rsrc",   range: "Registrador" },
-  "operand:N":  { usage: "imm",    range: "Imediato" },
-  "operand:M":  { usage: "addr",   range: "Endereço" },
-  "srcA:Ra":    { usage: "Rsrc_a", range: "SrcA" },
-  "srcB:Rb":    { usage: "Rsrc_b", range: "SrcB" },
-  "dst:Rd":     { usage: "Rdst",   range: "Dst" },
-};
-
-/** A lone address operand is a jump target, and is named as one. */
-const JUMP_TARGET_TERMS = { usage: "endereço ou label", range: "Endereço de jump" };
-
-function operandTerms(desc: InstructionDescriptor, spec: OperandSpec): { usage: string; range: string } {
-  if (desc.operands.length === 1 && spec.kind === "address") return JUMP_TARGET_TERMS;
-  return OPERAND_TERMS[`${spec.field}:${spec.label}`] ?? { usage: spec.label, range: spec.label };
-}
+export type AssemblerMessage =
+  | { code: "invalidDataLine"; line: string }
+  | { code: "duplicateLabel"; name: string }
+  | { code: "invalidDbValue"; text: string }
+  | { code: "unknownMnemonic"; token: string }
+  | { code: "labelNotFound"; name: string }
+  | { code: "outOfRange"; role: OperandRole; min: number; max: number; value: number }
+  | { code: "noOperands"; mnemonic: string }
+  | { code: "wrongArity"; mnemonic: string; roles: OperandRole[]; got: number };
 
 // ── Public types ─────────────────────────────────────────────────────────────
 
 export interface AssemblyError {
   line: number;
-  message: string;
+  message: AssemblerMessage;
 }
 
 /** One assembled instruction, for the bytecode listing. */
@@ -225,12 +227,12 @@ function pass1(lines: string[]): Pass1Result {
       // Match: LABEL or LABEL: optionally followed by DB value
       const m = line.match(/^([A-Za-z_][A-Za-z0-9_]*):?\s*(.*)/);
       if (!m) {
-        errors.push({ line: lineNum, message: MSG.invalidDataLine(line) });
+        errors.push({ line: lineNum, message: { code: "invalidDataLine", line } });
         continue;
       }
       const name = m[1].toUpperCase();
       if (labels.has(name)) {
-        errors.push({ line: lineNum, message: MSG.duplicateLabel(name) });
+        errors.push({ line: lineNum, message: { code: "duplicateLabel", name } });
       } else {
         labels.set(name, dataAddr);
       }
@@ -244,7 +246,7 @@ function pass1(lines: string[]): Pass1Result {
         if (val !== null) {
           initialValue = val & 0xFFFF;
         } else if (rest) {
-          errors.push({ line: lineNum, message: MSG.invalidDbValue(rest) });
+          errors.push({ line: lineNum, message: { code: "invalidDbValue", text: rest } });
         }
       }
       dataWords[dataAddr] = initialValue;
@@ -261,7 +263,7 @@ function pass1(lines: string[]): Pass1Result {
     if (labelMatch) {
       const name = labelMatch[1].toUpperCase();
       if (labels.has(name)) {
-        errors.push({ line: lineNum, message: MSG.duplicateLabel(name) });
+        errors.push({ line: lineNum, message: { code: "duplicateLabel", name } });
       } else {
         labels.set(name, codeAddr);
       }
@@ -277,7 +279,7 @@ function pass1(lines: string[]): Pass1Result {
 
     // Validate mnemonic
     if (!(mnemonic in INSTRUCTION_SET)) {
-      errors.push({ line: lineNum, message: MSG.unknownMnemonic(tokens[0]) });
+      errors.push({ line: lineNum, message: { code: "unknownMnemonic", token: tokens[0] } });
       codeAddr++; // still reserve an address slot
       continue;
     }
@@ -302,7 +304,7 @@ function resolveOperand(
   if (typeof op === "number") return op;
   const addr = labels.get(op);
   if (addr === undefined) {
-    errors.push({ line: lineNum, message: MSG.labelNotFound(op) });
+    errors.push({ line: lineNum, message: { code: "labelNotFound", name: op } });
     return null;
   }
   return addr;
@@ -318,7 +320,7 @@ function resolveOperand(
 function checkRange(
   value: number,
   bits: number,
-  fieldName: string,
+  role: OperandRole,
   lineNum: number,
   errors: AssemblyError[],
   allowNegative = false,
@@ -326,7 +328,7 @@ function checkRange(
   const max = (1 << bits) - 1;
   const min = allowNegative ? -(1 << (bits - 1)) : 0;
   if (value < min || value > max) {
-    errors.push({ line: lineNum, message: MSG.outOfRange(fieldName, min, max, value) });
+    errors.push({ line: lineNum, message: { code: "outOfRange", role, min, max, value } });
     return false;
   }
   return true;
@@ -347,9 +349,9 @@ function encodeOperands(
 ): number | null {
   const specs = desc.operands;
   if (operands.length !== specs.length) {
-    const message = specs.length === 0
-      ? MSG.noOperands(desc.mnemonic)
-      : MSG.wrongArity(desc.mnemonic, specs.map((spec) => operandTerms(desc, spec).usage), operands.length);
+    const message: AssemblerMessage = specs.length === 0
+      ? { code: "noOperands", mnemonic: desc.mnemonic }
+      : { code: "wrongArity", mnemonic: desc.mnemonic, roles: specs.map((spec) => operandRole(desc, spec)), got: operands.length };
     errors.push({ line: lineNum, message });
     return null;
   }
@@ -364,7 +366,7 @@ function encodeOperands(
 
   for (const spec of specs) {
     const { bits } = fieldSpec(desc.format, spec.field);
-    if (!checkRange(fields[spec.field]!, bits, operandTerms(desc, spec).range, lineNum, errors, spec.signed)) {
+    if (!checkRange(fields[spec.field]!, bits, operandRole(desc, spec), lineNum, errors, spec.signed)) {
       return null;
     }
   }

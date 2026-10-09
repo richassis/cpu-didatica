@@ -12,6 +12,8 @@ import { DEFAULT_PROJECT_ID, isDefaultProject } from "@/lib/defaultProject";
 import { EDITOR_ENABLED } from "@/lib/editorFlag";
 import { purgeLegacyStorage } from "@/lib/legacyStorage";
 import type { WireDescriptor } from "@/lib/simulator";
+import { LOCALES } from "@/lib/locale";
+import { MESSAGES } from "@/lib/i18n";
 
 export default function Home() {
   const activeTabId = useProjectStore((s) => s.activeTabId);
@@ -220,7 +222,13 @@ export default function Home() {
   if (!isHydrated) {
     return (
       <div className="flex flex-1 items-center justify-center bg-canvas">
-        <div className="text-sm text-fg-muted">Carregando…</div>
+        {/* Rendered on the server, before the language is known: one copy per
+            language, the others hidden by `<html lang>` (globals.css). */}
+        {LOCALES.map((locale) => (
+          <div key={locale} data-locale-only={locale} className="text-sm text-fg-muted">
+            {MESSAGES[locale].common.loading}
+          </div>
+        ))}
       </div>
     );
   }

@@ -136,6 +136,11 @@
 [data-text-size="small"] { --fs: 0.875; --fs-cv: 0.95; }
 [data-text-size="large"] { --fs: 1.15; --fs-cv: 1.06; }
 
+/* Text rendered before the language is known (the server's loading screen):
+   one copy per language, only the one matching <html lang> shown. */
+html:not([lang="en"]) [data-locale-only="en"],
+html[lang="en"] [data-locale-only="pt"] { display: none; }
+
 html {
   font-size: calc(16px * var(--fs));
 }

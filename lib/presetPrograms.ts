@@ -1,7 +1,14 @@
+import type { Locale } from "@/lib/locale";
+
+/**
+ * An example program, written once per language: the comments and the label
+ * names are translated, the instructions and data are the same, so every
+ * version assembles to the same words.
+ */
 export interface PresetProgram {
   id: string;
-  name: string;
-  source: string;
+  name: Readonly<Record<Locale, string>>;
+  source: Readonly<Record<Locale, string>>;
 }
 
 // Column widths used throughout:  LABEL(8) + MNEMONIC(6) + OPERANDS + COMMENT
@@ -141,10 +148,18 @@ RES_NOT: DB   0             ; resultado de NOT R0
         HLT
 `;
 
-export const PRESET_PROGRAMS: PresetProgram[] = [
-  { id: "basico",   name: "Exemplo Básico",         source: BASICO },
-  { id: "for",      name: "FOR — Contador",          source: FOR_CONTADOR },
-  { id: "if-else",  name: "IF-THEN-ELSE",            source: IF_THEN_ELSE },
-  { id: "desvios",  name: "Desvios",                 source: DESVIOS },
-  { id: "logico",   name: "Instruções Lógicas",      source: LOGICO },
+export const PRESET_PROGRAMS: readonly PresetProgram[] = [
+  { id: "basico",  name: { pt: "Exemplo Básico", en: "Exemplo Básico" },         source: { pt: BASICO, en: BASICO } },
+  { id: "for",     name: { pt: "FOR — Contador", en: "FOR — Contador" },         source: { pt: FOR_CONTADOR, en: FOR_CONTADOR } },
+  { id: "if-else", name: { pt: "IF-THEN-ELSE", en: "IF-THEN-ELSE" },             source: { pt: IF_THEN_ELSE, en: IF_THEN_ELSE } },
+  { id: "desvios", name: { pt: "Desvios", en: "Desvios" },                       source: { pt: DESVIOS, en: DESVIOS } },
+  { id: "logico",  name: { pt: "Instruções Lógicas", en: "Instruções Lógicas" }, source: { pt: LOGICO, en: LOGICO } },
 ];
+
+/**
+ * The example whose text this is, in any language — an example stays the same
+ * example after a language switch, until the student edits it.
+ */
+export function findPresetBySource(source: string): PresetProgram | undefined {
+  return PRESET_PROGRAMS.find((p) => Object.values(p.source).includes(source));
+}

@@ -6,6 +6,7 @@ import { SHORTCUTS, SHORTCUTS_NOTE } from "@/lib/helpContent";
 import { useProgramDataStore } from "@/lib/programDataStore";
 import { useExecutionStore } from "@/lib/executionStore";
 import { useOnboardingStore } from "@/lib/onboardingStore";
+import { useLocale } from "@/lib/i18n";
 
 const EXAMPLE = `        .data
 SOMA:   DB    0            ; variável, começa em 0
@@ -51,6 +52,7 @@ function Heading({ children }: { children: React.ReactNode }) {
 }
 
 export default function GuideTab({ onClose }: { onClose: () => void }) {
+  const locale = useLocale();
   const setAssemblySource = useProgramDataStore((s) => s.setAssemblySource);
   const isRunning = useProgramDataStore((s) => s.isRunning);
   const isTimelineActive = useExecutionStore((s) => s.isTimelineActive);
@@ -205,13 +207,13 @@ export default function GuideTab({ onClose }: { onClose: () => void }) {
               key={p.id}
               disabled={locked}
               onClick={() => {
-                setAssemblySource(p.source);
+                setAssemblySource(p.source[locale]);
                 onClose();
               }}
               title={locked ? "Encerre a simulação para trocar o programa" : "Carregar este programa no editor"}
               className="flex items-center justify-between rounded-lg border border-line px-3 py-2 text-left text-ui text-fg transition-colors hover:border-line-strong hover:bg-raised disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <span>{p.name}</span>
+              <span>{p.name[locale]}</span>
               <span className="text-small text-fg-faint">carregar</span>
             </button>
           ))}

@@ -16,6 +16,7 @@ import HelpDialog from "@/components/Help/HelpDialog";
 import { useHelpStore } from "@/lib/helpStore";
 import ThemeToggle from "./ThemeToggle";
 import ErrorToast from "./ErrorToast";
+import { getMessages } from "@/lib/i18n";
 
 /**
  * Top bar for Program Mode (the default, end-user view).
@@ -80,7 +81,7 @@ export default function TopBarProgram() {
     if (file) {
       setImportError(null);
       importAssembly(file).catch((err: unknown) => {
-        setImportError(err instanceof Error ? err.message : "Falha ao abrir o arquivo.");
+        setImportError(err instanceof Error ? err.message : getMessages().errors.fileOpenFailed);
       });
     }
     e.target.value = "";

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Urbanist, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { DEFAULT_TEXT_SIZE } from "@/lib/textSize";
+import { LOCALE_BOOT_SCRIPT } from "@/lib/locale";
 
 /**
  * Two families, rigid roles: Urbanist carries the chrome, JetBrains Mono
@@ -54,21 +55,22 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    // suppressHydrationWarning: the inline script below stamps `data-theme` and
-    // `data-text-size` on <html> before React hydrates, so the client DOM
-    // intentionally differs from the server HTML on these attributes.
+    // suppressHydrationWarning: the inline script below stamps `data-theme`,
+    // `data-text-size` and `lang` on <html> before React hydrates, so the
+    // client DOM intentionally differs from the server HTML on these attributes.
     <html lang="pt-BR" suppressHydrationWarning>
       <head>
         {/*
-          Apply the persisted colour profile and text size before first paint,
-          otherwise the app renders dark for a frame and then flips to light, or
-          at the CSS's unscaled size and then shrinks. The text size is always
-          written — the stored one, else the store's default — mapping legacy
-          values the way displayStore's migrate does.
+          Apply the persisted colour profile, text size and language before
+          first paint, otherwise the app renders dark for a frame and then flips
+          to light, or at the CSS's unscaled size and then shrinks. The text size
+          is always written — the stored one, else the store's default — mapping
+          legacy values the way displayStore's migrate does. The language follows
+          `resolveLocale` (lib/locale.ts).
         */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{var t=JSON.parse(localStorage.getItem("simulator-theme")||"{}");document.documentElement.dataset.theme=(t.state&&t.state.theme)||"dark"}catch(e){document.documentElement.dataset.theme="dark"}var z=${JSON.stringify(DEFAULT_TEXT_SIZE)};try{var d=JSON.parse(localStorage.getItem("simulator-display")||"{}");var s=d.state&&d.state.textSize;if(s==="small"||s==="medium"||s==="large")z=s;else if(s==="xlarge")z="large";else if(s)z="medium"}catch(e){}document.documentElement.dataset.textSize=z`,
+            __html: `try{var t=JSON.parse(localStorage.getItem("simulator-theme")||"{}");document.documentElement.dataset.theme=(t.state&&t.state.theme)||"dark"}catch(e){document.documentElement.dataset.theme="dark"}var z=${JSON.stringify(DEFAULT_TEXT_SIZE)};try{var d=JSON.parse(localStorage.getItem("simulator-display")||"{}");var s=d.state&&d.state.textSize;if(s==="small"||s==="medium"||s==="large")z=s;else if(s==="xlarge")z="large";else if(s)z="medium"}catch(e){}document.documentElement.dataset.textSize=z;${LOCALE_BOOT_SCRIPT}`,
           }}
         />
       </head>

@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { useProgramDataStore } from "@/lib/programDataStore";
 import { useExecutionStore } from "@/lib/executionStore";
-import { PRESET_PROGRAMS } from "@/lib/presetPrograms";
+import { PRESET_PROGRAMS, findPresetBySource } from "@/lib/presetPrograms";
+import { useLocale, useT } from "@/lib/i18n";
 
 // ── Syntax tokenizer ──────────────────────────────────────────────────────────
 // Splits a source line into segments, preserving every character so that the
@@ -129,6 +130,7 @@ const PAD_CLASS   = "px-2 pt-1 pb-4";
 const GUTTER_W    = "2.75rem";
 
 export default function AssemblyPanel({ onToggleCollapse }: { onToggleCollapse: () => void }) {
+  const t = useT();
   const assemblySource    = useProgramDataStore((s) => s.assemblySource);
   const setAssemblySource = useProgramDataStore((s) => s.setAssemblySource);
   const assemblyErrors    = useProgramDataStore((s) => s.assemblyErrors);
@@ -147,7 +149,8 @@ export default function AssemblyPanel({ onToggleCollapse }: { onToggleCollapse: 
   const currentLine =
     assembled && currentPc !== undefined ? assembled.lineForAddress[currentPc] : undefined;
 
-  const activePreset = PRESET_PROGRAMS.find((p) => p.source === assemblySource) ?? null;
+  const locale = useLocale();
+  const activePreset = findPresetBySource(assemblySource) ?? null;
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const overlayRef  = useRef<HTMLDivElement>(null);
@@ -173,7 +176,7 @@ export default function AssemblyPanel({ onToggleCollapse }: { onToggleCollapse: 
 
   function handlePresetChange(id: string) {
     const p = PRESET_PROGRAMS.find((x) => x.id === id);
-    if (p) setAssemblySource(p.source);
+    if (p) setAssemblySource(p.source[locale]);
   }
 
   const lines = assemblySource.split("\n");
@@ -216,7 +219,7 @@ export default function AssemblyPanel({ onToggleCollapse }: { onToggleCollapse: 
               <option value="__custom" disabled>Personalizado</option>
             )}
             {PRESET_PROGRAMS.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
+              <option key={p.id} value={p.id}>{p.name[locale]}</option>
             ))}
           </select>
         </div>
@@ -303,7 +306,7 @@ export default function AssemblyPanel({ onToggleCollapse }: { onToggleCollapse: 
               </p>
               {assemblyErrors.map((err, i) => (
                 <div key={i} className="font-mono text-small text-fg-muted">
-                  <span className="text-st-error">L{err.line}:</span> {err.message}
+                  <span className="text-st-error">L{err.line}:</span> {t.assembler.format(err.message)}
                 </div>
               ))}
             </div>

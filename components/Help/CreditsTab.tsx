@@ -15,9 +15,9 @@ export default function CreditsTab() {
       <div className="mx-auto my-6 h-px w-16 bg-line" />
 
       <p className="text-ui leading-relaxed text-fg">
-        Projeto da <b>{CREDITS.institution.split(" — ")[1]}</b>
+        Projeto da <b>{CREDITS.universityShort}</b>
         <br />
-        <span className="text-fg-muted">{CREDITS.institution.split(" — ")[0]}</span>
+        <span className="text-fg-muted">{CREDITS.university}</span>
         <br />
         <span className="text-fg-muted">{CREDITS.center}</span>
         <br />

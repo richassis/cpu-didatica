@@ -9,6 +9,7 @@ import { useNodeState, type NodeState } from "@/lib/useNodeState";
 import ConfigModal from "@/components/ConfigModal";
 import { useCanvasEditing } from "@/components/CanvasEditingContext";
 import { EDITOR_ENABLED } from "@/lib/editorFlag";
+import { useDisplayLabel } from "@/lib/i18n";
 import PortsOverlay from "@/components/PortsOverlay";
 import {
   Silhouette,
@@ -88,7 +89,8 @@ export default function NodeShell({
   children,
   dense = false,
 }: NodeShellProps) {
-  const { id, x, y, w, h, label, type } = component;
+  const { id, x, y, w, h, type } = component;
+  const label = useDisplayLabel(component.label);
   const [configOpen, setConfigOpen] = useState(false);
   const derivedState = useNodeState(id);
   const nodeState = state ?? derivedState;

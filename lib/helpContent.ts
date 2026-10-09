@@ -120,7 +120,8 @@ export const SHORTCUTS_NOTE =
 
 export const CREDITS = {
   project: "CPU Didática",
-  institution: "Universidade Federal do Rio Grande — FURG",
+  university: "Universidade Federal do Rio Grande",
+  universityShort: "FURG",
   center: "Centro de Ciências Computacionais — C3",
   year: "2026",
   professor: "Ewerson Carvalho",

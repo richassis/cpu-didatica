@@ -18,6 +18,8 @@ export interface WordField {
   kind: FieldKind;
   /** What the field means for this instruction. */
   meaning?: string;
+  /** The instruction does not use the field. */
+  unused?: boolean;
 }
 
 /** How each field of the layout is drawn. */
@@ -52,13 +54,15 @@ export function wordFields(word: number): { mnemonic: string | null; format: Ins
     switch (spec.name) {
       case "opcode":  return { ...f, meaning: entry.mnemonic };
       case "srcA":    return { ...f, meaning: "primeiro operando" };
-      case "srcB":    return { ...f, meaning: operand ? "segundo operando" : "não usado (NOT)" };
+      case "srcB":    return operand ? { ...f, meaning: "segundo operando" } : { ...f, meaning: "não usado (NOT)", unused: true };
       case "dst":     return { ...f, meaning: "destino do resultado" };
-      case "pad":     return { ...f, meaning: "não usado" };
+      case "pad":     return { ...f, meaning: "não usado", unused: true };
       case "gprAddr":
-        return { ...f, meaning: !operand ? "não usado" : operand.label === "Rs" ? "registrador fonte" : "registrador destino" };
+        if (!operand) return { ...f, meaning: "não usado", unused: true };
+        return { ...f, meaning: operand.label === "Rs" ? "registrador fonte" : "registrador destino" };
       case "operand":
-        return { ...f, meaning: !operand ? "não usado" : operand.kind === "immediate" ? "valor imediato N" : "endereço M" };
+        if (!operand) return { ...f, meaning: "não usado", unused: true };
+        return { ...f, meaning: operand.kind === "immediate" ? "valor imediato N" : "endereço M" };
     }
   });
   return { mnemonic: entry?.mnemonic ?? null, format, fields };

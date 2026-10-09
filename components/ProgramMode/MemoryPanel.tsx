@@ -9,6 +9,7 @@ import { useLayoutStore, type ComponentInstance } from "@/lib/store";
 import { useProgramDataStore, mountStatus } from "@/lib/programDataStore";
 import { decodeMnemonic } from "@/lib/disassemble";
 import AddressList from "@/components/AddressList";
+import { useDisplayLabel } from "@/lib/i18n";
 
 /**
  * Both memories, side by side, where the code panels are — instruction memory
@@ -53,6 +54,7 @@ function MemoryColumn({
   instruction?: boolean;
 }) {
   const { id } = component;
+  const label = useDisplayLabel(component.label);
 
   const revision = useSimulatorStore((s) => s.revision);
   const imem = useSimulatorStore((s) => (instruction ? s.getInstructionMemory(id) : undefined));
@@ -92,7 +94,7 @@ function MemoryColumn({
   return (
     <section className="flex min-h-0 min-w-0 flex-1 flex-col border-r border-line last:border-r-0">
       <div className="flex shrink-0 items-baseline justify-between border-b border-line px-3 py-2">
-        <h2 className="t-panel truncate text-fg">{component.label}</h2>
+        <h2 className="t-panel truncate text-fg">{label}</h2>
       </div>
       <AddressList
         density="compact"

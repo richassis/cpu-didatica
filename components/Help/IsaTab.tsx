@@ -3,7 +3,8 @@
 import { useMemo, useState } from "react";
 import { Opcode, INSTRUCTION_SET, INSTRUCTIONS_BY_OPCODE, OPCODE_SEQUENCES } from "@/lib/simulator";
 import { OPCODE_SHIFT, formatOpcodeBits } from "@/lib/simulator/ISA";
-import { assemble } from "@/lib/assembler";
+import { assemble, type AssemblerMessage } from "@/lib/assembler";
+import { useT } from "@/lib/i18n";
 import { INSTRUCTION_HELP } from "@/lib/helpContent";
 import BitFields, { wordFields, type WordField } from "@/components/Help/BitFields";
 
@@ -29,7 +30,7 @@ function groupFields(group: (typeof FORMAT_GROUPS)[number]): WordField[] {
   const operandLabel = operands.find((o) => o.field === "operand")?.label;
   return wordFields(opcode << OPCODE_SHIFT).fields.map((f): WordField => {
     if (f.kind === "opcode") return { ...f, meaning: undefined };
-    if (f.meaning?.startsWith("não usado")) return { ...f, label: "—", kind: "pad" };
+    if (f.unused) return { ...f, label: "—", kind: "pad" };
     if (f.kind === "register" && group.registerMeaning) return { ...f, meaning: group.registerMeaning };
     if (f.kind === "operand" && operandLabel) return { ...f, label: operandLabel };
     return f;
@@ -57,7 +58,10 @@ const bin = (n: number, digits: number) => n.toString(2).padStart(digits, "0");
 const binGroups = (n: number) => bin(n, 16).replace(/(.{4})(?=.)/g, "$1 ");
 
 /** A word typed in hex or binary, or an instruction typed in assembly. */
-function parseEncoderInput(text: string): { word?: number; error?: string } {
+function parseEncoderInput(
+  text: string,
+  formatError: (message: AssemblerMessage) => string,
+): { word?: number; error?: string } {
   const t = text.trim();
   if (!t) return {};
 
@@ -67,14 +71,15 @@ function parseEncoderInput(text: string): { word?: number; error?: string } {
 
   const result = assemble(t);
   if (!result) return {};
-  if (result.errors.length > 0) return { error: result.errors[0].message };
+  if (result.errors.length > 0) return { error: formatError(result.errors[0].message) };
   if (result.words.length !== 1) return { error: "Digite uma instrução por vez." };
   return { word: result.words[0] };
 }
 
 export default function IsaTab() {
   const [input, setInput] = useState("ADD R1, R2, R3");
-  const parsed = useMemo(() => parseEncoderInput(input), [input]);
+  const t = useT();
+  const parsed = useMemo(() => parseEncoderInput(input, t.assembler.format), [input, t]);
   const decoded = parsed.word !== undefined ? wordFields(parsed.word) : null;
 
   return (

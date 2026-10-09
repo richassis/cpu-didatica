@@ -76,8 +76,8 @@ export interface ExecutionState extends ExecutionDerivedState {
   currentIndex: number;
   /** True when a program has been loaded and the timeline is active. */
   isTimelineActive: boolean;
-  /** Error message when execution stops due to max ticks. */
-  executionError: string | null;
+  /** Why execution stopped early (the run hit `MAX_TICKS`); the text is the interface's. */
+  executionError: { code: "tickLimit"; maxTicks: number } | null;
 
   loadAndExecute: (dataWords?: number[]) => void;
   goToTick: (index: number) => void;
@@ -473,9 +473,8 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
 
       const halted = sim.getPrimaryCpu()?.halted ?? false;
       if (!halted && tickCount >= MAX_TICKS) {
-        const message = `Execution stopped after ${MAX_TICKS} ticks (possible infinite loop).`;
-        console.warn(message);
-        set({ executionError: message });
+        console.warn(`Execution stopped after ${MAX_TICKS} ticks (possible infinite loop).`);
+        set({ executionError: { code: "tickLimit", maxTicks: MAX_TICKS } });
       } else {
         set({ executionError: null });
       }

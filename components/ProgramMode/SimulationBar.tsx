@@ -16,6 +16,7 @@ import {
 import { useExecutionStore } from "@/lib/executionStore";
 import { usePlaybackStore } from "@/lib/playbackStore";
 import { useProgramDataStore, mountStatus } from "@/lib/programDataStore";
+import { useT } from "@/lib/i18n";
 import TickDisplay from "@/components/ProgramMode/TickDisplay";
 
 /**
@@ -38,6 +39,7 @@ import TickDisplay from "@/components/ProgramMode/TickDisplay";
  * that Montar and Simular are reachable before the first run.
  */
 export default function SimulationBar() {
+  const t = useT();
   const isTimelineActive = useExecutionStore((s) => s.isTimelineActive);
   const frames = useExecutionStore((s) => s.frames);
   const currentIndex = useExecutionStore((s) => s.currentIndex);
@@ -246,7 +248,7 @@ export default function SimulationBar() {
 
           {executionError && (
             <div className="mt-3 rounded-lg border border-st-error px-3 py-2 text-xs text-st-error">
-              {executionError}
+              {t.errors.tickLimit(executionError.maxTicks)}
             </div>
           )}
 

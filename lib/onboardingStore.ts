@@ -15,6 +15,7 @@ import { usePlaybackStore } from "./playbackStore";
 import { useMemoryPanelStore } from "./memoryPanelStore";
 import { useProgramDataStore } from "./programDataStore";
 import { PRESET_PROGRAMS } from "./presetPrograms";
+import { useLocaleStore } from "./localeStore";
 
 interface OnboardingState {
   welcomeSeen: boolean;
@@ -52,7 +53,7 @@ export const useOnboardingStore = create<OnboardingState>()(
         if (execution.isTimelineActive) execution.exitTimeline();
         useMemoryPanelStore.getState().closeMemoryPanel();
         useProgramDataStore.setState({
-          assemblySource: PRESET_PROGRAMS[0].source,
+          assemblySource: PRESET_PROGRAMS[0].source[useLocaleStore.getState().locale],
           assembled: null,
           assemblyErrors: [],
           mountedSource: null,
