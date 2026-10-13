@@ -238,7 +238,7 @@ function registerFedWires(): WireDescriptor[] {
  *
  * A wire at rest keeps showing that value. Reading the live source instead
  * drifts: a register updates after its wire delivered, and combinational logic
- * (the IMem, PC+1, MUX_PC) is re-evaluated every tick with the propagated
+ * (the IMem, PC+1, muxPC) is re-evaluated every tick with the propagated
  * inputs, whether or not any wire animated.
  */
 function computeWireValues(frames: TickFrame[]): void {

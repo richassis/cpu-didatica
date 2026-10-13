@@ -189,7 +189,7 @@
     {
       "id": "mux-pc",
       "type": "MuxComponent",
-      "label": "MUX_PC",
+      "label": "muxPC",
       "x": 304,
       "y": 608,
       "w": 64,
@@ -1110,7 +1110,7 @@
     {
       "id": "mux-pc",
       "type": "MuxComponent",
-      "name": "MUX_PC",
+      "name": "muxPC",
       "tickSteps": [
         0
       ],

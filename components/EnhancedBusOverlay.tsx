@@ -578,7 +578,7 @@ export default function EnhancedBusOverlay({
       // The last substep finishes exactly at `totalDuration`, so the frame
       // where its `groupProgress` reaches 1 may never run and its wires were
       // never settled — which is why the final value delivered each state
-      // (MUX_PC -> PC on a fetch) vanished instead of resting at its
+      // (muxPC -> PC on a fetch) vanished instead of resting at its
       // destination. Settle everything that animated in this pass here.
       setSettledDots((prev) => {
         const next = new Set(prev);

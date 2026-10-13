@@ -8,7 +8,7 @@
  *  • Serialize/deserialize the wiring configuration
  *
  * Cycles are not rejected: the datapath has legitimate loops (PC → PC+1 →
- * MUX_PC → PC). They can't run away, because a port only pushes its value to
+ * muxPC → PC). They can't run away, because a port only pushes its value to
  * the inputs wired to it, and the CPU caps re-evaluation per tick
  * (`MAX_EVALUATE_PASSES`).
  */
